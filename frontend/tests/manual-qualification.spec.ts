@@ -1,0 +1,182 @@
+import { readFile } from 'node:fs/promises';
+import { expect, test, type Page } from '@playwright/test';
+import { signInAdmin } from './helpers/auth';
+import { finishMonthlyScan } from './helpers/scans';
+import type { QualificationWorkspace } from '../src/modules/qualification/types';
+
+async function workspace(page: Page): Promise<QualificationWorkspace> {
+  return page.evaluate(() => JSON.parse(localStorage.getItem('quantforge-qualification')!).state.workspaces['admin@example.com']);
+}
+async function addStocks(page: Page, symbols: string[], note = '') {
+  await page.getByRole('button', { name: 'Add stock', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  for (const symbol of symbols) {
+    const input = dialog.getByRole('combobox', { name: 'Stocks', exact: true });
+    await input.fill(symbol);
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: new RegExp(`^${symbol} ·`) }).click();
+  }
+  await dialog.getByRole('combobox', { name: 'Stocks', exact: true }).press('Escape');
+  await dialog.getByLabel('Selection note (optional)').fill(note);
+  await dialog.getByRole('button', { name: 'Add to qualified list' }).click();
+  await expect(dialog).not.toBeVisible();
+}
+test.beforeEach(async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-17T06:00:00Z') });
+  await signInAdmin(page, 'Qualification');
+});
+
+test('manual additions retain tags, persist, export their source and can be removed; rule stocks are protected', async ({ page }) => {
+  const before = await workspace(page);
+  await expect(page.locator('.q-candidate-table').getByRole('button', { name: /^Remove / })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove all manually added', exact: true })).toBeDisabled();
+  expect((await workspace(page)).caches).toEqual(before.caches);
+  await page.getByRole('button', { name: 'Add stock', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Add to qualified list' }).click();
+  await expect(page.getByText('Select at least one stock.')).toBeVisible();
+  await page.getByRole('dialog').getByRole('combobox', { name: 'Stocks', exact: true }).fill('RELIANCE');
+  await expect(page.locator('.ant-select-dropdown:visible .ant-select-item-option')).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('combobox', { name: 'Stocks', exact: true }).press('Escape');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await addStocks(page, ['MOTHERSON', 'DEMO6200'], 'Custom thesis: improving orders despite higher debt.');
+  let saved = await workspace(page);
+  expect(saved.caches['2026-09'].candidates).toHaveLength(64);
+  expect(saved.caches['2026-09'].id).not.toBe(before.caches['2026-09'].id);
+  expect(saved.cacheHistory[0]).toEqual(before.caches['2026-09']);
+  expect(saved.caches['2026-09'].candidates.filter((stock) => stock.qualificationSource === 'manual').map((stock) => stock.symbol)).toEqual(['MOTHERSON', 'DEMO6200']);
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+  await page.getByRole('textbox', { name: 'Search qualified stocks' }).fill('MOTHERSON');
+  const row = page.locator('.q-candidate-table tbody tr.ant-table-row');
+  await expect(row).toContainText('Manually added');
+  await expect(row.locator('.q-index-tags .ant-tag')).toHaveText(['NIFTY NEXT 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY 500']);
+  await row.getByRole('button', { name: 'MOTHERSON Samvardhana Motherson', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Included by you for September 2026');
+  await expect(page.getByRole('dialog')).toContainText('Custom thesis: improving orders despite higher debt.');
+  await expect(page.getByRole('dialog')).toContainText('not evaluated by the platform');
+  await expect(page.getByRole('dialog')).not.toContainText('Conditions used by the published scan');
+  await expect(page.getByRole('dialog').locator('.q-rule-summary')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).not.toContainText('Passed Stage 1');
+  await page.screenshot({ path: 'test-results/screenshots/manual-custom-selection.png', animations: 'disabled' });
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export list' }).click();
+  const csv = await readFile((await (await downloadEvent).path())!, 'utf8');
+  expect(csv).toContain('"Qualification source"');
+  expect(csv).toContain('"Manually added"');
+  expect(csv).toContain('"Custom thesis: improving orders despite higher debt."');
+  await page.screenshot({ path: 'test-results/screenshots/manual-qualified-stocks.png', fullPage: true, animations: 'disabled' });
+  await signInAdmin(page, 'Qualification');
+  expect((await workspace(page)).caches).toEqual(saved.caches);
+  await page.getByRole('textbox', { name: 'Search qualified stocks' }).fill('MOTHERSON');
+  await page.getByRole('button', { name: 'Remove MOTHERSON', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep stock', exact: true }).click();
+  expect((await workspace(page)).caches['2026-09'].candidates).toHaveLength(64);
+  await page.getByRole('button', { name: 'Remove MOTHERSON', exact: true }).click();
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Remove', exact: true }).click();
+  saved = await workspace(page);
+  expect(saved.caches['2026-09'].candidates).toHaveLength(63);
+  expect(saved.caches['2026-09'].candidates.some((stock) => stock.symbol === 'MOTHERSON')).toBe(false);
+  expect(saved.caches['2026-09'].candidates.filter((stock) => stock.qualificationSource !== 'manual')).toEqual(before.caches['2026-09'].candidates);
+  await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
+  await expect(page.locator('.stock-opportunities tbody tr.ant-table-row')).toHaveCount(0);
+});
+
+test('source and searchable sector filters combine; bulk removal includes hidden manual stocks and preserves scan stocks', async ({ page }) => {
+  test.setTimeout(60000);
+  const before = await workspace(page);
+  await addStocks(page, ['MOTHERSON', 'DEMO6200']);
+  const chooseSource = async (label: string) => {
+    await page.getByRole('combobox', { name: 'Filter candidates by source' }).click();
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: label }).click();
+  };
+  await chooseSource('Manually added');
+  await expect(page.locator('.q-index-filter-note')).toContainText('2 of 64 candidates');
+  await expect(page.locator('.q-candidate-table .q-manual-tag')).toHaveCount(2);
+  await page.getByRole('button', { name: 'MOTHERSON Samvardhana Motherson', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Selection criteria not recorded.');
+  await expect(page.getByRole('dialog').locator('.q-rule-summary')).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await chooseSource('From scan');
+  await expect(page.locator('.q-index-filter-note')).toContainText('62 of 64 candidates');
+  await expect(page.locator('.q-candidate-table .q-manual-tag')).toHaveCount(0);
+  const sector = page.getByRole('combobox', { name: 'Filter candidates by sector' });
+  await sector.fill('tech');
+  await expect(page.locator('.ant-select-dropdown:visible .ant-select-item-option')).toHaveCount(1);
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^Technology$/ }).click();
+  const technologyCount = before.caches['2026-09'].candidates.filter((stock) => stock.sector === 'Technology').length;
+  await expect(page.locator('.q-index-filter-note')).toContainText(`${technologyCount} of 64 candidates`);
+  await page.getByRole('textbox', { name: 'Search qualified stocks' }).fill('INFY');
+  await expect(page.locator('.q-index-filter-note')).toContainText('1 of 64 candidates');
+  // Clear sector, then combine the manual-source, index and text filters.
+  await sector.click();
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^All sectors$/ }).click();
+  await chooseSource('Manually added');
+  await page.getByRole('textbox', { name: 'Search qualified stocks' }).fill('MOTHERSON');
+  const index = page.getByRole('combobox', { name: 'Filter candidates by index' });
+  await index.fill('NIFTY 200');
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: 'NIFTY 200' }).click();
+  await index.press('Escape');
+  await expect(page.locator('.q-index-filter-note')).toContainText('1 of 64 candidates');
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export list' }).click();
+  const csv = await readFile((await (await downloadEvent).path())!, 'utf8');
+  expect(csv.trim().split('\r\n')).toHaveLength(2);
+  expect(csv).toContain('"MOTHERSON"');
+  expect(csv).not.toContain('"DEMO6200"');
+  const removeAll = page.getByRole('button', { name: 'Remove all manually added', exact: true });
+  await removeAll.click();
+  await expect(page.locator('.ant-popconfirm')).toContainText('Remove all 2 manually added stocks?');
+  await expect(page.locator('.ant-popconfirm')).toContainText('including stocks hidden by filters');
+  await page.getByRole('button', { name: 'Keep stocks', exact: true }).click();
+  expect((await workspace(page)).caches['2026-09'].candidates).toHaveLength(64);
+  const previousCache = (await workspace(page)).caches['2026-09'];
+  await removeAll.click();
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Remove all', exact: true }).click();
+  await expect(removeAll).toBeDisabled();
+  const after = await workspace(page);
+  expect(after.caches['2026-09'].candidates).toEqual(before.caches['2026-09'].candidates);
+  expect(after.caches['2026-09'].id).not.toBe(previousCache.id);
+  expect(after.cacheHistory[0]).toEqual(previousCache);
+  await expect(page.locator('.q-index-filter-note')).toContainText('0 of 62 candidates');
+  await expect(page.getByRole('button', { name: 'Export list' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+  await signInAdmin(page, 'Qualification');
+  expect((await workspace(page)).caches['2026-09']).toEqual(after.caches['2026-09']);
+  await chooseSource('Manually added');
+  await expect(page.locator('.q-candidate-table')).toContainText('No candidates match your search.');
+});
+
+test('rescans keep manual additions; pending jobs pause edits and the next month starts independently', async ({ page }) => {
+  await addStocks(page, ['MOTHERSON'], 'Long-term custom research');
+  await page.getByRole('tab', { name: 'Monthly rules', exact: true }).click();
+  await page.locator('.monthly-condition').nth(2).getByLabel('Value (ratio)', { exact: true }).fill('0.4');
+  await page.getByRole('button', { name: 'Save and run', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Add stock', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Remove all manually added', exact: true })).toBeDisabled();
+  await page.getByRole('textbox', { name: 'Search qualified stocks' }).fill('MOTHERSON');
+  await expect(page.getByRole('button', { name: 'Remove MOTHERSON', exact: true })).toBeDisabled();
+  await page.clock.fastForward(31000);
+  await expect(page.getByRole('button', { name: 'Add stock', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Review & publish', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Includes 1 manually added stock');
+  await expect(page.getByRole('dialog')).toContainText('36 from scan · 1 manual inclusion retained');
+  await page.getByRole('button', { name: 'Publish monthly universe', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect((await workspace(page)).caches['2026-09'].candidates).toHaveLength(37);
+  expect((await workspace(page)).caches['2026-09'].candidates.find((stock) => stock.symbol === 'MOTHERSON')?.manualSelectionNote).toBe('Long-term custom research');
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Remove MOTHERSON', exact: true })).toBeEnabled();
+  await expect(page.getByRole('combobox', { name: 'List version' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Cache month' })).toHaveCount(0);
+  await expect(page.locator('.q-scan-job')).toHaveCount(0);
+  // The next month starts with only its newly scanned rules, not September's additions.
+  await page.clock.setSystemTime(new Date('2026-10-02T06:00:00Z'));
+  await signInAdmin(page, 'Qualification');
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await finishMonthlyScan(page);
+  const saved = await workspace(page);
+  expect(saved.caches['2026-10'].candidates).toHaveLength(36);
+  expect(saved.caches['2026-09'].candidates.find((stock) => stock.symbol === 'MOTHERSON')?.qualificationSource).toBe('manual');
+});

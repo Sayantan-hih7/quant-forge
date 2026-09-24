@@ -1,0 +1,15 @@
+.q-index-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.q-index-tags .ant-tag { margin: 0; padding: 0 5px; font-size: 9px; line-height: 17px; color: var(--muted); background: var(--surface-raised); border-color: var(--border); border-radius: 4px; }
+.q-index-empty { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; }
+.q-index-link { display: inline-flex; border-radius: 4px; }
+.q-index-link .ant-tag { cursor: pointer; }
+.q-index-link:hover .ant-tag, .q-index-link:focus-visible .ant-tag { color: var(--primary); border-color: var(--primary); }
+.q-index-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.q-table-toolbar { flex-wrap: wrap; }
+.q-table-toolbar .q-index-filter { flex: 1; min-width: 230px; max-width: 360px; }
+.q-index-filter-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin: -3px 0 14px; color: var(--muted); font-size: 10px; }
+.q-index-filter-note strong { color: var(--text); font-weight: 500; }
+.q-stock-detail .q-index-tags { margin: 9px 0 18px; }
+@media (max-width: 600px) {
+  .q-table-toolbar .q-index-filter { min-width: 100%; max-width: none; }
+}

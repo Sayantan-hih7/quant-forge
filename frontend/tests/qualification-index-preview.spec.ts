@@ -1,0 +1,65 @@
+import { expect, test } from '@playwright/test';
+import { signInAdmin } from './helpers/auth';
+
+test('stock index tags preview on hover and focus, link to the exact index, and support browser history', async ({ page }) => {
+  test.setTimeout(60000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await signInAdmin(page, 'Qualification');
+  const row = page.locator('.q-candidate-table tbody tr.ant-table-row').filter({ has: page.getByRole('button', { name: 'RELIANCE Reliance Industries', exact: true }) });
+  const tag = row.getByRole('link', { name: 'View NIFTY 100 index', exact: true });
+  await tag.hover();
+  const preview = page.getByRole('region', { name: 'NIFTY 100 preview' });
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText('Broad market');
+  await expect(preview).toContainText('Simulated prices');
+  await expect(preview).toContainText('saved list');
+  await expect(preview).toContainText('Day low');
+  await expect(preview.locator('.index-change--badge')).toBeVisible();
+  await page.screenshot({ path: 'test-results/screenshots/index-tag-preview-light.png', animations: 'disabled' });
+  await page.getByRole('heading', { name: 'Your monthly candidate pool' }).hover();
+  await expect(preview).not.toBeVisible();
+  await tag.focus();
+  await expect(preview).toBeVisible();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: 'test-results/screenshots/index-tag-preview-dark.png', animations: 'disabled' });
+  await tag.press('Enter');
+  await expect(page).toHaveURL(/exchange=NSE&category=broad&index=nse%3Anifty-100/);
+  await expect(page.getByRole('dialog')).toContainText('NIFTY 100');
+  await expect(page.getByRole('tab', { name: /Broad market/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.indices-table tbody tr.ant-table-row')).toHaveCount(1);
+  await expect(page.locator('.indices-results-note')).toContainText('Focused on NIFTY 100');
+  await page.screenshot({ path: 'test-results/screenshots/index-tag-destination.png', animations: 'disabled' });
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Your monthly candidate pool' })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('dialog')).toContainText('NIFTY 100');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.locator('.indices-table tbody tr.ant-table-row')).toHaveCount(12);
+  await expect(page).not.toHaveURL(/index=/);
+  expect(errors).toEqual([]);
+});
+
+test('index deep links resolve exchange and category, reset stale filters and handle unknown IDs', async ({ page }) => {
+  await signInAdmin(page);
+  await page.getByRole('link', { name: 'Indices', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Search indices across NSE and BSE' }).fill('no match');
+  const navigate = async (path: string) => page.evaluate((url) => {
+    window.history.pushState(null, '', url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await navigate('/market-data/indices?exchange=NSE&category=sectoral&index=bse%3Abse-sensex');
+  await expect(page.getByRole('dialog')).toContainText('BSE SENSEX');
+  await expect(page.getByRole('region', { name: 'BSE index watch' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Broad market/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('combobox', { name: 'Search indices across NSE and BSE' })).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/exchange=BSE&category=broad$/);
+  await navigate('/market-data/indices?index=unknown');
+  await expect(page.getByRole('alert')).toContainText('This index is not available');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Show available indices' }).click();
+  await expect(page.getByRole('alert')).not.toBeVisible();
+  await expect(page).not.toHaveURL(/index=/);
+});

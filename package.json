@@ -1,0 +1,39 @@
+{
+  "name": "quant-forge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "setup": "node --import tsx scripts/setup.ts",
+    "dev": "node --import tsx scripts/dev.ts",
+    "start": "npm run dev",
+    "dev:frontend": "npm run dev --workspace @quantforge/frontend --",
+    "dev:backend": "npm run dev --workspace @quantforge/backend",
+    "dev:engine": "node --import tsx backend/scripts/run-engine.ts --reload",
+    "dev:worker": "npm run dev:worker --workspace @quantforge/backend",
+    "dev:feed": "npm run dev:feed --workspace @quantforge/backend",
+    "dev:paper": "npm run dev:paper --workspace @quantforge/backend",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose stop",
+    "build": "npm run build --workspaces",
+    "build:frontend": "npm run build --workspace @quantforge/frontend",
+    "build:backend": "npm run build --workspace @quantforge/backend",
+    "lint": "npm run lint --workspaces && eslint scripts && tsc -p tsconfig.scripts.json",
+    "preview": "npm run preview --workspace @quantforge/frontend --",
+    "test": "npm run test --workspace @quantforge/backend && npm run test:engine && npm run test:startup",
+    "test:engine": "node --import tsx scripts/test-engine.ts",
+    "test:startup": "node --import tsx --test scripts/tests/*.test.ts",
+    "test:ui": "npm run test:ui --workspace @quantforge/frontend --"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.13.3",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "tsx": "^4.20.5",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.69.0"
+  }
+}

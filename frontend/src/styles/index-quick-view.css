@@ -1,0 +1,15 @@
+.index-quick-view { width: 272px; max-width: calc(100vw - 56px); color: var(--text); font-size: 11px; }
+.index-quick-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.index-quick-heading strong { font-size: 13px; }
+.index-quick-heading span { color: var(--muted); font-size: 10px; }
+.index-quick-view p { margin: 4px 0 12px; color: var(--muted); }
+.index-quick-price { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.index-quick-price > strong { font-family: var(--font-data); font-size: 20px; font-weight: 500; }
+.index-quick-move { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.index-quick-view dl { display: flex; justify-content: space-between; margin: 16px 0; }
+.index-quick-view dl > div:last-child { text-align: right; }
+.index-quick-view dt { margin-bottom: 3px; color: var(--muted); font-size: 10px; }
+.index-quick-view dd { margin: 0; font-family: var(--font-data); font-size: 11px; }
+.index-quick-view .index-quick-membership { border-top: 1px solid var(--border); padding-top: 10px; margin-bottom: 4px; font-size: 10px; }
+.index-quick-view small { display: block; color: var(--muted); font-size: 9px; }
+.index-quick-view > a { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; font-weight: 500; }
