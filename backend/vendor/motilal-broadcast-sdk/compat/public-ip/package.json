@@ -1,0 +1,7 @@
+{
+  "name": "@tradeiq/public-ip-compat",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "dependencies": { "public-ip-modern": "npm:public-ip@^8.0.0" }
+}

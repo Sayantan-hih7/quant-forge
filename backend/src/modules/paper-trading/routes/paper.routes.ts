@@ -1,0 +1,15 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { cancelPaperOrder, confirmPaperOrder, createPaperSession, manualPaperOrder, paperState, pauseEntries, sessionInstruments, stopPaperSession } from '../services/paper.service.js';
+import { controlSchema } from '../validations/paper.validation.js';
+import { previewStrategy } from '../services/preview.service.js';
+export const paperRouter=Router();
+paperRouter.get('/',async(_req,res)=>{res.json(await paperState());});
+paperRouter.get('/instruments',async(_req,res)=>{res.json(await sessionInstruments());});
+paperRouter.post('/preview',async(req,res)=>{res.json(await previewStrategy(req.body));});
+paperRouter.post('/sessions',async(req,res)=>{res.status(201).json(await createPaperSession(req.body));});
+paperRouter.post('/sessions/:id/stop',async(req,res)=>{await stopPaperSession(z.string().uuid().parse(req.params.id));res.json({ok:true});});
+paperRouter.patch('/sessions/:id',async(req,res)=>{await pauseEntries(z.string().uuid().parse(req.params.id),controlSchema.parse(req.body).entriesPaused);res.json({ok:true});});
+paperRouter.post('/orders',async(req,res)=>{res.status(202).json(await manualPaperOrder(req.body));});
+paperRouter.post('/orders/:id/confirm',async(req,res)=>{res.json(await confirmPaperOrder(z.string().uuid().parse(req.params.id)));});
+paperRouter.post('/orders/:id/cancel',async(req,res)=>{await cancelPaperOrder(z.string().uuid().parse(req.params.id));res.json({ok:true});});

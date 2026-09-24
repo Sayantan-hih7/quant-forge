@@ -1,0 +1,51 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import mongoose from 'mongoose';
+import {env} from '../src/config/env.js';
+import {connectDatabase,disconnectDatabase} from '../src/shared/database.js';
+import {jobs,redis} from '../src/shared/redis.js';
+import {PaperOrderModel,PaperPositionModel,PaperSessionModel} from '../src/modules/paper-trading/models/paper.model.js';
+import {MonthlyUniverseModel} from '../src/modules/qualification/models/qualification.model.js';
+import {currentMonth} from '../src/modules/qualification/services/universe.service.js';
+import {fillPaperOrder} from '../src/modules/paper-trading/services/fill.service.js';
+import type {LiveQuote} from '../src/modules/market-feed/types/feed.types.js';
+import type {Risk} from '../src/modules/strategies/validations/strategy.validation.js';
+import { stopPaperSession } from '../src/modules/paper-trading/services/paper.service.js';
+test('paper cash ledger handles duplicate concurrent fills, stale ticks, overselling and qualification removal',{skip:process.env.RUN_DB_TESTS!=='1'},async()=>{
+  const name=`quantforge_test_${randomUUID().replaceAll('-','')}`,uri=new URL(env.MONGODB_URI);uri.pathname=`/${name}`;env.MONGODB_URI=uri.toString();
+  try{
+    await connectDatabase();assert.equal(mongoose.connection.name,name);
+    const at='2026-09-23T05:00:00.000Z',now=Date.parse(at),sessionId=randomUUID();
+    const risk:Risk={initialCapital:100000,riskPercent:1,maxPositions:1,timeframe:'15m',stopMode:'fixed',stopPercent:1,atrPeriod:14,atrMultiplier:2,targetR:2,overnight:false,slippagePercent:0,feePercent:0};
+    await PaperSessionModel.create({_id:sessionId,strategyId:randomUUID(),strategy:{risk},ids:['NSE:1'],cashPaise:10000000,initialPaise:10000000,mode:'automatic',entriesPaused:false,active:true,revision:1,createdAt:at});
+    await MonthlyUniverseModel.create({_id:currentMonth(),month:currentMonth(),members:[{instrumentId:'NSE:1',isin:'INE000A01001',source:'scan',addedAt:at}]});
+    const make=async(side:'BUY'|'SELL',quantity:number)=>PaperOrderModel.create({_id:randomUUID(),sessionId,instrumentId:'NSE:1',side,quantity,source:'manual',status:'pending',createdAt:new Date(now-2000).toISOString(),eligibleAfter:new Date(now-1000).toISOString(),expiresAt:new Date(now+60000).toISOString(),reason:'test'});
+    const quote:LiveQuote={instrumentId:'NSE:1',symbol:'FIXTURE',exchange:'NSE',price:100,cumulativeVolume:1000,at,receivedAt:at,source:'motilal',session:'fixture'};
+    const outside=await make('BUY',1);await PaperOrderModel.updateOne({_id:outside._id},{$set:{instrumentId:'NSE:2'}});
+    await fillPaperOrder(outside._id,{...quote,instrumentId:'NSE:2'},now);
+    assert.equal((await PaperOrderModel.findById(outside._id))?.message,'Stock is outside this paper session scope');
+    const buy=await make('BUY',10);
+    await fillPaperOrder(buy._id,{...quote,at:new Date(now-30000).toISOString()},now);
+    assert.equal((await PaperOrderModel.findById(buy._id))?.status,'pending');
+    await Promise.all([fillPaperOrder(buy._id,quote,now),fillPaperOrder(buy._id,quote,now)]);
+    assert.equal((await PaperSessionModel.findById(sessionId))?.cashPaise,9900000);
+    assert.equal((await PaperPositionModel.findOne())?.quantity,10);
+    await assert.rejects(stopPaperSession(sessionId),/Close held paper positions/);
+    const oversell=await make('SELL',11);await fillPaperOrder(oversell._id,quote,now);
+    assert.equal((await PaperOrderModel.findById(oversell._id))?.status,'rejected');
+    await MonthlyUniverseModel.updateOne({_id:currentMonth()},{$set:{members:[]}});
+    const sell=await make('SELL',10);await fillPaperOrder(sell._id,{...quote,price:105},now);
+    assert.equal(await PaperPositionModel.countDocuments(),0);
+    assert.equal((await PaperSessionModel.findById(sessionId))?.cashPaise,10005000);
+    const excluded=await make('BUY',10);await fillPaperOrder(excluded._id,quote,now);
+    assert.equal((await PaperOrderModel.findById(excluded._id))?.status,'rejected');
+    const pending=await make('BUY',1);
+    await stopPaperSession(sessionId);
+    assert.equal((await PaperSessionModel.findById(sessionId))?.active,false);
+    assert.equal((await PaperOrderModel.findById(pending._id))?.status,'cancelled');
+  }finally{
+    if(mongoose.connection.readyState===1&&mongoose.connection.name===name&&/^quantforge_test_[a-f0-9]{32}$/.test(name))await mongoose.connection.dropDatabase();
+    await disconnectDatabase();await jobs.close();if(redis.status!=='end')await redis.quit();
+  }
+});
