@@ -5,7 +5,7 @@ export interface StockQuote {
   lowerCircuit: number | null; upperCircuit: number | null; lastTradeAt: string | null; receivedAt: string;
   source: 'dhan-snapshot' | 'dhan-stream' | 'historical-close';
 }
-export interface StockFact { field: string; value: number | string | string[]; period?: string; observedAt: string; source: string }
+export interface StockFact { field: string; value: number | string | string[]; period?: string; observedAt: string; source: string; sourceUrl?: string; ownership?: { evidence: string }; statementBasis?: 'consolidated' | 'standalone'; calculation?: { method: string } }
 export interface StockDetail {
   message?: string;
   instrument: { _id: string; symbol: string; name: string; exchange: string; isin: string };
@@ -15,5 +15,5 @@ export interface StockDetail {
 }
 export type StockTimeframe = '1m' | '5m' | '15m' | '1d' | '1w' | '1mo';
 export interface ChartBar { time: string; open: number; high: number; low: number; close: number; volume: number }
-export interface StockChartData { instrumentId: string; timeframe: StockTimeframe; bars: ChartBar[]; message?: string; source: string; refreshedAt: string }
+export interface StockChartData { instrumentId: string; timeframe: StockTimeframe; bars: ChartBar[]; message?: string; latestCandleAt?: string | null; source: string; refreshedAt: string }
 export interface QuoteStatus { state: 'connecting' | 'streaming' | 'reconnecting' | 'unavailable'; message?: string }

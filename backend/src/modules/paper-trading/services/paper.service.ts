@@ -22,6 +22,7 @@ export async function paperState() {
 export async function createPaperSession(raw:unknown) {
   const input=sessionSchema.parse(raw), strategy=await StrategyModel.findById(input.strategyId).lean();
   invariant(strategy,'Save a strategy before starting a paper session');
+  invariant(input.expectedRevision === undefined || strategy.revision === input.expectedRevision, 'The strategy changed. Reload its saved rules before starting monitoring.');
   const universe=await MonthlyUniverseModel.findById(currentMonth()).lean();
   invariant(universe?.members.length,'Publish this month’s qualified stocks first');
   const ids=[...new Set(input.ids)];

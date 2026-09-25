@@ -15,12 +15,16 @@ import '../../../styles/stock-details.css';
 const timeframes = [{ label: '1m', value: '1m' }, { label: '5m', value: '5m' }, { label: '15m', value: '15m' }, { label: '1D', value: '1d' }, { label: '1W', value: '1w' }, { label: '1M', value: '1mo' }];
 const metrics = [
   ['marketCap', 'Market cap', ' Cr'], ['pe', 'P/E', ''], ['pb', 'Price / book', ''], ['eps', 'EPS', ''],
-  ['roe', 'Return on equity', '%'], ['roce', 'Return on capital', '%'], ['debtEquity', 'Debt / equity', ''], ['promoterHolding', 'Promoter holding', '%'],
+  ['roe', 'Return on equity', '%'], ['roce', 'Return on capital', '%'], ['debtEquity', 'Debt / equity', ''], ['promoterHolding', 'Promoter holding', '%'], ['pledge', 'Promoter encumbrance', '%'],
 ] as const;
 function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
   return <div className="stock-metric"><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
 }
-function factPeriod(fact?: StockFact) { return fact?.period ? `Period ${fact.period}` : fact ? `Observed ${new Date(fact.observedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })}` : 'Not available'; }
+function factPeriod(fact?: StockFact) {
+  if (!fact) return 'Not available';
+  const period = fact.period ? `Period ${fact.period}` : `Observed ${new Date(fact.observedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })}`;
+  return [period, fact.statementBasis, fact.calculation ? 'Calculated from annual statements' : fact.source === 'dhan-public-company' ? 'Dhan financials' : undefined].filter(Boolean).join(' · ');
+}
 
 function StockDetails({ stock }: { stock: QualifiedStock }) {
   const [timeframe, setTimeframe] = useState<StockTimeframe>('1d'), [kind, setKind] = useState<'candles' | 'line'>('candles'), [showEma, setShowEma] = useState(true);
@@ -44,6 +48,7 @@ function StockDetails({ stock }: { stock: QualifiedStock }) {
     <section className="stock-chart-section" aria-label="Price chart">
       <div className="stock-section-heading"><h3>Price & volume</h3><Space size={8}><Checkbox checked={showEma} onChange={event => setShowEma(event.target.checked)}>EMA <span className="stock-ema-fast">5</span> / <span className="stock-ema-slow">21</span></Checkbox><Tooltip title="Refresh chart history"><Button aria-label="Refresh chart" icon={<ReloadOutlined />} loading={chart.loading} onClick={chart.retry} size="small" /></Tooltip></Space></div>
       <div className="stock-chart-controls"><Segmented aria-label="Chart timeframe" size="small" value={timeframe} options={timeframes} onChange={value => setTimeframe(value as StockTimeframe)} /><Segmented aria-label="Chart style" size="small" value={kind} options={[{ value: 'candles', label: 'Candles' }, { value: 'line', label: 'Line' }]} onChange={value => setKind(value as 'candles' | 'line')} /></div>
+      {chart.data?.latestCandleAt && <p className="stock-chart-note" aria-label="Chart data timestamp">Candles through {new Date(chart.data.latestCandleAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', ...(['1m', '5m', '15m'].includes(timeframe) ? { hour: '2-digit', minute: '2-digit' } : {}) })} · {['1m', '5m', '15m'].includes(timeframe) ? 'Completed candles' : 'Completed daily sessions'}. The live price updates separately.</p>}
       {(chart.error || chart.data?.message) && <Alert className="stock-inline-alert" type="warning" showIcon title={chart.error || chart.data?.message} action={<Button size="small" onClick={chart.retry}>Retry</Button>} />}
       {chart.loading && !chart.data ? <div className="stock-chart-loading"><Skeleton active paragraph={{ rows: 5 }} /><p>Loading price history. The first download can take longer.</p></div> : chart.data?.bars.length ?
         <StockCandlestickChart key={timeframe} bars={chart.data.bars} quote={quote} timeframe={timeframe} showEma={showEma} kind={kind} symbol={stock.instrument?.symbol ?? stock.instrumentId} /> :
@@ -55,7 +60,8 @@ function StockDetails({ stock }: { stock: QualifiedStock }) {
       {(detail.error || data?.message) && <Alert className="stock-inline-alert" type="warning" title={detail.error || data?.message} action={<Button size="small" onClick={detail.retry}>Retry</Button>} />}
       {detail.loading && !data ? <Skeleton active paragraph={{ rows: 2 }} /> : <>
         <div className="stock-company-meta"><Tag>{String(facts.get('sector')?.value ?? stock.metrics.sector ?? 'Sector unavailable')}</Tag><span className="muted">ISIN {data?.instrument.isin ?? stock.isin}</span></div>
-        <div className="stock-fundamentals">{metrics.map(([field, label, suffix]) => { const fact = facts.get(field); return <Metric key={field} label={label} value={typeof fact?.value === 'number' ? `${field === 'marketCap' || field === 'eps' ? '₹' : ''}${stockNumber(fact.value)}${suffix}` : '—'} note={factPeriod(fact)} />; })}</div>
+        <div className="stock-fundamentals">{metrics.map(([field, label, suffix]) => { const fact = facts.get(field); return <Metric key={field} label={label} value={fact?.value === 'not-applicable' ? 'N/A · no promoters' : typeof fact?.value === 'number' ? `${field === 'marketCap' || field === 'eps' ? '₹' : ''}${stockNumber(fact.value)}${suffix}` : '—'} note={factPeriod(fact)} />; })}</div>
+        {facts.get('pledge')?.ownership && <p className="muted">Promoter encumbrance uses pledged shares plus other reported encumbrances, as a percentage of promoter holding. Companies with no promoters meet maximum-encumbrance limits; their percentage is not applicable. <a href={facts.get('pledge')?.sourceUrl} target="_blank" rel="noreferrer">View exchange filing</a></p>}
         {Array.isArray(indices) && indices.length > 0 && <div className="stock-detail-indices"><span>Index memberships</span><StockIndexTags indices={indices.map(String)} /></div>}
       </>}
     </section>

@@ -6,8 +6,8 @@ export function createHttpClient(baseURL?: string) {
   const client = axios.create({ baseURL, timeout: 30_000, maxRedirects: 0, maxContentLength: 65_000_000, maxBodyLength: 8_000_000,
     httpsAgent: new Agent({ keepAlive: false }) });
   client.interceptors.request.use(config => {
-    config.headers.set('User-Agent', 'QuantForge/0.1 (local research)');
-    config.headers.set('Accept', 'application/json, text/csv, text/plain, */*');
+    if (!config.headers.has('User-Agent')) config.headers.set('User-Agent', 'QuantForge/0.1 (local research)');
+    if (!config.headers.has('Accept')) config.headers.set('Accept', 'application/json, text/csv, text/plain, */*');
     return config;
   });
   client.interceptors.response.use(response => response, (error: unknown) => {

@@ -40,6 +40,7 @@ test('preparation skips only decided rejects, caches data before fixing the scan
     });
     const started = new Date().toISOString();
     await prepareQualification(run.toObject(), { evaluate,
+      ownership: async () => false,
       company: async stock => { companyCalls.push(stock._id); return true; },
       history: async (stock, from, to) => { assert.equal(from, '2021-06-01'); assert.equal(to, '2026-09-01'); historyCalls.push(stock._id); return true; },
     });
@@ -47,7 +48,7 @@ test('preparation skips only decided rejects, caches data before fixing the scan
     const saved = await QualificationRunModel.findById(run._id).lean();
     assert.equal(saved?.stage, 'evaluating'); assert.ok(saved!.cutoff >= started); assert.equal(saved?.preparation?.ruledOut, 2);
     await QualificationRunModel.updateOne({ _id: run._id }, { $set: { status: 'cancelled' } });
-    await assert.rejects(prepareQualification(run.toObject(), { evaluate, company: async () => { throw new Error('Must not download after cancellation'); }, history: async () => false }), /cancelled/);
+    await assert.rejects(prepareQualification(run.toObject(), { evaluate, ownership: async () => false, company: async () => { throw new Error('Must not download after cancellation'); }, history: async () => false }), /cancelled/);
   } finally {
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
     await mongoose.disconnect();

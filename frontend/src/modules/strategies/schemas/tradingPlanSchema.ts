@@ -11,6 +11,8 @@ export type StrategyRisk = z.infer<typeof strategyRiskSchema>;
 export const tradingPlanSchema = z.object({ name: z.string().trim().min(3).max(50), entry: ruleSchema, exit: ruleSchema, risk: strategyRiskSchema }).superRefine((plan, ctx) => {
   if (plan.entry.side !== 'BUY' || plan.exit.side !== 'SELL' || plan.entry.tier !== 'tactical' || plan.exit.tier !== 'tactical') ctx.addIssue({ code: 'custom', message: 'A strategy needs a tactical buy entry and sell exit.' });
   if (plan.entry.horizon !== plan.exit.horizon) ctx.addIssue({ code: 'custom', message: 'Buy and sell rules must use the same trading horizon.' });
+  if (plan.entry.cadence !== plan.exit.cadence) ctx.addIssue({ code: 'custom', path: ['entry', 'cadence'], message: 'Buy and sell rules must use the same check frequency.' });
+  if (plan.entry.horizon === 'intraday' && plan.entry.cadence === 'daily') ctx.addIssue({ code: 'custom', path: ['entry', 'cadence'], message: 'Intraday strategies need a check frequency within the session.' });
   if (plan.entry.horizon === 'intraday' && plan.risk.overnight) ctx.addIssue({ code: 'custom', path: ['risk', 'overnight'], message: 'Intraday strategies must close within the session.' });
   if (plan.entry.horizon !== 'intraday' && !plan.risk.overnight) ctx.addIssue({ code: 'custom', path: ['risk', 'overnight'], message: 'Swing and long-term strategies require overnight holding.' });
 });

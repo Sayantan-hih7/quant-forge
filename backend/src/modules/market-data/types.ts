@@ -9,6 +9,9 @@ export interface Fact {
   _id: string; instrumentId: string; field: string; value: FactValue;
   source: string; sourceUrl: string; observedAt: string; knownAt: string;
   period?: string; validUntil?: string; basis: 'observed-snapshot' | 'published-report' | 'derived';
+  statementBasis?: 'consolidated' | 'standalone';
+  calculation?: { method: string; netIncome: number; equity: number; unit: string };
+  ownership?: { evidence: 'reported-total' | 'explicit-no-encumbrance' | 'no-promoters'; promoterShares?: number; encumberedShares?: number };
 }
 export interface DeliveryDay {
   _id: string; instrumentId: string; date: string; volume: number;

@@ -12,7 +12,7 @@ export async function stockDetail(id: string) {
   if (!instrument) throw new AppError(404, 'STOCK_NOT_FOUND', 'Stock not found');
   let message: string | undefined;
   if (instrument.active) {
-    try { await ensureCompanyData(instrument, ['marketCap', 'pe', 'sector'], currentMonth(), { maxWaitMs: 15_000 }); }
+    try { await ensureCompanyData(instrument, ['marketCap', 'pe', 'sector', 'roe', 'roce'], currentMonth(), { maxWaitMs: 15_000 }); }
     catch { message = 'Company data could not be refreshed. Previously saved metrics are shown with their dates; unavailable values are left blank.'; }
   }
   const facts = await latestFacts(id, new Date().toISOString());

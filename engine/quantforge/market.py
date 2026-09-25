@@ -1,5 +1,5 @@
 from datetime import timedelta, timezone
-import math
+import numpy as np
 import pandas as pd
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -13,38 +13,35 @@ def stamp(value):
 
 def candles(rows, cutoff, interval="1d"):
     """Validate before aggregation; duplicates with conflicting values fail closed."""
-    records = {}
-    for row in rows:
-        t = stamp(row["time"])
-        values = {key: float(row[key]) for key in ["open", "high", "low", "close", "volume"]}
-        if not all(math.isfinite(v) for v in values.values()):
-            raise ValueError("Non-finite candle value")
-        o, h, l, c, v = (values[k] for k in ["open", "high", "low", "close", "volume"])
-        if min(o, h, l, c) <= 0 or v < 0 or h < max(o, c, l) or l > min(o, c):
-            raise ValueError("Invalid OHLCV candle")
-        local = t.tz_convert(IST)
-        if interval == "1d":
-            start = local.normalize() + pd.Timedelta(hours=9, minutes=15)
-            end = local.normalize() + pd.Timedelta(hours=15, minutes=30)
-        else:
-            minute = local.hour * 60 + local.minute
-            if minute < 555 or minute >= 930 or local.second != 0:
-                raise ValueError("Intraday candle outside the regular IST session")
-            start, end = t, t + pd.Timedelta(minutes=1)
-        if end > stamp(cutoff):
-            continue
-        key = start.tz_convert("UTC")
-        if key in records and records[key] != values:
-            raise ValueError("Conflicting duplicate candle")
-        records[key] = values
-    if not records:
+    if not rows:
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume", "end"])
-    df = pd.DataFrame.from_dict(records, orient="index").sort_index()
+    raw = pd.DataFrame(rows)
+    df = raw[["open", "high", "low", "close", "volume"]].astype(float)
+    if not np.isfinite(df.to_numpy()).all():
+        raise ValueError("Non-finite candle value")
+    if ((df[["open", "high", "low", "close"]] <= 0).any(axis=1) | (df.volume < 0)
+        | (df.high < df[["open", "close", "low"]].max(axis=1))
+        | (df.low > df[["open", "close"]].min(axis=1))).any():
+        raise ValueError("Invalid OHLCV candle")
+    times = pd.DatetimeIndex(pd.to_datetime(raw.time, utc=True, format="mixed"))
+    if times.isna().any():
+        raise ValueError("Invalid candle timestamp")
+    local = times.tz_convert(IST)
     if interval == "1d":
-        df["end"] = df.index.tz_convert(IST).normalize() + pd.Timedelta(hours=15, minutes=30)
+        start = local.normalize() + pd.Timedelta(hours=9, minutes=15)
+        end = local.normalize() + pd.Timedelta(hours=15, minutes=30)
     else:
-        df["end"] = df.index + pd.Timedelta(minutes=1)
-    return df
+        minute = local.hour * 60 + local.minute
+        if ((minute < 555) | (minute >= 930) | (local.second != 0)).any():
+            raise ValueError("Intraday candle outside the regular IST session")
+        start, end = times, times + pd.Timedelta(minutes=1)
+    df.index = start.tz_convert("UTC").rename(None)
+    df["end"] = end
+    df = df.loc[end <= stamp(cutoff)]
+    duplicated = df.loc[df.index.duplicated(keep=False)]
+    if not duplicated.empty and (duplicated.groupby(level=0).nunique() > 1).any().any():
+        raise ValueError("Conflicting duplicate candle")
+    return df.loc[~df.index.duplicated()].sort_index()
 
 
 def timeframe(daily, intraday, frame, cutoff):
@@ -52,35 +49,25 @@ def timeframe(daily, intraday, frame, cutoff):
         return daily
     if frame == "1m":
         return intraday
-    rows = []
     source = daily if frame in ("1w", "1mo", "1q") else intraday
     if source.empty:
         return source
-    groups = {}
-    for t, row in source.iterrows():
-        local = t.tz_convert(IST)
-        if frame == "1mo":
-            start = local.normalize().replace(day=1)
-            end = start + pd.offsets.MonthBegin(1)
-        elif frame == "1q":
-            start = local.normalize().replace(month=(local.month - 1) // 3 * 3 + 1, day=1)
-            end = start + pd.offsets.MonthBegin(3)
-        elif frame == "1w":
-            start = local.normalize() - pd.Timedelta(days=local.weekday())
-            end = start + pd.Timedelta(days=7)
-        elif frame in FRAME_MINUTES:
-            session = local.normalize() + pd.Timedelta(hours=9, minutes=15)
-            size = FRAME_MINUTES[frame]
-            start = session + pd.Timedelta(minutes=int((local - session).total_seconds() // 60) // size * size)
-            end = min(start + pd.Timedelta(minutes=size), session + pd.Timedelta(minutes=375))
-        else:
-            raise ValueError(f"Unsupported timeframe: {frame}")
-        if end <= stamp(cutoff):
-            groups.setdefault((start, end), []).append((t, row))
-    for (start, end), group in groups.items():
-        if frame in FRAME_MINUTES and len(group) != int((end-start).total_seconds() // 60):
-            continue  # Do not invent missing intraday minutes.
-        rows.append({"time": start, "end": end, "open": group[0][1].open,
-                     "high": max(x[1].high for x in group), "low": min(x[1].low for x in group),
-                     "close": group[-1][1].close, "volume": sum(x[1].volume for x in group)})
-    return pd.DataFrame(rows).set_index("time") if rows else source.iloc[:0]
+    local = source.index.tz_convert(IST)
+    if frame in ("1mo", "1q", "1w"):
+        frequency = {"1mo": "M", "1q": "Q", "1w": "W-SUN"}[frame]
+        start = local.tz_localize(None).to_period(frequency).to_timestamp().tz_localize(IST)
+        end = start + (pd.Timedelta(days=7) if frame == "1w" else pd.offsets.MonthBegin(3 if frame == "1q" else 1))
+    elif frame in FRAME_MINUTES:
+        session = local.normalize() + pd.Timedelta(hours=9, minutes=15)
+        size = FRAME_MINUTES[frame]
+        start = session + pd.to_timedelta(((local - session).total_seconds() // 60 // size) * size, unit="m")
+        end = (start + pd.Timedelta(minutes=size)).where(start + pd.Timedelta(minutes=size) <= session + pd.Timedelta(minutes=375), session + pd.Timedelta(minutes=375))
+    else:
+        raise ValueError(f"Unsupported timeframe: {frame}")
+    grouped = source.assign(time=start, end=end).loc[end <= stamp(cutoff)].groupby("time", sort=True)
+    result = grouped.agg(open=("open", "first"), high=("high", "max"), low=("low", "min"),
+                         close=("close", "last"), volume=("volume", "sum"), end=("end", "first"))
+    if frame in FRAME_MINUTES and not result.empty:
+        expected = (pd.DatetimeIndex(result.end) - result.index).total_seconds() // 60
+        result = result.loc[grouped.size() == expected]  # Never invent missing minutes.
+    return result

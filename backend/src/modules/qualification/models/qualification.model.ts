@@ -3,8 +3,9 @@ export interface MonthlyRule { _id: string; rule: Record<string, unknown>; revis
 export interface QualificationRun {
   _id: string; month: string; rule: Record<string, unknown>; revision: number; fingerprint: string; cutoff: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  ids: string[]; total: number; processed: number; qualified: number; rejected: number; unavailable: number; message?: string; finishedAt?: string;
-  stage?: 'checking' | 'fundamentals' | 'history' | 'evaluating';
+  ids: string[]; total: number; processed: number; qualified: number; rejected: number; unavailable: number; awaitingHistory?: number; message?: string; finishedAt?: string;
+  stage?: 'checking' | 'fundamentals' | 'ownership' | 'history' | 'evaluating';
+  dataGaps?: { field: string; stocks: number }[];
   preparation?: { processed: number; total: number; downloaded: number; cached: number; failed: number; ruledOut: number; failures: { instrumentId: string; message: string }[] };
 }
 export interface UniverseMember { instrumentId: string; isin: string; source: 'scan' | 'manual'; addedAt: string; note?: string }
@@ -16,8 +17,9 @@ export const MonthlyRuleModel = model<MonthlyRule>('MonthlyRule', new Schema<Mon
 const runSchema = new Schema<QualificationRun>({
   _id: String, month: String, rule: Schema.Types.Mixed, revision: Number, fingerprint: String, cutoff: String,
   status: { type: String, enum: ['queued', 'running', 'completed', 'failed', 'cancelled'] },
-  ids: [String], total: Number, processed: Number, qualified: Number, rejected: Number, unavailable: Number, message: String, finishedAt: String,
-  stage: { type: String, enum: ['checking', 'fundamentals', 'history', 'evaluating'] },
+  ids: [String], total: Number, processed: Number, qualified: Number, rejected: Number, unavailable: Number, awaitingHistory: { type: Number, default: 0 }, message: String, finishedAt: String,
+  stage: { type: String, enum: ['checking', 'fundamentals', 'ownership', 'history', 'evaluating'] },
+  dataGaps: { type: [{ _id: false, field: String, stocks: Number }], default: undefined },
   preparation: { type: new Schema({ processed: Number, total: Number, downloaded: Number, cached: Number, failed: Number, ruledOut: Number,
     failures: [{ _id: false, instrumentId: String, message: String }] }, { _id: false }), default: undefined },
 }, options);

@@ -7,7 +7,7 @@ import { connectDatabase, disconnectDatabase } from '../src/shared/database.js';
 import { jobs, redis } from '../src/shared/redis.js';
 import { instruments } from '../src/modules/market-data/repository.js';
 import { MonthlyRuleModel, MonthlyUniverseModel, UniverseSnapshotModel, QualificationResultModel, QualificationRunModel } from '../src/modules/qualification/models/qualification.model.js';
-import { publishQualification } from '../src/modules/qualification/services/qualification.service.js';
+import { publishQualification, qualificationResults } from '../src/modules/qualification/services/qualification.service.js';
 import { currentMonth, addManualStock, removeManualStocks } from '../src/modules/qualification/services/universe.service.js';
 
 test('qualification publication, manual edits and concurrent changes are atomic and isolated', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
@@ -39,6 +39,16 @@ test('qualification publication, manual edits and concurrent changes are atomic 
     assert.equal((await MonthlyUniverseModel.findById(month).lean())?.members[0].source, 'scan');
     assert.equal(await UniverseSnapshotModel.countDocuments(), 3);
     assert.equal((await UniverseSnapshotModel.findById(`${month}:2`).lean())?.members.length, 2);
+    const waitingId = randomUUID();
+    await QualificationRunModel.create({ _id: waitingId, month, rule: {}, revision: 1, fingerprint: 'fixture', cutoff: at, status: 'completed', ids: ['NSE:1', 'NSE:2'], total: 2, processed: 2, qualified: 1, rejected: 0, unavailable: 0, awaitingHistory: 1 });
+    await QualificationResultModel.insertMany([
+      { _id: `${waitingId}:NSE:1`, runId: waitingId, instrumentId: 'NSE:1', matched: true, status: 'qualified', checks: [] },
+      { _id: `${waitingId}:NSE:2`, runId: waitingId, instrumentId: 'NSE:2', matched: null, status: 'awaiting_history', checks: [{ field: 'ema21', matched: null, availableMonths: 8, requiredMonths: 21 }] },
+    ]);
+    assert.equal((await qualificationResults(waitingId, 1, 'awaiting_history')).total, 1);
+    await assert.rejects(publishQualification(waitingId, false), /awaiting history/);
+    await publishQualification(waitingId, true);
+    assert.deepEqual((await MonthlyUniverseModel.findById(month).lean())?.members.map(x => x.instrumentId), ['NSE:1']);
     await QualificationRunModel.create({ _id: randomUUID(), month, status: 'queued' });
     await assert.rejects(QualificationRunModel.create({ _id: randomUUID(), month, status: 'queued' }), (error: unknown) => error instanceof mongoose.mongo.MongoServerError && error.code === 11000);
   } finally {

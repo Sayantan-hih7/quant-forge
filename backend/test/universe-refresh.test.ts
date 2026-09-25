@@ -10,7 +10,7 @@ import { instruments, sourceRuns } from '../src/modules/market-data/repository.j
 import { publishInstrumentSnapshot, validateInstrumentSnapshot } from '../src/modules/market-data/services/instrument-snapshot.service.js';
 import { universeCycle, UNIVERSE_SCHEDULER_ID } from '../src/modules/market-data/services/universe-calendar.js';
 import { registerUniverseSchedule } from '../src/modules/market-data/services/universe-refresh.service.js';
-import { monthlyRequiredFields } from '../src/modules/qualification/services/readiness.service.js';
+import { createReadinessCache, monthlyRequiredFields } from '../src/modules/qualification/services/readiness.service.js';
 import type { Instrument } from '../src/modules/market-data/types.js';
 
 after(async () => { await jobs.close(); if (redis.status !== 'end') await redis.quit(); });
@@ -26,6 +26,32 @@ test('readiness includes both indicator operands, deduplicates them, and separat
     { field: 'ema5', operand: 'field', compareField: 'ema21' },
     { field: 'delivery', operand: 'value', compareField: 'ema5' }, { field: 'ema5', operand: 'value' },
   ] }] }), [{ field: 'ema5', kind: 'history' }, { field: 'ema21', kind: 'history' }, { field: 'delivery', kind: 'fact' }]);
+});
+
+test('coverage loads in the background once and never returns coverage for a different rule', async () => {
+  type Coverage = Awaited<ReturnType<Parameters<typeof createReadinessCache>[0]>>;
+  const coverage: Coverage = { companies: 5458, checkedAt: '2026-09-25T08:00:00.000Z', fields: [],
+    universeRefresh: { scheduled: true, workerOnline: true, timezone: 'Asia/Kolkata',
+      schedule: '1st of every month at 02:00 IST', nextRunAt: null, upToDate: true,
+      lastSuccessAt: null, latestStatus: 'completed', lastError: null, addedListings: 0, addedCompanies: 0 } };
+  let complete!: (value: Coverage) => void;
+  const pending = new Promise<Coverage>(resolve => { complete = resolve; });
+  let calls = 0;
+  const read = createReadinessCache(() => { calls++; return calls === 1 ? pending : Promise.reject(new Error('Coverage unavailable')); });
+  const rule = { groups: [{ conditions: [{ field: 'pledge' }] }] };
+  assert.equal(read(rule), undefined);
+  assert.equal(read(rule), undefined);
+  assert.equal(calls, 1, 'polling must reuse the pending aggregate');
+  complete(coverage);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(read(rule), coverage);
+  assert.equal(calls, 1);
+  const changedRule = { groups: [{ conditions: [{ field: 'roe' }] }] };
+  assert.equal(read(changedRule), undefined, 'old coverage must not be attached to changed rules');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(read(changedRule), undefined, 'an aggregate failure must not be presented as zero coverage');
+  assert.equal(calls, 2, 'failed aggregates back off instead of retrying on every progress poll');
+  assert.deepEqual(read(rule), coverage, 'a failed refresh keeps the previous valid coverage');
 });
 
 const row = (i: number, exchange: 'NSE' | 'BSE'): Instrument => ({

@@ -23,8 +23,9 @@ Redis stores BullMQ jobs, leases, short-lived authenticated workspace sessions, 
 | Live LTP and cumulative volume | Isolated Motilal broadcast SDK; no fabricated timestamps |
 | Daily/one-minute OHLCV | Dhan Data API, bounded request rate and date windows |
 | Market cap, valuation, debt/equity, profitability, ownership | Dhan `/v2/data/companyinfo`; dated snapshots |
+| Missing ROE / ROCE | Dhan public company financial pages, matched by ISIN; reported annual ratios or ROE calculated from matching annual statements. Cached up to seven days; observation time is never backdated. See [monthly qualification](monthly-qualification.md). |
 | Monthly turnover, volume-weighted delivery | Complete NSE/BSE daily report sets |
-| Promoter pledge | Official filing adapters; current BSE endpoint may fail |
+| Promoter encumbrance / pledge limit | NSE consolidated disclosures, then per-company NSE equity/SME XBRL and BSE shareholding detail/summary. Identity, report period and promoter denominator are checked; no-promoter companies retain N/A. |
 | Index memberships | Configured official NIFTY/BSE constituent sources; 22-index catalogue |
 | Index prices and charts | Independent NSE/NSE Indices/BSE website adapters; 114 curated indices, with dated daily reports for daily-only indices and persisted fallback data. See [index data](index-data.md). |
 | Growth/news/patterns/F&O | Unsupported until verified source adapters exist |

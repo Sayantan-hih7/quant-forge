@@ -13,6 +13,7 @@ import type { Fact, SourceRun } from './types.js';
 import { SourceArtifactModel } from './models/market-data.model.js';
 import { motilalMasterUrl, parseMotilalMappings } from './sources/motilal-master.js';
 import { publishInstrumentSnapshot } from './services/instrument-snapshot.service.js';
+import { requestShareholding } from './providers/shareholding.client.js';
 
 export type ImportKind = 'instruments' | 'memberships' | 'pledge' | 'delivery' | 'fundamentals' | 'history';
 export type Progress = (processed: number, total?: number, details?: Record<string, unknown>) => Promise<void>;
@@ -101,9 +102,7 @@ export async function syncPledge() {
       try {
         const result = exchange === 'NSE'
           ? parseNsePledge(await downloadJson(NSE_PLEDGE_URL), (await download(NSE_EQUITIES_URL)).toString('utf8'), stocks, new Date().toISOString())
-          : parseBsePledge(await downloadJson(BSE_PLEDGE_URL, { maxRedirects: 2, beforeRedirect: options => {
-            if (options.protocol !== 'https:' || options.hostname !== 'www.bseindia.com') throw new AppError(502, 'SOURCE_REDIRECT', 'Unexpected BSE report redirect');
-          } }), stocks, new Date().toISOString());
+          : parseBsePledge(await requestShareholding(BSE_PLEDGE_URL), stocks, new Date().toISOString());
         await writeFacts(result.facts); reported += result.reported; unmatched += result.unmatched; written += result.facts.length;
       } catch (e) { errors.push({ item: exchange, message: e instanceof AppError ? e.message : 'Pledge disclosures unavailable' }); }
     }

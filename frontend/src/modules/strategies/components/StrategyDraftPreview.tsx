@@ -5,6 +5,7 @@ import { horizonLabels } from '../../qualification/config/metrics';
 import { money } from '../../backtesting/config/backtestDefaults';
 import type { RuleDefinition } from '../../qualification/types';
 import type { TradingPlanDraft } from '../types/tradingPlan';
+import { cadenceLabel } from '../utils/strategyLabels';
 
 function TradeSide({ rule }: { rule: RuleDefinition }) {
   const buy = rule.side === 'BUY';
@@ -18,9 +19,9 @@ export function StrategyDraftPreview({ draft, changed, saved }: { draft?: Tradin
   if (!draft) return <div className="strategy-draft-empty"><div className="strategy-empty-flow"><span>BUY</span><i>→</i><span>HOLD</span><i>→</i><span>SELL</span></div><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Your strategy will take shape here" /><p>Describe your strategy in chat. Review the entry, exit and risk settings together before saving.</p></div>;
   const { risk } = draft;
   return <><div className="strategy-draft-title"><div><span className="strategy-eyebrow">{changed ? 'DRAFT FOR REVIEW' : 'SAVED STRATEGY'}</span><h2>{draft.name}</h2></div><Tag color={changed ? 'gold' : 'green'}>{changed ? saved ? 'Unsaved changes' : 'Not saved' : 'Saved'}</Tag></div>
-    <div className="strategy-draft-meta"><Tag>{horizonLabels[draft.entry.horizon]}</Tag><span>{risk.timeframe === '1d' ? 'Daily execution' : `${risk.timeframe} execution`}</span><span>Long only</span></div>
+    <div className="strategy-draft-meta"><Tag>{horizonLabels[draft.entry.horizon]}</Tag><span>{cadenceLabel(draft.entry.cadence)}</span><span>Long only</span></div>
     <TradeSide rule={draft.entry} /><TradeSide rule={draft.exit} />
     <section className="strategy-risk" aria-label="Strategy risk settings"><header><SafetyOutlined /><h3>Risk & protective exits</h3></header><div className="strategy-risk-grid"><div><span>Risk per trade</span><strong>{risk.riskPercent}% <small>of equity</small></strong></div><div><span>Open positions</span><strong>{risk.maxPositions} <small>maximum</small></strong></div><div><span>Stop loss</span><strong>{risk.stopMode === 'ATR' ? `ATR(${risk.atrPeriod}) × ${risk.atrMultiplier}` : `${risk.stopPercent}% ${risk.stopMode}`}</strong></div><div><span>Profit target</span><strong>{risk.targetR}R</strong></div></div><p>First applicable exit wins: sell condition, stop, target{risk.overnight ? '.' : ', or 15:15 IST session close.'} {risk.overnight ? 'Overnight holding allowed.' : 'No overnight positions.'}</p>
-      <Collapse ghost size="small" items={[{ key: 'assumptions', label: 'Capital, costs & execution assumptions', children: <dl className="strategy-assumptions"><dt>Initial capital</dt><dd>{money(risk.initialCapital)}</dd><dt>Slippage / side</dt><dd>{risk.slippagePercent}%</dd><dt>Estimated fees / side</dt><dd>{risk.feePercent}%</dd><dt>Execution</dt><dd>Closed candles · next available bar</dd><dt>Stock pool</dt><dd>Current monthly qualified list, including custom additions</dd></dl> }]} />
+      <Collapse ghost size="small" items={[{ key: 'assumptions', label: 'Capital, costs & execution assumptions', children: <dl className="strategy-assumptions"><dt>Initial capital</dt><dd>{money(risk.initialCapital)}</dd><dt>Slippage / side</dt><dd>{risk.slippagePercent}%</dd><dt>Estimated fees / side</dt><dd>{risk.feePercent}%</dd><dt>Execution</dt><dd>Closed candles · next available bar</dd><dt>Stock pool</dt><dd>Selected qualified stocks; manual additions depend on the run settings</dd></dl> }]} />
     </section></>;
 }

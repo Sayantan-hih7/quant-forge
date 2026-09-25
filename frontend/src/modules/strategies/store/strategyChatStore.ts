@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { StrategyMessage, TradingPlanDraft } from '../types/tradingPlan';
 
-interface Conversation { messages: StrategyMessage[]; draft?: TradingPlanDraft; proposal?: TradingPlanDraft; savedPlanId?: string }
+interface Conversation { messages: StrategyMessage[]; draft?: TradingPlanDraft; proposal?: TradingPlanDraft; savedPlanId?: string; baseRevision?: number }
 interface StrategyChatState {
   conversations: Record<string, Conversation>;
   update: (key: string, value: Partial<Conversation>) => void;

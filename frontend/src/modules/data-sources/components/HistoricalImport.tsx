@@ -10,7 +10,7 @@ import type { DataStatus } from '../types';
 const schema = z.object({ search: z.string(), instrumentId: z.string().min(1, 'Choose a stock from the suggestions'), interval: z.enum(['1d', '1m']), from: z.string().date(), to: z.string().date() }).refine(x => x.from < x.to, { path: ['to'], message: 'End date must follow the start date' });
 type Fields = z.infer<typeof schema>;
 interface Stock { _id: string; symbol: string; exchange: string; name: string }
-interface Fact { _id: string; field: string; value: string | string[] | number; source: string; knownAt: string; period?: string }
+interface Fact { _id: string; field: string; value: string | string[] | number; source: string; sourceUrl?: string; knownAt: string; period?: string; statementBasis?: string; calculation?: { method: string } }
 const labels: Record<string, string> = { index: 'Index memberships', pledge: 'Promoter pledge (%)', delivery: 'Monthly delivery (%)', tradedValue: 'Monthly traded value (₹ Cr)', turnover: 'Average daily turnover (₹ Cr)', marketCap: 'Market cap (₹ Cr)', debtEquity: 'Debt / equity', pe: 'P/E', roe: 'ROE (%)', roce: 'ROCE (%)', sector: 'Sector', industry: 'Industry', promoterHolding: 'Promoter holding (%)', fiiChange: 'FII change (percentage points)', diiChange: 'DII change (percentage points)' };
 export function HistoricalImport({ data, refresh }: { data: DataStatus; refresh: () => Promise<void> }) {
   const { message } = App.useApp();
@@ -47,8 +47,9 @@ export function HistoricalImport({ data, refresh }: { data: DataStatus; refresh:
     </Form>
     {!!facts.length && <Table<Fact> size="small" className="mt-5" rowKey="_id" dataSource={facts} pagination={false} scroll={{ x: 600 }} columns={[
       { title: 'Field', dataIndex: 'field', render: (field: string) => labels[field] ?? field },
-      { title: 'Value', dataIndex: 'value', render: (value: Fact['value']) => Array.isArray(value) ? <Space wrap>{value.map(id => <Tag key={id}>{data.indices.find(x => x.id === id)?.name ?? id}</Tag>)}</Space> : typeof value === 'number' ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : value },
-      { title: 'Source', dataIndex: 'source' }, { title: 'Period', dataIndex: 'period', render: (period?: string) => period || 'Current snapshot' },
+      { title: 'Value', dataIndex: 'value', render: (value: Fact['value']) => Array.isArray(value) ? <Space wrap>{value.map(id => <Tag key={id}>{data.indices.find(x => x.id === id)?.name ?? id}</Tag>)}</Space> : value === 'not-applicable' ? 'N/A · no promoter holding' : typeof value === 'number' ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : value },
+      { title: 'Source', render: (_, row) => row.source === 'dhan-public-company' ? <a href={row.sourceUrl} target="_blank" rel="noreferrer">Dhan public financials{row.calculation ? ' · calculated' : ''}</a> : ['nse-shareholding', 'bse-shareholding'].includes(row.source) ? <a href={row.sourceUrl} target="_blank" rel="noreferrer">{row.source.startsWith('nse') ? 'NSE' : 'BSE'} shareholding filing</a> : row.source },
+      { title: 'Period', render: (_, row) => [row.period || 'Current snapshot', row.statementBasis].filter(Boolean).join(' · ') },
       { title: 'Collected', dataIndex: 'knownAt', render: (at: string) => new Date(at).toLocaleDateString() },
     ]} />}
   </Card>;

@@ -32,7 +32,7 @@ async function collectCoverage(rule?: Record<string, unknown>) {
     ]),
     required.some(x => x.kind === 'history') ? storedCandles.aggregate<{ _id: string; months: string[] }>([
       { $match: { instrumentId: { $in: ids }, interval: '1d', time: { $gte: needed.from, $lt: monthStart } } },
-      { $group: { _id: '$instrumentId', months: { $addToSet: { $substrBytes: ['$time', 0, 7] } } } },
+      { $group: { _id: '$instrumentId', months: { $addToSet: { $dateToString: { date: { $toDate: '$time' }, format: '%Y-%m', timezone: 'Asia/Kolkata' } } } } },
     ]) : Promise.resolve([]),
   ]);
   const consecutive = history.map(item => {
@@ -45,11 +45,20 @@ async function collectCoverage(rule?: Record<string, unknown>) {
     withData: item.kind === 'history' ? consecutive.filter(count => count >= needed.fields[item.field]).length : observations.find(row => row._id === item.field)?.count ?? 0,
   })) };
 }
-let cached: { key: string; until: number; value: Awaited<ReturnType<typeof collectCoverage>> } | undefined;
-export async function qualificationReadiness(rule?: Record<string, unknown>) {
-  const key = JSON.stringify(monthlyRequiredFields(rule));
-  if (!cached || cached.key !== key || cached.until < Date.now()) {
-    cached = { key, until: Date.now() + 15_000, value: await collectCoverage(rule) };
-  }
-  return { ...cached.value, universeRefresh: await universeRefreshStatus() };
+type Readiness = Awaited<ReturnType<typeof collectCoverage>> & { universeRefresh: Awaited<ReturnType<typeof universeRefreshStatus>> };
+export function createReadinessCache(load: (rule?: Record<string, unknown>) => Promise<Readiness>) {
+  let cached: { key: string; until: number; value: Readiness } | undefined;
+  const pending = new Set<string>(), retryAfter = new Map<string, number>();
+  return (rule?: Record<string, unknown>) => {
+    const key = JSON.stringify([rule, new Date(Date.now() + 19800000).toISOString().slice(0, 7)]);
+    if ((!cached || cached.key !== key || cached.until < Date.now()) && !pending.has(key) && (retryAfter.get(key) ?? 0) <= Date.now()) {
+      pending.add(key);
+      // Coverage is an informational aggregate over all stored candles. It must
+      // not delay opening the page, polling progress, or submitting a scan.
+      void load(rule).then(value => { cached = { key, value, until: Date.now() + 30_000 }; retryAfter.delete(key); })
+        .catch(() => { retryAfter.set(key, Date.now() + 30_000); }).finally(() => pending.delete(key));
+    }
+    return cached?.key === key ? cached.value : undefined;
+  };
 }
+export const qualificationReadiness = createReadinessCache(async rule => ({ ...await collectCoverage(rule), universeRefresh: await universeRefreshStatus() }));

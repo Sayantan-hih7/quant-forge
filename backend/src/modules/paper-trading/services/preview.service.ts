@@ -17,6 +17,7 @@ export async function previewStrategy(raw: unknown) {
     StrategyModel.findById(input.strategyId).lean(), MonthlyUniverseModel.findById(currentMonth()).lean(), feedStatus(), instruments.find({ _id: { $in: ids } }).lean(),
   ]);
   invariant(strategy, 'Select a saved strategy');
+  invariant(input.expectedRevision === undefined || strategy.revision === input.expectedRevision, 'The strategy changed. Reload its saved rules before inspecting signals.');
   invariant(ids.every(id => universe?.members.some(m => m.instrumentId === id)), 'Only currently qualified stocks can be checked');
   const cutoff = new Date().toISOString(), today = new Date(Date.now() + 19_800_000).toISOString().slice(0, 10);
   const plan = strategyHistoryPlan(strategy, today, today), results: Decision[] = [];

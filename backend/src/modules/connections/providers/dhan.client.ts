@@ -16,6 +16,9 @@ export function dhanProviderError(error: unknown, auth: boolean): AppError {
   if (status === 404) return new AppError(502, 'DHAN_ENDPOINT_UNAVAILABLE', 'This data endpoint is not available from Dhan. Check API availability before retrying the import.');
   if (auth && [400, 401, 403, 410].includes(status ?? 0)) return new AppError(424, 'DHAN_CONSENT_REJECTED', 'Dhan rejected this login code. It may have expired, already been used, or belong to another API app. Start a new Dhan login and paste its latest redirect URL or tokenId.');
   if ([401, 403].includes(status ?? 0)) return new AppError(424, 'DHAN_TOKEN_REJECTED', 'Dhan rejected the access token. Generate a fresh access token in Dhan, or complete a new Dhan login. Your saved connection has not been replaced.');
+  if (status === 400 && ['/charts/historical', '/charts/intraday'].includes(error.config?.url ?? '') && error.response?.data?.errorCode === 'DH-907') {
+    return new AppError(502, 'DHAN_HISTORY_UNAVAILABLE', 'Dhan could not return candles for this stock and date range. The requested history may be unavailable.');
+  }
   return new AppError(502, 'DHAN_UNAVAILABLE', status ? `Dhan returned HTTP ${status}. Please retry or check the Dhan service status.` : 'Dhan is unavailable or took too long to respond. Please retry.');
 }
 

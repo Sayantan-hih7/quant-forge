@@ -1,7 +1,7 @@
 import { AppError, invariant } from '../../../shared/errors.js';
 import { sourceRun } from '../imports.js';
-import { instruments, storedCandles, writeFacts } from '../repository.js';
-import { parseDhanCompany } from '../sources/dhan-company.js';
+import { facts, instruments, storedCandles } from '../repository.js';
+import { ensureCompanyData } from './dhan-cache.service.js';
 import { historyWindows, parseDhanHistory } from '../sources/dhan-history.js';
 import { dhanRequest } from '../../connections/services/dhan.service.js';
 
@@ -12,13 +12,10 @@ export async function syncFundamentals(ids?: string[]) {
     let factsWritten = 0;
     for (const [i, stock] of stocks.entries()) {
       try {
-        const data = await dhanRequest('/data/companyinfo', { securityId: stock.securityId, exchangeSegment: `${stock.exchange}_EQ`, instrument: 'EQUITY', metrics: ['CO', 'RATIOS', 'SHP'] });
-        const observedAt = new Date().toISOString();
-        const rows = parseDhanCompany(data, stock, observedAt);
-        // Corporate facts are ISIN-level; distribute to both listings, unlike exchange-specific delivery/price.
-        const listings = await instruments.find({ isin: stock.isin, active: true }).lean();
-        const expanded = listings.flatMap(x => rows.map(row => ({ ...row, _id: `dhan:${x._id}:${row.field}:${observedAt}`, instrumentId: x._id })));
-        await writeFacts(expanded); factsWritten += expanded.length;
+        const startedAt = new Date().toISOString();
+        await ensureCompanyData(stock, ['marketCap', 'debtEquity', 'roe', 'roce', 'pe', 'sector', 'promoterHolding', 'fiiChange', 'diiChange'],
+          new Date(Date.now() + 19800000).toISOString().slice(0, 7));
+        factsWritten += await facts.countDocuments({ instrumentId: stock._id, observedAt: { $gte: startedAt } });
       } catch (e) {
         if (e instanceof AppError && (e.status === 424 || e.status === 429 || ['SOURCE_HTTP_404', 'SOURCE_HTTP_429', 'DHAN_ENDPOINT_UNAVAILABLE', 'DHAN_LOGIN_REQUIRED'].includes(e.code))) throw e;
         errors.push({ item: stock._id, message: e instanceof AppError ? e.message : 'Company metrics unavailable' });

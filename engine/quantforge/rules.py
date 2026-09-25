@@ -121,6 +121,26 @@ class Observations:
         self.intraday = candles(instrument.get("intraday", []), cutoff, "1m")
         self.facts = instrument.get("facts", [])
         self.cache = {}
+        self.frame_cache = {}
+        self.monthly_history_issue = None
+        self.monthly_history_checked = instrument.get('monthlyHistoryChecked', False)
+
+    def bars(self, frame):
+        if frame not in self.frame_cache:
+            df = timeframe(self.daily, self.intraday, frame, self.cutoff)
+            if frame == '1mo' and not df.empty:
+                expected_end = self.cutoff.tz_convert(IST).normalize().replace(day=1)
+                if df.end.iloc[-1] != expected_end:
+                    self.monthly_history_issue = 'stale_history'
+                    df = df.iloc[:0]
+                else:
+                    months = df.index.year * 12 + df.index.month
+                    gaps = np.flatnonzero(np.diff(months) != 1)
+                    if len(gaps):
+                        self.monthly_history_issue = 'history_gap'
+                        df = df.iloc[gaps[-1] + 1:]
+            self.frame_cache[frame] = df
+        return self.frame_cache[frame]
 
     def values(self, field, frame):
         key = field, frame
@@ -130,22 +150,10 @@ class Observations:
             found = [x for x in self.facts if field in x.get("values", {}) and stamp(x["knownAt"]) <= self.cutoff
                      and (not x.get("validUntil") or stamp(x["validUntil"]) >= self.cutoff)]
             # A late download of an older report cannot supersede a newer reporting period.
-            found.sort(key=lambda x: (x.get("period") or "", stamp(x["knownAt"])))
+            found.sort(key=lambda x: (x.get("priority", 1), x.get("period") or "", stamp(x["knownAt"])))
             result = pd.Series([x["values"][field] for x in found], dtype=object)
         else:
-            df = timeframe(self.daily, self.intraday, frame, self.cutoff)
-            if frame == '1mo' and not df.empty:
-                # Monthly indicators must end with the most recently completed
-                # month. Stale/suspended stocks cannot use an old trend as current.
-                expected_end = self.cutoff.tz_convert(IST).normalize().replace(day=1)
-                if df.end.iloc[-1] != expected_end:
-                    df = df.iloc[:0]
-                else:
-                    months = [t.year * 12 + t.month for t in df.index]
-                    gaps = [i for i in range(1, len(months)) if months[i] != months[i-1] + 1]
-                    if gaps:
-                        df = df.iloc[gaps[-1]:]  # Warm up again after a missing month.
-            result = indicator(df, field)
+            result = indicator(self.bars(frame), field)
         self.cache[key] = result
         return result
 
@@ -161,9 +169,40 @@ def condition(c, data, monthly):
     frame = "1mo" if monthly else c.get("leftFrame", "1d")
     left = data.values(field, frame)
     missing = {"matched": None, "field": field, "reason": f"Missing/insufficient {field} ({frame}) history or dated facts"}
+    if monthly:
+        # Diagnose both operands, including the lookback. A failed data request is
+        # not evidence of an IPO, and preferred EMA warm-up is not minimum age.
+        required = [field]
+        if c.get('operand') == 'field':
+            required.append(c.get('compareField'))
+        # A missing fundamental must remain a data gap even if its technical
+        # comparison also lacks history.
+        if any(operand in FACTS and data.values(operand, frame).empty for operand in required):
+            required = []
+        for operand in sorted(required, key=indicator_months, reverse=True):
+            if operand not in TECHNICAL:
+                continue
+            bars = data.bars('1mo')
+            needed = indicator_months(operand) + (int(c.get('lookback', 1)) if c['operator'] in {'crossAbove', 'crossBelow', 'increasing', 'decreasing'} else 0)
+            if len(bars) < needed:
+                code = data.monthly_history_issue or ('insufficient_monthly_history' if len(bars) or not data.daily.empty or data.monthly_history_checked else 'missing_history')
+                missing = {**missing, 'code': code, 'historyField': operand, 'availableMonths': len(bars), 'requiredMonths': needed,
+                           'reason': f'{operand}: {len(bars)} of {needed} completed monthly candles available. '
+                                     + ({'stale_history': 'Latest completed month is missing.', 'history_gap': 'History has a gap; consecutive candles are required.',
+                                         'missing_history': 'Price history is not loaded; listing age is not yet known.'}.get(code, 'More monthly history is needed; the forming month is excluded.'))}
+                break
     if left.empty:
         return missing
     op = c["operator"]
+    if field == 'pledge' and left.iloc[-1] == 'not-applicable':
+        # A verified no-promoter filing has no percentage denominator. It meets
+        # a nonnegative maximum-encumbrance guardrail without fabricating 0%.
+        threshold = c.get('value')
+        upper_limit = c.get('operand', c.get('rightType')) not in ('field', 'indicator') and isinstance(threshold, (int, float))
+        passed = upper_limit and (op == 'lte' and threshold >= 0 or op == 'lt' and threshold > 0)
+        return {'matched': True if passed else None, 'field': field, 'code': 'no_promoters',
+                'reason': 'No promoter holding in the verified filing; pledge percentage is not applicable. '
+                          + ('Meets the maximum-encumbrance limit.' if passed else 'This comparison requires a promoter holding percentage.')}
     if op in ("is", "isNot", "in", "notIn"):
         value = left.iloc[-1]
         selected = c.get("choices", [])
@@ -222,5 +261,16 @@ def evaluate(rule, instrument, cutoff):
 def evaluate_observations(rule, instrument_id, data, monthly=False):
     groups = [[condition(c, data, monthly) for c in group["conditions"]] for group in rule["groups"]]
     matched = combine([combine([c["matched"] for c in checks], group["logic"]) for checks, group in zip(groups, rule["groups"])], rule["logic"])
-    return {"id": instrument_id, "matched": matched, "status": "unavailable" if matched is None else "qualified" if matched else "rejected",
+    missing = [c for group in groups for c in group if c['matched'] is None]
+    awaiting = monthly and missing and all(c.get('code') == 'insufficient_monthly_history' for c in missing)
+    return {"id": instrument_id, "matched": matched, "status": ('awaiting_history' if awaiting else 'unavailable') if matched is None else "qualified" if matched else "rejected",
             "checks": [c for group in groups for c in group]}
+
+
+def indicator_months(field):
+    ma = re.fullmatch(r'(?:ema|sma)(\d+)', field)
+    returns = re.fullmatch(r'return(\d+)m', field)
+    return int(ma[1]) if ma else int(returns[1]) + 1 if returns else {
+        'rsi': 15, 'atr': 14, 'macd': 26, 'macdSignal': 34, 'avgVolume6': 7,
+        'avgVolume20': 21, 'rvol': 21, 'volumeRatio': 21, 'priceChange': 2,
+    }.get(field, 1)

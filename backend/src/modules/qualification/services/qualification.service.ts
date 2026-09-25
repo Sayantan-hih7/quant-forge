@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { AppError, invariant } from '../../../shared/errors.js';
 import { announce, jobs, redis } from '../../../shared/redis.js';
-import { instruments } from '../../market-data/repository.js';
+import { facts, instruments } from '../../market-data/repository.js';
+import type { Fact } from '../../market-data/types.js';
 import { evaluateBatch } from '../../engine/services/engine.service.js';
 import { validateSourcedRule } from '../../market-data/services/capabilities.service.js';
 import { MonthlyRuleModel, MonthlyUniverseModel, QualificationResultModel, QualificationRunModel } from '../models/qualification.model.js';
@@ -20,7 +21,7 @@ export async function qualificationState() {
   const month = currentMonth();
   const [rule, universe, runs] = await Promise.all([MonthlyRuleModel.findById('monthly').lean(), MonthlyUniverseModel.findById(month).lean(), QualificationRunModel.find({ month }).sort({ cutoff: -1 }).limit(10).select('-ids').lean()]);
   const cooldown = await redis.pttl('quantforge:dhan:cooldown');
-  return { month, rule, universe, runs, providerRetryAt: cooldown > 0 ? new Date(Date.now() + cooldown).toISOString() : null, readiness: await qualificationReadiness(rule?.rule), canRun: !!rule && (rule.fingerprint !== universe?.fingerprint || !!runs[0]?.unavailable) && !runs.some(x => ['queued', 'running'].includes(x.status)) };
+  return { month, rule, universe, runs, providerRetryAt: cooldown > 0 ? new Date(Date.now() + cooldown).toISOString() : null, readiness: qualificationReadiness(rule?.rule), canRun: !!rule && (rule.fingerprint !== universe?.fingerprint || !!runs[0]?.unavailable) && !runs.some(x => ['queued', 'running'].includes(x.status)) };
 }
 export async function saveMonthlyRule(rule: Record<string, unknown>, expectedRevision: number) {
   invariant(rule.timeframe === '1mo', 'Qualification requires monthly rules');
@@ -61,18 +62,28 @@ export async function runQualification(id: string) {
       run = await QualificationRunModel.findById(id).lean();
       if (!run || run.status !== 'running') return;
     }
+    // Recover only the durably committed prefix. A crash after writing results
+    // but before progress is saved must not count the replayed batch twice.
+    const previousCounts = run.processed ? await QualificationResultModel.aggregate<{ _id: string; count: number }>([
+      { $match: { runId: id, instrumentId: { $in: run.ids.slice(0, run.processed) } } }, { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]) : [];
+    const counts = Object.fromEntries(previousCounts.map(x => [x._id, x.count]));
     for (let offset = run.processed; offset < run.ids.length; offset += 20) {
       const current = await QualificationRunModel.findById(id).select('status').lean();
       if (current?.status === 'cancelled') return;
       const results = await evaluateBatch(run.rule, run.ids.slice(offset, offset + 20), run.cutoff);
       await QualificationResultModel.bulkWrite(results.map(result => ({ updateOne: { filter: { _id: `${id}:${result.id}` },
         update: { $set: { runId: id, instrumentId: result.id, matched: result.matched, status: result.status, checks: result.checks } }, upsert: true } })));
-      const counts = await QualificationResultModel.aggregate<{ _id: string; count: number }>([{ $match: { runId: id } }, { $group: { _id: '$status', count: { $sum: 1 } } }]);
-      const count = (status: string) => counts.find(x => x._id === status)?.count ?? 0;
-      await QualificationRunModel.updateOne({ _id: id, status: 'running' }, { $set: { processed: Math.min(offset + 20, run.ids.length), qualified: count('qualified'), rejected: count('rejected'), unavailable: count('unavailable') } });
+      for (const result of results) counts[result.status] = (counts[result.status] ?? 0) + 1;
+      await QualificationRunModel.updateOne({ _id: id, status: 'running' }, { $set: { processed: Math.min(offset + 20, run.ids.length), qualified: counts.qualified ?? 0, rejected: counts.rejected ?? 0, unavailable: counts.unavailable ?? 0, awaitingHistory: counts.awaiting_history ?? 0 } });
       await announce('qualification.progress', { id });
     }
-    await QualificationRunModel.updateOne({ _id: id, status: 'running' }, { $set: { status: 'completed', finishedAt: new Date().toISOString() } });
+    const dataGaps = await QualificationResultModel.aggregate<{ field: string; stocks: number }>([
+      { $match: { runId: id, status: 'unavailable' } }, { $unwind: '$checks' }, { $match: { 'checks.matched': null } },
+      { $group: { _id: { stock: '$instrumentId', field: { $ifNull: ['$checks.historyField', '$checks.field'] } } } },
+      { $group: { _id: '$_id.field', stocks: { $sum: 1 } } }, { $project: { _id: 0, field: '$_id', stocks: 1 } }, { $sort: { stocks: -1, field: 1 } },
+    ]);
+    await QualificationRunModel.updateOne({ _id: id, status: 'running' }, { $set: { status: 'completed', finishedAt: new Date().toISOString(), dataGaps } });
   } catch (e) {
     if (e instanceof AppError && e.code === 'SCAN_CANCELLED') return;
     await QualificationRunModel.updateOne({ _id: id, status: 'running' }, { $set: { status: 'failed', message: e instanceof AppError ? e.message : 'Qualification failed' } }); throw e;
@@ -82,7 +93,7 @@ export async function publishQualification(id: string, acknowledgeMissingData: b
   const saved = await mongoose.connection.transaction(async session => {
   const run = await QualificationRunModel.findById(id).session(session).lean();
   invariant(run?.status === 'completed' && run.month === currentMonth(), 'Only a completed current-month scan can be published');
-  invariant(!run.unavailable || acknowledgeMissingData, 'Review unavailable stocks before publishing a partial-coverage scan');
+  invariant(!(run.unavailable || run.awaitingHistory) || acknowledgeMissingData, 'Review unavailable stocks and those awaiting history before publishing a partial-coverage scan');
   const rule = await MonthlyRuleModel.findById('monthly').session(session).lean();
   invariant(rule?.fingerprint === run.fingerprint, 'Saved rules changed after this scan; run the saved rules before publishing');
   const results = await QualificationResultModel.find({ runId: id, matched: true }).session(session).lean();
@@ -102,8 +113,9 @@ export async function publishQualification(id: string, acknowledgeMissingData: b
   await announce('qualification.published'); return saved;
 }
 
-export async function qualificationResults(id: string, page: number, status?: 'qualified' | 'rejected' | 'unavailable') {
-  invariant(await QualificationRunModel.exists({ _id: id }), 'Scan not found');
+export async function qualificationResults(id: string, page: number, status?: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history') {
+  const run = await QualificationRunModel.findById(id).select('cutoff').lean();
+  invariant(run, 'Scan not found');
   const query = { runId: id, ...(status ? { status } : {}) };
   const [rows, total] = await Promise.all([
     QualificationResultModel.find(query).sort({ instrumentId: 1 }).skip((page - 1) * 50).limit(50).lean(),
@@ -111,7 +123,18 @@ export async function qualificationResults(id: string, page: number, status?: 'q
   ]);
   const stocks = await instruments.find({ _id: { $in: rows.map(row => row.instrumentId).filter((id): id is string => typeof id === 'string') } }).select('symbol name exchange').lean();
   const byId = new Map(stocks.map(stock => [stock._id, stock]));
-  return { rows: rows.map(row => ({ ...row, instrument: byId.get(row.instrumentId!) })), total };
+  const observations = await facts.aggregate<Fact>([
+    { $match: { instrumentId: { $in: stocks.map(stock => stock._id) }, knownAt: { $lte: run.cutoff },
+      $or: [{ validUntil: { $exists: false } }, { validUntil: { $gte: run.cutoff } }] } },
+    { $set: { priority: { $cond: [{ $eq: ['$source', 'dhan-public-company'] }, 0, 1] } } },
+    { $sort: { priority: -1, period: -1, knownAt: -1 } },
+    { $group: { _id: { instrument: '$instrumentId', field: '$field' }, fact: { $first: '$$ROOT' } } },
+    { $replaceRoot: { newRoot: '$fact' } },
+  ]);
+  const evidence = new Map(observations.map(fact => [`${fact.instrumentId}:${fact.field}`, { source: fact.source, sourceUrl: fact.sourceUrl, period: fact.period }]));
+  return { rows: rows.map(row => ({ ...row, instrument: byId.get(row.instrumentId!),
+    checks: row.checks.map(check => ({ ...check, evidence: evidence.get(`${row.instrumentId}:${check.field}`) })),
+  })), total };
 }
 export async function cancelQualification(id: string) {
   await QualificationRunModel.updateOne({ _id: id, status: { $in: ['queued', 'running'] } }, { $set: { status: 'cancelled', finishedAt: new Date().toISOString() } });

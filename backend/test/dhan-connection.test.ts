@@ -36,6 +36,17 @@ test('Dhan provider failures explain login-code versus access-token errors witho
   assert.equal(dhanProviderError(error, true).code, 'DHAN_RATE_LIMIT');
 });
 
+test('unavailable chart ranges are distinguished from temporary provider or authentication failures', () => {
+  const config = { url: '/charts/historical', headers: new AxiosHeaders({ 'access-token': 'secret-fixture' }) };
+  const error = new AxiosError('secret-fixture', 'ERR_BAD_REQUEST', config, undefined,
+    { status: 400, statusText: 'Bad Request', headers: {}, config, data: { errorCode: 'DH-907', errorMessage: 'secret-fixture' } });
+  const result = dhanProviderError(error, false);
+  assert.equal(result.code, 'DHAN_HISTORY_UNAVAILABLE');
+  assert.equal(result.message.includes('secret-fixture'), false);
+  error.config!.url = '/data/companyinfo';
+  assert.equal(dhanProviderError(error, false).code, 'DHAN_UNAVAILABLE');
+});
+
 test('Dhan exchanges a pasted redirect, encrypts the verified session and preserves it after a rejected replacement', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
   const name = `quantforge_test_${randomUUID().replaceAll('-', '')}`;
   const uri = new URL(env.MONGODB_URI); uri.pathname = `/${name}`;

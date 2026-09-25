@@ -7,9 +7,10 @@ export interface RuleCapabilities {
 }
 export interface BackendScan {
   _id: string; month: string; status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  cutoff: string; total: number; processed: number; qualified: number; rejected: number; unavailable: number; message?: string;
+  cutoff: string; total: number; processed: number; qualified: number; rejected: number; unavailable: number; awaitingHistory?: number; message?: string;
   revision: number; fingerprint: string;
-  stage?: 'checking' | 'fundamentals' | 'history' | 'evaluating';
+  stage?: 'checking' | 'fundamentals' | 'ownership' | 'history' | 'evaluating';
+  dataGaps?: { field: string; stocks: number }[];
   preparation?: { processed: number; total: number; downloaded: number; cached: number; failed: number; ruledOut: number; failures: { instrumentId: string; message: string }[] };
 }
 export interface QualificationState {

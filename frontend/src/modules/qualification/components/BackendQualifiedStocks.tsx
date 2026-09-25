@@ -49,6 +49,9 @@ export function BackendQualifiedStocks({ state, stocks, capabilities, refresh, o
       <Button onClick={onRules}>Edit monthly rules</Button>
       <Button type="primary" disabled={!state.canRun} loading={busy} onClick={async () => { setBusy(true); try { await apiClient.post('/qualification/runs'); await refresh(); } catch (error) { message.error((error as Error).message); } finally { setBusy(false); } }}>Run saved rules</Button>
     </Space></div>
+    {ready && state.universe && state.universe.runId !== latest._id && <Alert className="mb-5" type="info" showIcon
+      title={`${latest.qualified.toLocaleString()} stocks qualified in your latest scan`}
+      description={`This table shows your published list of ${stocks.length.toLocaleString()} companies. Review the latest scan above and choose Publish qualified list to apply the new results. Your manual additions are retained.`} />}
     {!state.universe && <Alert className="mb-5" type="info" showIcon title={active ? 'Your first monthly scan is in progress' : ready ? `${latest.qualified.toLocaleString()} qualifying stocks ready to review` : 'No published list for this month'} description={active ? 'Follow data preparation and scan progress above. Once complete, review the results and publish your qualified list here.' : ready ? 'Open Review results in the latest scan, then publish the qualified list. Manual additions become available after publication.' : 'Save monthly rules and run a scan. Required data is prepared automatically before evaluation.'} />}
     <Space wrap className="mb-5">
       <Input.Search aria-label="Search qualified stocks" placeholder="Search stocks" value={query} onChange={event => setQuery(event.target.value)} style={{ width: 230 }} />

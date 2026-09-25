@@ -8,16 +8,22 @@ import { evaluateBatch } from '../../engine/services/engine.service.js';
 import { QualificationRunModel, type QualificationRun } from '../models/qualification.model.js';
 import { dhanCompanyFields, monthlyHistoryRequirements } from './history-requirements.js';
 import { monthlyRequiredFields } from './readiness.service.js';
+import { ensureShareholding } from '../../market-data/services/shareholding.service.js';
 
-const preparationDependencies = { evaluate: evaluateBatch, company: ensureCompanyData, history: ensureMonthlyHistory };
+const preparationDependencies = { evaluate: evaluateBatch, company: ensureCompanyData, history: ensureMonthlyHistory, ownership: ensureShareholding };
 export async function prepareQualification(run: QualificationRun, dependencies = preparationDependencies) {
   const required = monthlyRequiredFields(run.rule).map(x => x.field);
   const history = monthlyHistoryRequirements(run.rule, run.month);
   const stats = { processed: 0, total: run.total, downloaded: 0, cached: 0, failed: 0, ruledOut: 0, failures: [] as { instrumentId: string; message: string }[] };
+  let lastActiveCheck = 0, lastUpdate = 0;
   async function checkActive() {
+    if (Date.now() - lastActiveCheck < 250) return;
     if (!(await QualificationRunModel.exists({ _id: run._id, status: 'running' }))) throw new AppError(409, 'SCAN_CANCELLED', 'Scan cancelled');
+    lastActiveCheck = Date.now();
   }
-  async function update(stage: QualificationRun['stage']) {
+  async function update(stage: QualificationRun['stage'], force = true) {
+    if (!force && Date.now() - lastUpdate < 500) return;
+    lastUpdate = Date.now();
     await QualificationRunModel.updateOne({ _id: run._id, status: 'running' }, { $set: { stage, preparation: stats } });
     await announce('qualification.progress', { id: run._id });
   }
@@ -35,19 +41,21 @@ export async function prepareQualification(run: QualificationRun, dependencies =
 
   async function possible(ids: string[]) {
     const remaining: string[] = [];
-    for (let offset = 0; offset < ids.length; offset += 20) {
+    for (let offset = 0; offset < ids.length; offset += 100) {
       await checkActive();
-      const results = await dependencies.evaluate(run.rule, ids.slice(offset, offset + 20), new Date().toISOString());
+      // Cheap dated facts first. Technical conditions remain unknown here;
+      // three-valued AND/OR logic still requires a definite failing outcome.
+      const results = await dependencies.evaluate(run.rule, ids.slice(offset, offset + 100), new Date().toISOString(), { factsOnly: true });
       // Three-valued AND/OR evaluation: only a definitive rejection can skip downloads.
       remaining.push(...results.filter(x => x.status !== 'rejected').map(x => x.id));
-      stats.processed = Math.min(offset + 20, ids.length);
-      if (offset % 100 === 0) await update('checking');
+      stats.processed = Math.min(offset + 100, ids.length);
+      await update('checking', false);
     }
     return remaining;
   }
   let candidates = await possible(run.ids);
   const companyFields = required.filter(field => dhanCompanyFields.has(field));
-  async function collect(stage: 'fundamentals' | 'history', ids: string[]) {
+  async function collect(stage: 'fundamentals' | 'ownership' | 'history', ids: string[]) {
     const stocks = await instruments.find({ _id: { $in: ids }, active: true }).lean();
     stats.processed = 0; stats.total = stocks.length; stats.ruledOut = run.total - ids.length;
     await update(stage);
@@ -57,7 +65,8 @@ export async function prepareQualification(run: QualificationRun, dependencies =
         const stock = stocks[cursor++];
         try {
           await checkActive();
-          const downloaded = stage === 'fundamentals' ? await dependencies.company(stock, companyFields, run.month) : await dependencies.history(stock, history.from, history.to);
+          const downloaded = stage === 'fundamentals' ? await dependencies.company(stock, companyFields, run.month)
+            : stage === 'ownership' ? await dependencies.ownership(stock) : await dependencies.history(stock, history.from, history.to);
           if (downloaded) stats.downloaded++; else stats.cached++;
         } catch (error) {
           if (error instanceof AppError && (error.status === 424 || error.status === 429 || ['SCAN_CANCELLED', 'DHAN_ENDPOINT_UNAVAILABLE'].includes(error.code))) { stop = error; return; }
@@ -65,7 +74,7 @@ export async function prepareQualification(run: QualificationRun, dependencies =
           if (stats.failures.length < 30) stats.failures.push({ instrumentId: stock._id, message: error instanceof AppError ? error.message : 'Data unavailable from provider' });
         }
         stats.processed++;
-        await update(stage);
+        await update(stage, false);
       }
     };
     await Promise.all([work(), work(), work()]);
@@ -74,6 +83,11 @@ export async function prepareQualification(run: QualificationRun, dependencies =
   }
   if (companyFields.length) {
     await collect('fundamentals', candidates);
+    stats.processed = 0; stats.total = candidates.length;
+    candidates = await possible(candidates);
+  }
+  if (required.includes('pledge')) {
+    await collect('ownership', candidates);
     stats.processed = 0; stats.total = candidates.length;
     candidates = await possible(candidates);
   }

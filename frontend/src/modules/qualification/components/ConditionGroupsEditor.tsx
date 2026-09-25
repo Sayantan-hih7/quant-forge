@@ -9,7 +9,7 @@ import {
   metrics,
   operatorLabels,
 } from "../config/metrics";
-import type { Metric, RuleDefinition, Tier } from "../types";
+import type { Condition, Metric, RuleDefinition, Tier } from "../types";
 
 type EditorValues = RuleDefinition & { entry: RuleDefinition; exit: RuleDefinition };
 type RulePrefix = '' | 'entry.' | 'exit.';
@@ -36,7 +36,7 @@ function ConditionRow({
     .filter(([, definition]) => tier === "tactical" || definition.base)
     .map(([value, definition]) => ({ value, label: definition.label }));
   const changeMetric = (side: "left" | "right", metric: Metric) =>
-    setValue(`${path}.${side}Frame`, allowedFrames(metric, tier)[0], {
+    setValue(`${path}.${side}Frame`, allowedFrames(metric, tier).includes(condition[side === 'left' ? 'leftFrame' : 'rightFrame']) ? condition[side === 'left' ? 'leftFrame' : 'rightFrame'] : allowedFrames(metric, tier)[0], {
       shouldValidate: true,
       shouldDirty: true,
     });
@@ -146,12 +146,14 @@ function GroupEditor({
   prefix,
   onRemove,
   canRemove,
+  initialCondition,
 }: {
   index: number;
   tier: Tier;
   prefix: RulePrefix;
   onRemove: () => void;
   canRemove: boolean;
+  initialCondition?: Condition;
 }) {
   const { control } = useFormContext<EditorValues>();
   const { fields, append, remove } = useFieldArray({
@@ -206,7 +208,7 @@ function GroupEditor({
         disabled={fields.length >= 12}
         onClick={() =>
           append(
-            tier === "base"
+            initialCondition ? { ...initialCondition } : tier === "base"
               ? { ...defaultCondition }
               : {
                   ...defaultCondition,
@@ -222,12 +224,12 @@ function GroupEditor({
     </section>
   );
 }
-export function ConditionGroupsEditor({ tier, prefix = '' }: { tier: Tier; prefix?: RulePrefix }) {
+export function ConditionGroupsEditor({ tier, prefix = '', initialCondition }: { tier: Tier; prefix?: RulePrefix; initialCondition?: Condition }) {
   const { control } = useFormContext<EditorValues>();
   const { fields, append, remove } = useFieldArray({ control, name: `${prefix}groups` });
   return (
     <div className="condition-groups-editor">
-      <div className="q-group-logic">
+      {fields.length > 1 && <div className="q-group-logic">
         <span>Combine condition groups</span>
         <RhfSelect
           control={control}
@@ -238,7 +240,7 @@ export function ConditionGroupsEditor({ tier, prefix = '' }: { tier: Tier; prefi
             { value: "OR", label: "ANY group · OR" },
           ]}
         />
-      </div>
+      </div>}
       {fields.map((field, index) => (
         <GroupEditor
           key={field.id}
@@ -246,6 +248,7 @@ export function ConditionGroupsEditor({ tier, prefix = '' }: { tier: Tier; prefi
           tier={tier}
           prefix={prefix}
           canRemove={fields.length > 1}
+          initialCondition={initialCondition}
           onRemove={() => remove(index)}
         />
       ))}
@@ -255,7 +258,7 @@ export function ConditionGroupsEditor({ tier, prefix = '' }: { tier: Tier; prefi
         icon={<PlusOutlined aria-hidden />}
         disabled={fields.length >= 6}
         onClick={() =>
-          append({ logic: "AND", conditions: [{ ...defaultCondition }] })
+          append({ logic: "AND", conditions: [{ ...(initialCondition ?? defaultCondition) }] })
         }
       >
         Add condition group

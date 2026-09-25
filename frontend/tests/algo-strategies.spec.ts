@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
     record = { ...body.draft, _id: route.request().url().split('/').at(-1)!, revision: body.expectedRevision + 1, savedAt: new Date().toISOString() };
     return route.fulfill({ json: record });
   });
-  await page.route('**/api/backtests**', route => route.fulfill({ json: [] }));
+  await page.route('**/api/backtests**', route => route.fulfill({ json: route.request().url().includes('/universe') ? { stocks: [], listCount: 0 } : [] }));
   await page.route('**/api/ai/status', route => route.fulfill({ json: { configured: true, provider: 'Gemini', model: 'fixture' } }));
   await page.route('**/api/ai/proposals', route => {
     const input = route.request().postDataJSON();
@@ -30,28 +30,30 @@ test('paired strategy validation rejects a buy rule used as a sell exit', () => 
 });
 
 test('manual buy/sell/risk edits save together and keep the backtest route', async ({ page }) => {
-  await page.goto('/strategies');
+  await page.goto('/strategies?rule=' + id);
   await expect(page.getByRole('region', { name: 'Trading rule builder' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Risk & execution' }).click();
+  await page.getByRole('navigation', { name: 'Strategy editor steps' }).getByRole('button', { name: '4 Risk' }).click();
   await page.getByLabel('Risk per trade (%)', { exact: true }).fill('0.5');
-  await page.getByRole('tab', { name: /Sell rules/ }).click();
+  await page.getByRole('navigation', { name: 'Strategy editor steps' }).getByRole('button', { name: '3 Sell rules' }).click();
   await page.getByLabel('Threshold (RSI)', { exact: true }).fill('40');
   const saved = page.waitForRequest(request => request.method() === 'PUT' && request.url().includes('/strategies/'));
-  await page.getByRole('button', { name: 'Save strategy', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   const data = (await saved).postDataJSON();
   expect(data.draft.entry.side).toBe('BUY'); expect(data.draft.exit.side).toBe('SELL');
   expect(data.draft.risk.riskPercent).toBe(0.5); expect(data.expectedRevision).toBe(1);
-  await expect(page.getByRole('button', { name: 'Save strategy', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Backtest strategy', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
+  await page.getByRole('tab', { name: 'Backtests', exact: true }).click();
   await expect(page).toHaveURL(/tab=backtests/);
   await expect(page.getByRole('tab', { name: 'Backtests', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('Gemini proposals support follow-ups, explicit apply and reload without automatic saving', async ({ page }) => {
   const writes: string[] = [];
-  page.on('request', request => { if (['PUT', 'POST'].includes(request.method()) && !request.url().includes('/ai/')) writes.push(request.url()); });
+  page.on('request', request => { if (['PUT', 'POST'].includes(request.method()) && !request.url().includes('/ai/') && !request.url().endsWith('/api/session')) writes.push(request.url()); });
+  await page.goto('/strategies?rule=' + id);
   await page.goto('/strategies');
   await page.getByRole('button', { name: 'New strategy', exact: true }).click();
+  await page.getByRole('button', { name: 'Start from scratch', exact: true }).click();
   await expect(page.getByLabel('Strategy name', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'AI assistant', exact: true }).click();
   await page.getByLabel('Message the strategy assistant').fill('Create a swing strategy with daily RSI conditions and an exit');
@@ -83,7 +85,7 @@ test('Gemini proposals support follow-ups, explicit apply and reload without aut
 });
 
 test('a failed strategy refinement preserves the paired suggestion without changing the manual builder', async ({ page }) => {
-  await page.goto('/strategies');
+  await page.goto('/strategies?rule=' + id);
   const original = await page.getByLabel('Strategy name', { exact: true }).inputValue();
   await page.getByRole('button', { name: 'AI assistant', exact: true }).click();
   await page.getByRole('button', { name: 'Swing strategy', exact: true }).click();
@@ -101,8 +103,10 @@ test('a failed strategy refinement preserves the paired suggestion without chang
 
 test('chat opens on the new draft when starting from an empty strategy list', async ({ page }) => {
   await page.route('**/api/strategies', route => route.fulfill({ json: [] }));
+  await page.goto('/strategies?rule=' + id);
   await page.goto('/strategies');
   await page.getByRole('button', { name: 'New strategy', exact: true }).click();
+  await page.getByRole('button', { name: 'Start from scratch', exact: true }).click();
   await page.getByRole('button', { name: 'AI assistant', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('textbox', { name: 'Message the strategy assistant' }).fill('Create a paper strategy with daily momentum buy rules, sell rules and a fixed stop. Keep it suitable for paper testing, with both sides editable in the builder.');

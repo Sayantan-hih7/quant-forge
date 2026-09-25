@@ -18,6 +18,11 @@ export function draftFromEntry(entry: RuleDefinition): TradingPlanDraft {
 export function sampleTradingPlan(horizon: Horizon): TradingPlanDraft {
   return draftFromEntry(initialTemplates.find((rule) => rule.tier === 'tactical' && rule.horizon === horizon)!);
 }
+export function blankTradingPlan(horizon: Horizon = 'intraday'): TradingPlanDraft {
+  const sample = sampleTradingPlan(horizon);
+  return { ...sample, name: '', risk: { ...sample.risk, timeframe: sample.entry.cadence === 'daily' ? '1d' : sample.entry.cadence }, entry: { ...sample.entry, name: 'Buy entry', description: '', groups: [{ logic: 'AND', conditions: [] }] },
+    exit: { ...sample.exit, name: 'Sell exit', description: '', groups: [{ logic: 'OR', conditions: [] }] } };
+}
 export function savedPlanDraft(workspace: QualificationWorkspace, plan: TradingPlan): TradingPlanDraft | undefined {
   const entry = workspace.templates.find((rule) => rule.id === plan.entryRuleId);
   const exit = workspace.templates.find((rule) => rule.id === plan.exitRuleId);

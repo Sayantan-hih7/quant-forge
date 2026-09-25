@@ -35,7 +35,7 @@ async function fixture(page: Page) {
       const timeframe = url.searchParams.get('timeframe');
       const intraday = ['1m', '5m', '15m'].includes(timeframe!);
       const bars = Array.from({ length: 60 }, (_, i) => ({ time: intraday ? new Date(Date.parse('2026-09-22T03:45:00Z') + i * 60_000).toISOString() : new Date(Date.parse('2026-06-01T00:00:00Z') + i * 86400000).toISOString().slice(0, 10), open: 310 + i / 4, high: 314 + i / 4, low: 308 + i / 4, close: 311 + i / 4, volume: 10000 + i * 50 }));
-      return route.fulfill({ json: { bars, timeframe, instrumentId: stock.instrumentId, source: 'Dhan historical candles' } });
+      return route.fulfill({ json: { bars, timeframe, instrumentId: stock.instrumentId, latestCandleAt: bars.at(-1)?.time, source: 'Dhan historical candles' } });
     }
     return route.fulfill({ json: { instrument: { ...stock.instrument, _id: stock.instrumentId, isin: stock.isin }, facts: [{ field: 'marketCap', value: 80740, period: '2026-06-30', observedAt: '2026-09-23T00:00:00Z', source: 'dhan' }], qualification: { source: stock.source, month: '2026-09', note: stock.note, cutoff: '2026-09-23T10:00:00Z', rule: stock.source === 'scan' ? initialMonthlyRule : null, checks: [] } } });
   });
@@ -51,11 +51,13 @@ test('qualified stock prices open an interactive chart and preserve manual quali
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByRole('figure', { name: 'FEDERALBNK price and volume chart' })).toBeVisible();
   await expect(drawer.locator('canvas').first()).toBeVisible();
+  await expect(drawer.getByLabel('Chart data timestamp')).toContainText('Completed daily sessions. The live price updates separately.');
   await expect(drawer.getByText('Day high', { exact: true })).toBeVisible();
   await expect(drawer.getByText('₹80,740.00 Cr', { exact: true })).toBeVisible();
   await drawer.getByText('View qualification rules', { exact: true }).click();
   await expect(drawer.getByText('Qualification conditions', { exact: true })).toBeVisible();
   await drawer.getByText('15m', { exact: true }).click();
+  await expect(drawer.getByLabel('Chart data timestamp')).toContainText('Completed candles. The live price updates separately.');
   await expect(drawer.getByRole('figure')).toBeVisible();
   await drawer.getByText('Line', { exact: true }).click();
   await drawer.getByRole('checkbox').uncheck();

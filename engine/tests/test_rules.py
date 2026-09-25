@@ -56,6 +56,18 @@ def test_official_turnover_is_required():
     assert evaluate(rule("tradedValue", value=10, monthly=True), stock, "2026-09-23")["matched"] is None
 
 
+def test_official_value_takes_priority_over_public_fallback_only_while_valid():
+    stock = {"id": "x", "facts": [
+        {"period": "2026-03-31", "knownAt": "2026-09-01", "priority": 0, "values": {"roe": 20}},
+        {"knownAt": "2026-09-20", "validUntil": "2026-09-24", "values": {"roe": 10}},
+    ]}
+    query = rule("roe", "gte", 15, monthly=True)
+    assert evaluate(query, stock, "2026-08-31")["matched"] is None
+    assert evaluate(query, stock, "2026-09-19")["matched"] is True
+    assert evaluate(query, stock, "2026-09-23")["matched"] is False
+    assert evaluate(query, stock, "2026-09-25")["matched"] is True
+
+
 def test_monthly_disallows_intraday_and_categorical_numeric_comparisons():
     with pytest.raises(ValueError): validate_rule(rule("vwap", monthly=True))
     bad = rule(monthly=True); bad["groups"][0]["conditions"][0]["timeframe"] = "1d"

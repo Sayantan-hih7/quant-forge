@@ -9,7 +9,7 @@ export function BackendBacktestReport({ run }: { run: BackendBacktest }) {
   const navigate = useNavigate(), result = run.result;
   if (!result) return null;
   const symbol = (id: string) => run.symbols?.[id] ?? id;
-  return <Card title={<Space wrap>{run.strategy.name}<Tag color="green">Completed</Tag></Space>} extra={<Button onClick={() => navigate(`/signal-runner?strategy=${run.strategy._id}&backtest=${run._id}`)}>Review in Signal Runner</Button>}>
+  return <Card className="backend-backtest-report" title={<Space wrap>{run.strategy.name}<Tag color="green">Completed</Tag></Space>} extra={<Button onClick={() => navigate(`/signal-runner?strategy=${run.strategy._id}&backtest=${run._id}`)}>Review in Signal Runner</Button>}>
     <p className="muted">{date(run.config.from)} – {date(new Date(Date.parse(run.config.to) - 1).toISOString())} · {run.config.ids.length} stocks · Saved strategy revision {run.strategy.revision}</p>
     {run.config.universe === 'current' && <Alert className="mb-5" showIcon type="warning" title="Research using today's qualified stocks" description="The stock list was selected later than this test period. These results demonstrate strategy behaviour, not an unbiased historical stock-selection test." />}
     <Row gutter={[16, 24]}>{[
@@ -36,11 +36,11 @@ export function BackendBacktestReport({ run }: { run: BackendBacktest }) {
         { title: 'Entry', dataIndex: 'entry', render: researchMoney }, { title: 'Exit', dataIndex: 'exit', render: researchMoney }, { title: 'Shares', dataIndex: 'quantity' },
         { title: 'Net P&L', dataIndex: 'pnl', render: value => <span className={value >= 0 ? 'positive' : 'negative'}>{researchMoney(value)}</span> }, { title: 'Exit reason', dataIndex: 'reason' },
       ]}/> },
-      { key: 'open', label: `Open positions (${result.openPositions.length})`, children: <Table size="small" rowKey="instrumentId" dataSource={result.openPositions} pagination={false} columns={[
+      { key: 'open', label: `Open positions (${result.openPositions.length})`, children: <Table size="small" rowKey="instrumentId" dataSource={result.openPositions} pagination={false} scroll={{ x: 600 }} columns={[
         { title: 'Stock', dataIndex: 'instrumentId', render: symbol }, { title: 'Shares', dataIndex: 'quantity' }, { title: 'Entry', dataIndex: 'entry', render: value => researchMoney(value / 100) },
         { title: 'Final close', dataIndex: 'mark', render: researchMoney }, { title: 'Unrealized P&L', render: (_, row) => researchMoney(row.mark * row.quantity - row.cost / 100) },
       ]}/> },
-      { key: 'data', label: 'Data & assumptions', children: <><Table size="small" rowKey="instrumentId" pagination={false} dataSource={result.coverage ?? []} columns={[
+      { key: 'data', label: 'Data & assumptions', children: <><Table size="small" rowKey="instrumentId" pagination={false} dataSource={result.coverage ?? []} scroll={{ x: 600 }} columns={[
         { title: 'Stock', dataIndex: 'instrumentId', render: symbol }, { title: 'Replay bars', dataIndex: 'bars' }, { title: 'First bar', dataIndex: 'from', render: time }, { title: 'Last bar', dataIndex: 'to', render: time },
       ]}/>{result.assumptions.map(item => <p key={item} className="muted mt-3">{item}</p>)}</> },
     ]}/>

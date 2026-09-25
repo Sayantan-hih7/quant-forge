@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
-import { env } from './config/env.js';
+import { isAllowedFrontendOrigin } from './config/frontend-origin.js';
 import { AppError } from './shared/errors.js';
 import { databaseReady } from './shared/database.js';
 import { redis } from './shared/redis.js';
@@ -20,7 +20,7 @@ import { stockDetailsRouter } from './modules/stock-details/routes/stock-details
 export const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
+app.use(cors({ origin: (origin, callback) => callback(null, isAllowedFrontendOrigin(origin)), credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (_req, res) => {
   const ready = databaseReady() && redis.status === 'ready';

@@ -14,6 +14,9 @@ const factSchema = new Schema<Fact>({
   value: { type: Schema.Types.Mixed, required: true }, source: String, sourceUrl: String,
   observedAt: String, knownAt: { type: String, required: true }, period: String, validUntil: String,
   basis: { type: String, enum: ['observed-snapshot', 'published-report', 'derived'] },
+  statementBasis: { type: String, enum: ['consolidated', 'standalone'] },
+  calculation: { type: new Schema({ method: String, netIncome: Number, equity: Number, unit: String }, { _id: false }), default: undefined },
+  ownership: { type: new Schema({ evidence: { type: String, enum: ['reported-total', 'explicit-no-encumbrance', 'no-promoters'] }, promoterShares: Number, encumberedShares: Number }, { _id: false }), default: undefined },
 }, options);
 factSchema.index({ instrumentId: 1, field: 1, knownAt: -1 });
 const deliverySchema = new Schema<DeliveryDay>({
