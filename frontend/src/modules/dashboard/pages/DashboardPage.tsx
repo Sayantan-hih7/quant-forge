@@ -31,13 +31,13 @@ export default function DashboardPage() {
     qualification: <QualificationWidget data={data} />,
     signals: <SignalsWidget data={data} side={preferences.signalSide} />,
     backtests: <BacktestsWidget data={data} />,
-    watchlists: <WatchlistsWidget data={data} preferences={preferences} />,
+    watchlists: <WatchlistsWidget data={data} />,
   } : null;
   return <div className={`workspace-dashboard is-${preferences.density}`}>
     <div className="workspace-page-heading"><div><span className="indices-eyebrow">YOUR TRADING WORKSPACE</span><h1>Dashboard <Tag color="blue">Paper trading</Tag></h1><p>{data ? `${data.market.date} · ${data.market.reason} · Updated ${time(data.at)}` : 'Loading your workspace…'}</p></div><Space wrap>
       <Button icon={<SettingOutlined aria-hidden />} onClick={() => navigate('/settings?tab=dashboard')}>Customize</Button>
       <Button icon={<ReloadOutlined aria-hidden />} onClick={() => { resource.retry(); if (marketVisible) void indices.refresh(); }} loading={resource.loading}>Refresh</Button>
-      <Button type="primary" onClick={() => navigate('/market-data/watchlists')} icon={<StarOutlined />}>My watchlists</Button>
+      <Button type="primary" onClick={() => navigate('/market-data/watchlists?tab=watchlist')} icon={<StarOutlined />}>My watchlist</Button>
     </Space></div>
     {resource.error && <Alert type="warning" showIcon title="Workspace could not be refreshed" description={resource.error} action={<Button onClick={resource.retry}>Retry</Button>} />}
     {!data || !widgets ? <Skeleton active paragraph={{ rows: 8 }} /> : <>

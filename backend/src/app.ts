@@ -20,6 +20,7 @@ import { indexRouter } from './modules/market-indices/routes/index.routes.js';
 import { aiRouter } from './modules/ai/routes/ai.routes.js';
 import { stockDetailsRouter } from './modules/stock-details/routes/stock-details.routes.js';
 import { watchlistRouter } from './modules/watchlists/routes/watchlist.routes.js';
+import { discoveryRouter } from './modules/stock-discovery/routes/discovery.routes.js';
 import { dashboardRouter } from './modules/dashboard/routes/dashboard.routes.js';
 import { deploymentReadiness } from './modules/system/services/readiness.service.js';
 export const app = express();
@@ -47,6 +48,7 @@ app.use('/api/paper', paperRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/stocks', stockDetailsRouter);
 app.use('/api/watchlists', watchlistRouter);
+app.use('/api/stock-discovery', discoveryRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.get('/api/system/readiness', async (_req, res) => res.json(await deploymentReadiness()));
 app.get('/api/events', async (req, res) => {

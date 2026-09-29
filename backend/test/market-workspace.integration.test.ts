@@ -36,6 +36,7 @@ test('dashboard respects published results and missing marks; closed markets nev
     await PaperSignalModel.create({ _id: 'older', sessionId: 'account', instrumentId: 'NSE:999000', side: 'SELL', createdAt: '2025-01-01T05:00:00Z', barEnd: '2025-01-01T05:00:00Z' });
     const { dashboardState } = await import('../src/modules/dashboard/services/dashboard.service.js');
     const before = JSON.stringify(await PaperSessionModel.find().lean());
+    await WatchlistModel.insertMany([{ _id: 'older', name: 'Older list', ids: ['NSE:1'], updatedAt: '2025-01-01' }, { _id: 'newer', name: 'Newer list', ids: ['NSE:2'], updatedAt: now }]);
     const data = await dashboardState();
     assert.equal(data.qualification.count, 1); assert.equal(data.qualification.latestScan?.qualified, 0);
     assert.equal(data.paper.realizedPaise, 500); assert.equal(data.paper.unrealizedPaise, null); assert.equal(data.paper.totalPaise, null);
@@ -45,14 +46,14 @@ test('dashboard respects published results and missing marks; closed markets nev
     assert.equal(JSON.stringify(await PaperSessionModel.find().lean()), before);
     await PaperSignalModel.insertMany(Array.from({ length: 30 }, (_, i) => ({ _id: `filtered-${i}`, sessionId: 'account', instrumentId: 'NSE:999000', side: i % 2 ? 'BUY' : 'SELL', createdAt: now, barEnd: now })));
     await BacktestRunModel.insertMany(Array.from({ length: 15 }, (_, i) => ({ _id: `extra-${i}`, strategy: { _id: 'strategy', name: 'Trend', revision: 2 }, config: { from: '2025-01-01', to: '2026-01-01' }, createdAt: now, status: 'completed' })));
-    await WatchlistModel.insertMany([{ _id: 'older', name: 'Older list', ids: [], updatedAt: '2025-01-01' }, { _id: 'newer', name: 'Newer list', ids: [], updatedAt: now }]);
     await saveDashboardPreferences({ revision: 0, settings: { ...defaultDashboardPreferences, signalSide: 'SELL', signalCount: 10, backtestCount: 12, watchlistMode: 'selected', watchlistIds: ['older', 'newer'], indexIds: ['nse:nifty-100'] } });
     const customized = await dashboardState();
     assert.equal(customized.signals.length, 10); assert.equal(customized.signals.every(signal => signal.side === 'SELL'), true);
-    assert.equal(customized.backtests.length, 12); assert.deepEqual(customized.watchlists.map(list => list.id), ['older', 'newer']);
+    assert.equal(customized.backtests.length, 12); assert.deepEqual(customized.watchlists.map(list => list.id), ['personal']);
+    assert.equal(customized.watchlists[0].count, 2);
     assert.deepEqual(customized.preferences.indexIds, ['nse:nifty-100']);
-    await WatchlistModel.deleteOne({ _id: 'older' });
-    assert.deepEqual((await dashboardState()).watchlists.map(list => list.id), ['newer']);
+    assert.equal(await WatchlistModel.countDocuments({ archivedAt: { $exists: true } }), 2);
+    assert.deepEqual((await dashboardState()).watchlists.map(list => list.id), ['personal']);
     assert.equal(JSON.stringify(await PaperSessionModel.find().lean()), before);
     await IndexCacheModel.create({ _id: 'BSE', quotes: [], attemptedAt: '2026-09-29T09:00:00Z' });
     await IndexChartModel.create({ _id: 'bse:bse-sensex', points: [{ time: Date.parse('2026-09-29T09:00:00Z'), value: 70000 }], fetchedAt: '2026-09-29T09:00:00Z', sourceUrl: 'https://www.bseindices.com' });

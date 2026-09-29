@@ -4,7 +4,7 @@ import { StrategyModel } from '../../strategies/models/strategy.model.js';
 import { BacktestRunModel } from '../../backtesting/models/backtest.model.js';
 import { PaperSignalModel } from '../../paper-trading/models/paper.model.js';
 import { paperState } from '../../paper-trading/services/paper.service.js';
-import { WatchlistModel } from '../../watchlists/models/watchlist.model.js';
+import { personalWatchlist } from '../../watchlists/services/watchlist.service.js';
 import { marketSession } from '../../../shared/market-calendar.js';
 import { dashboardPreferences } from './preferences.service.js';
 
@@ -12,12 +12,12 @@ export async function dashboardState() {
   const { settings: preferences } = await dashboardPreferences();
   const market = marketSession(), month = market.date.slice(0, 7), start = new Date(`${market.date}T00:00:00+05:30`).toISOString();
   const end = new Date(Date.parse(start) + 86400000).toISOString();
-  const [paper, universe, stockCount, strategies, latestScan, backtests, watchlists, signalsToday, recentSignals] = await Promise.all([
+  const [paper, universe, stockCount, strategies, latestScan, backtests, watchlist, signalsToday, recentSignals] = await Promise.all([
     paperState(), MonthlyUniverseModel.findById(month).lean(), InstrumentModel.countDocuments({ active: true }),
     StrategyModel.find().select('_id name revision savedAt').sort({ savedAt: -1 }).lean(),
     QualificationRunModel.findOne({ month }).select('_id status processed total qualified unavailable cutoff finishedAt message').sort({ cutoff: -1 }).lean(),
     BacktestRunModel.find().select('_id strategy._id strategy.name strategy.revision status config.from config.to createdAt').sort({ createdAt: -1, _id: -1 }).limit(preferences.backtestCount).lean(),
-    WatchlistModel.find(preferences.watchlistMode === 'selected' ? { _id: { $in: preferences.watchlistIds } } : {}).sort({ updatedAt: -1, _id: -1 }).limit(preferences.watchlistMode === 'selected' ? 8 : 5).lean(),
+    personalWatchlist(),
     PaperSignalModel.countDocuments({ createdAt: { $gte: start, $lt: end } }),
     PaperSignalModel.find(preferences.signalSide === 'all' ? {} : { side: preferences.signalSide }).sort({ createdAt: -1, _id: -1 }).limit(preferences.signalCount).lean(),
   ]);
@@ -31,7 +31,6 @@ export async function dashboardState() {
     checkedAt: s.checkedAt ?? null, message: s.message ?? null }));
   const signalStocks = await InstrumentModel.find({ _id: { $in: recentSignals.map(s => s.instrumentId) } }).select('_id symbol').lean();
   const symbols = new Map(signalStocks.map(s => [s._id, s.symbol]));
-  const orderedWatchlists = preferences.watchlistMode === 'selected' ? preferences.watchlistIds.flatMap(id => { const list = watchlists.find(w => w._id === id); return list ? [list] : []; }) : watchlists;
   return { at: new Date().toISOString(), market, month, preferences, stockCount, strategyCount: strategies.length, signalsToday,
     qualification: { count: universe?.members.length ?? 0, manualCount: universe?.members.filter(m => m.source === 'manual').length ?? 0, publishedAt: universe?.publishedAt ?? null, latestScan },
     paper: { accounts: accounts.length, openPositions: paper.positions.length, realizedPaise, unrealizedPaise,
@@ -43,6 +42,6 @@ export async function dashboardState() {
       status: s.orderId ? paper.orders.find(o => o._id === s.orderId)?.status ?? 'Order recorded' : s.expiresAt && s.expiresAt <= new Date().toISOString() ? 'expired' : 'Signal only' })),
     backtests: backtests.map(b => ({ id: b._id, strategyId: b.strategy._id, name: b.strategy.name, revision: b.strategy.revision,
       currentRevision: revisions.get(b.strategy._id) ?? null, status: b.status, from: b.config.from, to: b.config.to })),
-    watchlists: orderedWatchlists.map(w => ({ id: w._id, name: w.name, count: w.ids.length })),
+    watchlists: [{ id: watchlist._id, name: 'Watchlist', count: watchlist.ids.length }],
   };
 }

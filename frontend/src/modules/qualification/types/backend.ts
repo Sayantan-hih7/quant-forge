@@ -20,6 +20,7 @@ export interface QualificationState {
   rule: { rule: MonthlyRuleDefinition; revision: number; fingerprint: string } | null;
   universe: { runId: string; publishedAt: string; fingerprint: string; members: { instrumentId: string; source: 'scan' | 'manual' }[] } | null;
   runs: BackendScan[];
+  latestCompletedRun?: BackendScan | null;
 }
 export interface QualifiedStock {
   instrumentId: string; isin: string; source: 'scan' | 'manual'; addedAt: string; note?: string;

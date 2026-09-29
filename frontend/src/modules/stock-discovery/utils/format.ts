@@ -1,0 +1,2 @@
+export const discoveryNumber = (value: number, unit: string) => `${unit.startsWith('₹') ? '₹' : ''}${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${unit === '₹ Cr' ? ' Cr' : unit === '%' || unit === '×' ? unit : ''}`;
+export const discoveryTime = (value: string) => new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' IST';

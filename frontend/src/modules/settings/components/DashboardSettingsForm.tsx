@@ -8,8 +8,6 @@ import { RhfSelect, RhfSwitch } from '../../../components/forms';
 import { apiClient } from '../../../services/apiClient';
 import { indexCatalog } from '../../market-data/config/indices';
 import { dashboardPreferencesSchema, dashboardSectionOptions, defaultDashboardPreferences, metricOptions, type DashboardPreferences, type SavedDashboardPreferences } from '../../dashboard/config/preferences';
-import type { WatchlistState } from '../../watchlists/types';
-import { useStockResource } from '../../stock-details/hooks/useStockResource';
 import { OrderedChoices } from './OrderedChoices';
 import { DashboardLayoutPreview } from './DashboardLayoutPreview';
 
@@ -20,13 +18,10 @@ export function DashboardSettingsForm({ initial, onReload }: { initial: SavedDas
   const form = useForm<DashboardPreferences>({ resolver: zodResolver(dashboardPreferencesSchema), defaultValues: initial.settings });
   const { fields, move } = useFieldArray({ control: form.control, name: 'sections', keyName: 'fieldKey' });
   const settings = useWatch({ control: form.control }) as DashboardPreferences;
-  const lists = useStockResource<WatchlistState>('/watchlists');
   const [saved, setSaved] = useState(initial), [busy, setBusy] = useState(false), [error, setError] = useState<string>();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const enabled = (id: string) => settings.sections.some(section => section.id === id && section.visible);
-  const watchlistLabels = Object.fromEntries(lists.data?.lists.map(list => [list._id, list.name]) ?? []);
-  const missingLists = settings.watchlistIds.filter(id => lists.data && !lists.data.lists.some(list => list._id === id));
   async function save(values: DashboardPreferences) {
     setBusy(true); setError(undefined);
     try {
@@ -53,19 +48,12 @@ export function DashboardSettingsForm({ initial, onReload }: { initial: SavedDas
         <RhfSelect control={form.control} name="metricIds" label="Cards to show" mode="multiple" options={[...metricOptions]} />
         <OrderedChoices name="Summary card order" ids={settings.metricIds} labels={Object.fromEntries(metricOptions.map(option => [option.value, option.label]))} onChange={ids => form.setValue('metricIds', ids as DashboardPreferences['metricIds'], { shouldDirty: true, shouldValidate: true })} />
       </Card>
-      <Card title="Activity & watchlists" size="small"><div className="dashboard-settings-fields">
+      <Card title="Activity" size="small"><div className="dashboard-settings-fields">
         <RhfSelect control={form.control} name="monitoringPageSize" label="Monitoring rows per page" options={rowOptions([5, 10, 20])} />
         <RhfSelect control={form.control} name="signalCount" label="Recent signals to show" options={rowOptions([6, 10, 20])} />
         <RhfSelect control={form.control} name="signalSide" label="Signal events" options={[{ value: 'all', label: 'Buy and sell' }, { value: 'BUY', label: 'Buy only' }, { value: 'SELL', label: 'Sell only' }]} />
         <RhfSelect control={form.control} name="backtestCount" label="Recent backtests to show" options={rowOptions([4, 8, 12])} />
-      </div><RhfSelect control={form.control} name="watchlistMode" label="Dashboard watchlists" options={[{ value: 'recent', label: '5 most recently updated' }, { value: 'selected', label: 'Choose and pin watchlists' }]} />
-        {settings.watchlistMode === 'selected' && <>
-          <RhfSelect control={form.control} name="watchlistIds" label="Pinned watchlists" mode="multiple" maxCount={8} showSearch optionFilterProp="label" loading={lists.loading} options={[...(lists.data?.lists ?? []).map(list => ({ value: list._id, label: list.name })), ...missingLists.map(id => ({ value: id, label: 'Deleted watchlist · remove this selection' }))]} />
-          <OrderedChoices name="Pinned watchlist order" ids={settings.watchlistIds} labels={watchlistLabels} onChange={ids => form.setValue('watchlistIds', ids, { shouldDirty: true, shouldValidate: true })} />
-          {missingLists.length > 0 && <Alert type="warning" showIcon title="A pinned watchlist was deleted. Remove it or select another list; it will not appear on the dashboard." />}
-          {!lists.loading && lists.data?.lists.length === 0 && <p className="muted">No saved watchlists yet. <Link to="/market-data/watchlists">Create a watchlist</Link>, or use the recently updated option.</p>}
-          {lists.error && <Alert type="warning" title={lists.error} action={<Button onClick={lists.retry}>Retry watchlists</Button>} />}
-        </>}
+      </div><p className="muted">Your watchlist is available in its dashboard section. <Link to="/market-data/watchlists?tab=watchlist">Open watchlist</Link>.</p>
       </Card>
     </div><DashboardLayoutPreview settings={settings} /></div>
     <div className="dashboard-settings-actions"><div><Tag color={form.formState.isDirty ? 'orange' : 'green'}>{form.formState.isDirty ? 'Unsaved changes' : 'Saved preferences'}</Tag><span>{saved.updatedAt ? `Last saved ${new Date(saved.updatedAt).toLocaleString('en-IN')}` : 'Using the default layout'}</span></div><Space wrap>

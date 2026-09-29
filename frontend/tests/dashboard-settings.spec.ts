@@ -10,7 +10,7 @@ async function select(page: Page, label: string, option: string) {
 async function fixture(page: Page) {
   let saved: SavedDashboardPreferences = { revision: 0, updatedAt: null, settings: structuredClone(defaultDashboardPreferences) };
   let writes = 0, indexRequests = 0;
-  const lists = [{ _id: 'research', name: 'Research', ids: ['NSE:1'], updatedAt: '', createdAt: '' }, { _id: 'swing', name: 'Swing ideas', ids: ['NSE:1', 'NSE:2'], updatedAt: '', createdAt: '' }];
+  const lists = [{ _id: 'personal', name: 'Watchlist', ids: ['NSE:1', 'NSE:2'], updatedAt: '', createdAt: '' }];
   await page.route('**/api/dashboard/preferences', async route => {
     if (route.request().method() === 'PUT') {
       writes++;
@@ -31,7 +31,7 @@ async function fixture(page: Page) {
         sessions: Array.from({ length: 11 }, (_, i) => ({ id: `session-${i}`, name: `Strategy ${i}`, revision: 1, currentRevision: 1, mode: 'automatic', paused: false, stocks: 62, checkedAt: null, message: null })) },
       signals: Array.from({ length: 30 }, (_, i) => ({ id: `signal-${i}`, sessionId: 'session', symbol: `STOCK${i}`, side: i % 2 ? 'BUY' : 'SELL', at: '2026-09-29T08:00:00Z', strategy: 'Trend', status: 'filled' })).filter(s => preferences.signalSide === 'all' || s.side === preferences.signalSide).slice(0, preferences.signalCount),
       backtests: Array.from({ length: preferences.backtestCount }, (_, i) => ({ id: `report-${i}`, strategyId: 'strategy', name: `Backtest ${i}`, revision: 1, currentRevision: 1, from: '2025-09-29', to: '2026-09-29', status: 'completed' })),
-      watchlists: (preferences.watchlistMode === 'recent' ? lists : preferences.watchlistIds.flatMap(id => lists.filter(l => l._id === id))).map(l => ({ id: l._id, name: l.name, count: l.ids.length })),
+      watchlists: lists.map(l => ({ id: l._id, name: l.name, count: l.ids.length })),
     };
     return route.fulfill({ json: data });
   });
@@ -64,8 +64,7 @@ test('choose NIFTY 100, customize sections/cards/watchlists, persist and restore
   await select(page, 'Spacing', 'Compact');
   await select(page, 'Signal events', 'Sell only');
   await select(page, 'Recent signals to show', '10 rows');
-  await select(page, 'Dashboard watchlists', 'Choose and pin watchlists');
-  await select(page, 'Pinned watchlists', 'Swing ideas');
+  await expect(page.getByRole('combobox', { name: 'Dashboard watchlists', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: /View dashboard/ })).toBeDisabled();
   await page.screenshot({ path: '../.tools/artifacts/dashboard-settings-custom.png', fullPage: true });
@@ -81,7 +80,7 @@ test('choose NIFTY 100, customize sections/cards/watchlists, persist and restore
   await expect(page.locator('[data-dashboard-section="backtests"]')).toHaveCount(0);
   await expect(page.locator('.workspace-activity > a')).toHaveCount(10);
   await expect(page.locator('.workspace-watchlist-links > a')).toHaveCount(1);
-  await expect(page.locator('.workspace-watchlist-links')).toContainText('Swing ideas');
+  await expect(page.locator('.workspace-watchlist-links')).toContainText('Watchlist');
   await expect(page.getByText('The paper worker is offline')).toBeVisible();
   await expect(page.getByText('2 paper orders await your confirmation')).toBeVisible();
   await expect(page.locator('.workspace-dashboard')).toHaveClass(/is-compact/);

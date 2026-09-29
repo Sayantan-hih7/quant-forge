@@ -13,14 +13,24 @@ export async function addManualStock(instrumentId: string, note: string) {
   await mongoose.connection.transaction(async session => {
     const stock = await instruments.findOne({ _id: instrumentId, active: true }).session(session).lean();
     invariant(stock, 'Unknown stock');
+    const universe = await MonthlyUniverseModel.findById(currentMonth()).session(session).lean();
+    invariant(universe, 'Publish your monthly qualified list before adding stocks manually.');
+    // Both exchange listings share one qualification. A duplicate must not turn
+    // a scan-qualified company into a manual addition.
+    if (universe.members.some(member => member.isin === stock.isin)) return;
     const result = await MonthlyUniverseModel.findOneAndUpdate({ _id: currentMonth(), 'members.isin': { $ne: stock.isin } }, {
       $push: { members: { instrumentId: stock._id, isin: stock.isin, source: 'manual', addedAt: new Date().toISOString(), note } },
       $inc: { revision: 1 }, $set: { publishedAt: new Date().toISOString() },
     }, { session, returnDocument: 'after' }).lean();
-    invariant(result, 'Publish a monthly list first; this company may already be included');
+    invariant(result, 'The qualified list changed. Refresh and try again.');
     await recordUniverseSnapshot(result, session);
   });
   await announce('qualification.changed');
+}
+export async function qualificationMembership() {
+  const month = currentMonth();
+  const universe = await MonthlyUniverseModel.findById(month).select('members revision').lean();
+  return { month, revision: universe?.revision ?? 0, published: !!universe, members: (universe?.members ?? []).map(({ instrumentId, isin, source }) => ({ instrumentId, isin, source })) };
 }
 export async function removeManualStocks(instrumentId?: string) {
   await mongoose.connection.transaction(async session => {

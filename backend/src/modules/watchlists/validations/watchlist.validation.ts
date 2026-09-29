@@ -1,5 +1,4 @@
 import { z } from 'zod';
-export const watchlistName = z.object({ name: z.string().trim().min(1).max(60) });
 export const watchlistStock = z.object({ instrumentId: z.string().min(1).max(100) });
 export const browseStocksSchema = z.object({
   q: z.string().trim().max(100).default(''), exchange: z.enum(['NSE', 'BSE']).optional(), listId: z.string().max(100).optional(),

@@ -30,7 +30,7 @@ export const navigation: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "Market Data",
-    items: [{ path: "/market-data/indices", label: "Indices", icon: <StockOutlined /> }, { path: "/market-data/watchlists", label: "Stocks & watchlists", icon: <StarOutlined /> }],
+    items: [{ path: "/market-data/indices", label: "Indices", icon: <StockOutlined /> }, { path: "/market-data/watchlists", label: "Stocks & watchlist", icon: <StarOutlined /> }],
   },
   {
     title: "Strategy",

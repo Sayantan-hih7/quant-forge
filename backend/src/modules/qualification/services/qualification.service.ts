@@ -19,9 +19,9 @@ function normalized(value: unknown): unknown {
 export const ruleFingerprint = (rule: Record<string, unknown>) => createHash('sha256').update(JSON.stringify(normalized(rule))).digest('hex');
 export async function qualificationState() {
   const month = currentMonth();
-  const [rule, universe, runs] = await Promise.all([MonthlyRuleModel.findById('monthly').lean(), MonthlyUniverseModel.findById(month).lean(), QualificationRunModel.find({ month }).sort({ cutoff: -1 }).limit(10).select('-ids').lean()]);
+  const [rule, universe, runs, latestCompletedRun] = await Promise.all([MonthlyRuleModel.findById('monthly').lean(), MonthlyUniverseModel.findById(month).lean(), QualificationRunModel.find({ month }).sort({ cutoff: -1 }).limit(10).select('-ids').lean(), QualificationRunModel.findOne({ month, status: 'completed' }).sort({ cutoff: -1 }).select('-ids').lean()]);
   const cooldown = await redis.pttl('quantforge:dhan:cooldown');
-  return { month, rule, universe, runs, providerRetryAt: cooldown > 0 ? new Date(Date.now() + cooldown).toISOString() : null, readiness: qualificationReadiness(rule?.rule), canRun: !!rule && (rule.fingerprint !== universe?.fingerprint || !!runs[0]?.unavailable) && !runs.some(x => ['queued', 'running'].includes(x.status)) };
+  return { month, rule, universe, runs, latestCompletedRun, providerRetryAt: cooldown > 0 ? new Date(Date.now() + cooldown).toISOString() : null, readiness: qualificationReadiness(rule?.rule), canRun: !!rule && (rule.fingerprint !== universe?.fingerprint || !!runs[0]?.unavailable) && !runs.some(x => ['queued', 'running'].includes(x.status)) };
 }
 export async function saveMonthlyRule(rule: Record<string, unknown>, expectedRevision: number) {
   invariant(rule.timeframe === '1mo', 'Qualification requires monthly rules');
@@ -113,15 +113,25 @@ export async function publishQualification(id: string, acknowledgeMissingData: b
   await announce('qualification.published'); return saved;
 }
 
-export async function qualificationResults(id: string, page: number, status?: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history') {
+export async function qualificationResults(id: string, page: number, status?: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history', options: { q?: string; pageSize?: number; outsideUniverse?: string } = {}) {
   const run = await QualificationRunModel.findById(id).select('cutoff').lean();
   invariant(run, 'Scan not found');
-  const query = { runId: id, ...(status ? { status } : {}) };
-  const [rows, total] = await Promise.all([
-    QualificationResultModel.find(query).sort({ instrumentId: 1 }).skip((page - 1) * 50).limit(50).lean(),
-    QualificationResultModel.countDocuments(query),
-  ]);
-  const stocks = await instruments.find({ _id: { $in: rows.map(row => row.instrumentId).filter((id): id is string => typeof id === 'string') } }).select('symbol name exchange').lean();
+  const outside = options.outsideUniverse === 'true';
+  let eligibleIds: string[] | undefined;
+  if (outside || options.q) {
+    const universe = outside ? await MonthlyUniverseModel.findById(currentMonth()).select('members').lean() : null;
+    const pattern = options.q?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    eligibleIds = (await instruments.find({
+      ...(universe ? { isin: { $nin: universe.members.map(member => member.isin) } } : {}),
+      ...(pattern ? { $or: ['symbol', 'name', 'isin'].map(field => ({ [field]: { $regex: pattern, $options: 'i' } })) } : {}),
+    }).select('_id').lean()).map(stock => stock._id);
+  }
+  const query = { runId: id, ...(status ? { status } : outside ? { status: { $ne: 'qualified' } } : {}), ...(eligibleIds ? { instrumentId: { $in: eligibleIds } } : {}) };
+  const pageSize = options.pageSize ?? 50;
+  const total = await QualificationResultModel.countDocuments(query);
+  page = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
+  const rows = await QualificationResultModel.find(query).sort({ instrumentId: 1 }).skip((page - 1) * pageSize).limit(pageSize).lean();
+  const stocks = await instruments.find({ _id: { $in: rows.map(row => row.instrumentId).filter((id): id is string => typeof id === 'string') } }).select('symbol name exchange isin active').lean();
   const byId = new Map(stocks.map(stock => [stock._id, stock]));
   const observations = await facts.aggregate<Fact>([
     { $match: { instrumentId: { $in: stocks.map(stock => stock._id) }, knownAt: { $lte: run.cutoff },
@@ -134,7 +144,7 @@ export async function qualificationResults(id: string, page: number, status?: 'q
   const evidence = new Map(observations.map(fact => [`${fact.instrumentId}:${fact.field}`, { source: fact.source, sourceUrl: fact.sourceUrl, period: fact.period }]));
   return { rows: rows.map(row => ({ ...row, instrument: byId.get(row.instrumentId!),
     checks: row.checks.map(check => ({ ...check, evidence: evidence.get(`${row.instrumentId}:${check.missingField ?? check.field}`) })),
-  })), total };
+  })), total, page, pageSize };
 }
 export async function cancelQualification(id: string) {
   await QualificationRunModel.updateOne({ _id: id, status: { $in: ['queued', 'running'] } }, { $set: { status: 'cancelled', finishedAt: new Date().toISOString() } });

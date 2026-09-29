@@ -2,21 +2,6 @@
 .workspace-page-heading h1 { font-size:22px; font-weight:600; margin:0 0 8px; }
 .workspace-page-heading p { color:var(--muted); margin:0; font-size:12px; line-height:1.6; }
 .watchlists-page { max-width:1800px; margin:0 auto; }
-.watchlists-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:18px; align-items:start; }
-.watchlists-sidebar,.watchlists-content { background:var(--surface); border:1px solid var(--border); border-radius:8px; min-width:0; }
-.watchlists-sidebar { padding:12px; }
-.watchlists-sidebar > button { display:flex; justify-content:space-between; align-items:center; width:100%; gap:12px; padding:12px; text-align:left; border:0; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; }
-.watchlists-sidebar > button span { overflow-wrap:anywhere; }
-.watchlists-sidebar > button:hover,.watchlists-sidebar > button.active { background:var(--primary-subtle); color:var(--primary); }
-.watchlists-sidebar b { font:11px var(--font-data); color:var(--muted); }
-.watchlists-label { font-size:10px; letter-spacing:.7px; color:var(--muted); padding:22px 12px 8px; }
-.watchlists-sidebar p { font-size:11px; line-height:1.7; padding:0 12px; }
-.watchlists-note { color:var(--muted); margin-top:24px; border-top:1px solid var(--border); padding-top:15px!important; }
-.watchlists-table-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:20px; border-bottom:1px solid var(--border); }
-.watchlists-table-heading h2 { font-size:15px; margin:0 0 5px; }
-.watchlists-table-heading > div:first-child { min-width:0; }
-.watchlists-table-heading h2 { overflow-wrap:anywhere; }
-.watchlists-table-heading p { font-size:11px; color:var(--muted); margin:0; }
 .watchlists-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:18px 20px; }
 .watchlists-toolbar > .ant-input-affix-wrapper { width:320px; max-width:100%; }
 .watchlists-toolbar > .ant-select { width:150px; }
@@ -24,5 +9,8 @@
 .watchlists-content .ant-table-cell:first-child { padding-left:20px; }
 .watchlists-content > .ant-alert { margin:0 20px 14px; }
 .watchlists-footnote { margin:0; padding:8px 20px 18px; font-size:10px; color:var(--muted); }
-@media(max-width:1000px) { .watchlists-layout { grid-template-columns:1fr; } .watchlists-sidebar { display:flex; flex-wrap:wrap; gap:6px; } .watchlists-sidebar > button { width:auto; } .watchlists-label,.watchlists-note { display:none; } }
-@media(max-width:600px) { .workspace-page-heading { align-items:flex-start; flex-direction:column; } .watchlists-table-heading { align-items:flex-start; flex-direction:column; } }
+
+.watchlists-content { background:var(--surface); border:1px solid var(--border); border-radius:8px; min-width:0; }
+.watchlists-content > .ant-tabs { padding:0 20px; }
+.watchlists-content > .ant-tabs .ant-tabs-nav { margin-bottom:0; }
+@media(max-width:600px) { .workspace-page-heading { align-items:flex-start; flex-direction:column; } }

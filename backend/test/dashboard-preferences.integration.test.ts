@@ -12,7 +12,7 @@ test('dashboard preferences reject unknown indices, duplicate sections and unbou
     { indexIds: ['unknown:index'] }, { indexIds: [] }, { indexIds: ['nse:nifty-100', 'nse:nifty-100'] },
     { sections: defaultDashboardPreferences.sections.map(() => ({ id: 'market', visible: true })) },
     { sections: defaultDashboardPreferences.sections.map(s => ({ ...s, visible: false })) },
-    { signalCount: 100000 }, { metricIds: [] }, { watchlistMode: 'selected', watchlistIds: [] }, { feedEnabled: false },
+    { signalCount: 100000 }, { metricIds: [] }, { feedEnabled: false },
   ]) assert.equal(dashboardPreferencesSchema.safeParse({ ...defaultDashboardPreferences, ...patch }).success, false);
   assert.equal(dashboardPreferencesSchema.safeParse({ ...defaultDashboardPreferences, indexIds: ['nse:nifty-100', 'bse:bse-sensex'], signalSide: 'SELL' }).success, true);
 });
@@ -37,6 +37,8 @@ test('saved dashboard preferences survive reload, detect stale editors and allow
     assert.equal(simultaneous.filter(r => r.status === 'fulfilled').length, 1);
     const restored = await saveDashboardPreferences({ revision: 2, settings: defaultDashboardPreferences });
     assert.equal(restored.revision, 3); assert.deepEqual(restored.settings, defaultDashboardPreferences);
+    await DashboardPreferencesModel.updateOne({ _id: 'workspace' }, { $set: { settings: { ...custom, watchlistMode: 'selected', watchlistIds: ['old-list'] } } });
+    assert.deepEqual((await dashboardPreferences()).settings, custom, 'Legacy list settings do not reset other preferences');
     await DashboardPreferencesModel.updateOne({ _id: 'workspace' }, { $set: { settings: { unsupported: true } } });
     const repaired = await dashboardPreferences();
     assert.equal(repaired.revision, 3); assert.ok(repaired.warning); assert.deepEqual(repaired.settings, defaultDashboardPreferences);

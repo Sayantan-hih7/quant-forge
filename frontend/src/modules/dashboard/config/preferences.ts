@@ -8,7 +8,7 @@ export const dashboardSectionOptions = [
   { id: 'qualification', label: 'Monthly qualification', description: 'Published stocks and the latest scan.' },
   { id: 'signals', label: 'Recent signals', description: 'Recent buy and sell events.' },
   { id: 'backtests', label: 'Recent backtests', description: 'Reports, date ranges and rule revisions.' },
-  { id: 'watchlists', label: 'Your watchlists', description: 'Shortcuts to lists you follow.' },
+  { id: 'watchlists', label: 'Your watchlist', description: 'Stocks you have starred to follow.' },
 ] as const;
 export const metricOptions = [{ value: 'qualified', label: 'Qualified stocks' }, { value: 'monitoring', label: 'Strategies monitoring' }, { value: 'positions', label: 'Open paper positions' }, { value: 'pnl', label: 'Total paper P&L' }] as const;
 const unique = (values: string[]) => new Set(values).size === values.length;
@@ -22,8 +22,6 @@ export const dashboardPreferencesSchema = z.object({
   signalCount: z.union([z.literal(6), z.literal(10), z.literal(20)]), signalSide: z.enum(['all', 'BUY', 'SELL']),
   backtestCount: z.union([z.literal(4), z.literal(8), z.literal(12)]), monitoringPageSize: z.union([z.literal(5), z.literal(10), z.literal(20)]),
   watchlistMode: z.enum(['recent', 'selected']), watchlistIds: z.array(z.string().min(1).max(100)).max(8, 'Choose up to 8 watchlists').refine(unique),
-}).superRefine((value, ctx) => {
-  if (value.watchlistMode === 'selected' && !value.watchlistIds.length) ctx.addIssue({ code: 'custom', path: ['watchlistIds'], message: 'Choose at least one watchlist, or use Recently updated' });
 });
 export type DashboardPreferences = z.infer<typeof dashboardPreferencesSchema>;
 export type DashboardSectionId = DashboardPreferences['sections'][number]['id'];

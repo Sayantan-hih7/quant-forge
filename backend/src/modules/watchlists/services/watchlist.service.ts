@@ -1,37 +1,55 @@
-import { randomUUID } from 'node:crypto';
-import type { QueryFilter } from 'mongoose';
+import mongoose, { type QueryFilter } from 'mongoose';
 import { InstrumentModel } from '../../market-data/models/market-data.model.js';
 import type { Instrument } from '../../market-data/types.js';
 import { WatchlistModel } from '../models/watchlist.model.js';
-import { browseStocksSchema, watchlistName } from '../validations/watchlist.validation.js';
+import { browseStocksSchema } from '../validations/watchlist.validation.js';
 import { AppError, invariant } from '../../../shared/errors.js';
 
+export const personalWatchlistId = 'personal';
+export async function personalWatchlist() {
+  const existing = await WatchlistModel.findById(personalWatchlistId).lean();
+  if (existing) return existing;
+  // Merge once, in one transaction. Retain original lists as archives; never
+  // re-import their members after a user removes a stock from the new list.
+  try {
+    return await mongoose.connection.transaction(async session => {
+      const current = await WatchlistModel.findById(personalWatchlistId).session(session).lean();
+      if (current) return current;
+      const legacy = await WatchlistModel.find({ archivedAt: { $exists: false } }).sort({ createdAt: 1, _id: 1 }).session(session).lean();
+      const now = new Date().toISOString();
+      const [list] = await WatchlistModel.create([{ _id: personalWatchlistId, name: 'Watchlist',
+        ids: [...new Set(legacy.flatMap(item => item.ids))], createdAt: legacy[0]?.createdAt ?? now, updatedAt: now }], { session });
+      await WatchlistModel.updateMany({ _id: { $in: legacy.map(item => item._id) } }, { $set: { archivedAt: now } }, { session });
+      return list.toObject();
+    });
+  } catch (error) {
+    if (error instanceof mongoose.mongo.MongoServerError && error.code === 11000) {
+      const winner = await WatchlistModel.findById(personalWatchlistId).lean();
+      if (winner) return winner;
+    }
+    throw error;
+  }
+}
 export async function getWatchlist(id: string) {
-  const list = await WatchlistModel.findById(id).lean();
-  if (!list) throw new AppError(404, 'NOT_FOUND', 'This watchlist no longer exists. Choose another list.');
-  return list;
+  if (id !== personalWatchlistId && !await WatchlistModel.exists({ _id: id })) throw new AppError(404, 'NOT_FOUND', 'Watchlist not found');
+  return personalWatchlist();
 }
 export async function listWatchlists() {
-  const [lists, universeCount] = await Promise.all([WatchlistModel.find().sort({ createdAt: 1 }).lean(), InstrumentModel.countDocuments({ active: true })]);
-  return { lists, universeCount };
-}
-export async function saveWatchlist(raw: unknown, id?: string) {
-  const { name } = watchlistName.parse(raw), now = new Date().toISOString();
-  if (!id) return WatchlistModel.create({ _id: randomUUID(), name, ids: [], createdAt: now, updatedAt: now });
-  const updated = await WatchlistModel.findByIdAndUpdate(id, { $set: { name, updatedAt: now } }, { returnDocument: 'after' }).lean();
-  if (!updated) throw new AppError(404, 'NOT_FOUND', 'Watchlist not found');
-  return updated;
+  const [list, universeCount] = await Promise.all([personalWatchlist(), InstrumentModel.countDocuments({ active: true })]);
+  return { lists: [list], universeCount };
 }
 export async function addWatchlistStock(id: string, instrumentId: string) {
   invariant(await InstrumentModel.exists({ _id: instrumentId, active: true }), 'Choose an active cash stock from the stock universe.');
+  const current = await getWatchlist(id);
   // Bound one list without racing concurrent additions; duplicate additions are idempotent.
-  const list = await WatchlistModel.findOneAndUpdate({ _id: id, $or: [{ ids: instrumentId }, { 'ids.499': { $exists: false } }] },
+  const list = await WatchlistModel.findOneAndUpdate({ _id: current._id, $or: [{ ids: instrumentId }, { 'ids.9999': { $exists: false } }] },
     { $addToSet: { ids: instrumentId }, $set: { updatedAt: new Date().toISOString() } }, { returnDocument: 'after' }).lean();
-  if (!list) { await getWatchlist(id); throw new AppError(422, 'WATCHLIST_FULL', 'This list has 500 stocks. Create another list or remove a stock first.'); }
+  if (!list) throw new AppError(422, 'WATCHLIST_FULL', 'Your watchlist has 10,000 stocks. Remove a stock before adding another.');
   return list;
 }
 export async function removeWatchlistStock(id: string, instrumentId: string) {
-  const list = await WatchlistModel.findByIdAndUpdate(id, { $pull: { ids: instrumentId }, $set: { updatedAt: new Date().toISOString() } }, { returnDocument: 'after' }).lean();
+  const current = await getWatchlist(id);
+  const list = await WatchlistModel.findByIdAndUpdate(current._id, { $pull: { ids: instrumentId }, $set: { updatedAt: new Date().toISOString() } }, { returnDocument: 'after' }).lean();
   if (!list) throw new AppError(404, 'NOT_FOUND', 'Watchlist not found');
   return list;
 }

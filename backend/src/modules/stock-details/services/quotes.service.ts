@@ -2,6 +2,7 @@ import { redis } from '../../../shared/redis.js';
 import { object } from '../../../shared/http-client.js';
 import { AppError, invariant } from '../../../shared/errors.js';
 import { dhanDataClient } from '../../connections/services/dhan.service.js';
+import { recordDhanQuoteLimit, tryDhanQuoteSlot } from '../../connections/services/dhan-quote-allowance.js';
 import { CandleModel, InstrumentModel } from '../../market-data/models/market-data.model.js';
 import type { Instrument, Candle } from '../../market-data/types.js';
 import type { StockQuote } from '../types.js';
@@ -36,7 +37,7 @@ export async function stockQuotes(stocks: Instrument[]) {
   for (const value of cached) if (value) rememberQuote(JSON.parse(value) as StockQuote);
   let message: string | undefined;
   const missing = stocks.filter(x => { const q = quoteMemory.get(x._id); return !q || q.source === 'historical-close' || Date.now() - Date.parse(q.receivedAt) > 10_000 || Date.now() - (snapshotAt.get(x._id) ?? 0) > 60_000; });
-  if (missing.length && await redis.set('quantforge:research:quote-request', '1', 'PX', 1100, 'NX')) {
+  if (missing.length && await tryDhanQuoteSlot()) {
     try {
       // The quote endpoint has its own 1 request/second limit, separate from candle imports.
       const body: Record<string, number[]> = {};
@@ -49,7 +50,7 @@ export async function stockQuotes(stocks: Instrument[]) {
         if (quote) { snapshotAt.set(stock._id, Date.now()); fresh.push(rememberQuote(quote)); }
       }
       await persistQuotes(fresh);
-    } catch (error) { message = error instanceof AppError ? error.message : 'Current quotes could not be refreshed. Last available prices are shown.'; }
+    } catch (error) { await recordDhanQuoteLimit(error); message = error instanceof AppError ? error.message : 'Current quotes could not be refreshed. Last available prices are shown.'; }
   }
   const absent = ids.filter(id => !quoteMemory.has(id));
   if (absent.length) {

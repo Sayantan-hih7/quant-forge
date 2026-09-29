@@ -4,6 +4,7 @@ import * as controller from '../controllers/qualification.controller.js';
 export const qualificationRouter = Router();
 qualificationRouter.get('/', controller.state);
 qualificationRouter.get('/universe', controller.universe);
+qualificationRouter.get('/membership', controller.membership);
 qualificationRouter.put('/rule', controller.saveRule);
 qualificationRouter.post('/runs', controller.start);
 qualificationRouter.get('/runs/:id/results', controller.results);

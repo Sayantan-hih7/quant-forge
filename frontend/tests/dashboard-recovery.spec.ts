@@ -8,7 +8,7 @@ const data: WorkspaceDashboard = {
     sessions: [{ id: 'session', name: 'Swing trend', revision: 1, currentRevision: 2, mode: 'automatic', paused: false, stocks: 62, checkedAt: '2026-09-29T06:59:00Z', message: 'Waiting for next candle' }] },
   signals: [{ id: 'signal', sessionId: 'session', symbol: 'INFY', side: 'SELL', at: '2026-09-29T06:55:00Z', strategy: 'Swing trend', status: 'filled' }],
   backtests: [{ id: 'test', strategyId: 'strategy', name: 'Swing trend', revision: 1, currentRevision: 2, status: 'completed', from: '2025-09-28', to: '2026-09-27' }],
-  watchlists: [{ id: 'list', name: 'Research', count: 5 }],
+  watchlists: [{ id: 'personal', name: 'Watchlist', count: 5 }],
 };
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/dashboard', route => route.fulfill({ json: data }));
@@ -24,7 +24,7 @@ test('dashboard shows actual workspace totals, revisions and useful routes witho
   await expect(page.getByText('Older rules · saved r2', { exact: true })).toBeVisible();
   await expect(page.getByText('1 paper orders await your confirmation')).toBeVisible();
   await expect(page.getByText('Live feed needs attention')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: /Research 5 stocks/ })).toHaveAttribute('href', '/market-data/watchlists?list=list');
+  await expect(page.getByRole('link', { name: /Watchlist 5 stocks/ })).toHaveAttribute('href', '/market-data/watchlists?tab=watchlist');
   await expect(page.getByText(/UI DEMO|Mock data only|SIMULATED/)).toHaveCount(0);
   await expect(page.locator('.index-highlight')).toHaveCount(4);
   await expect(page.locator('.workspace-metrics')).toHaveCSS('display', 'grid');

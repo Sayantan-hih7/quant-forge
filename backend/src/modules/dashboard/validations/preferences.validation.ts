@@ -18,9 +18,7 @@ export const dashboardPreferencesSchema = z.object({
   monitoringPageSize: z.union([z.literal(5), z.literal(10), z.literal(20)]),
   watchlistMode: z.enum(['recent', 'selected']),
   watchlistIds: z.array(z.string().min(1).max(100)).max(8).refine(unique, 'Remove duplicate watchlists'),
-}).strict().superRefine((value, ctx) => {
-  if (value.watchlistMode === 'selected' && !value.watchlistIds.length) ctx.addIssue({ code: 'custom', path: ['watchlistIds'], message: 'Choose at least one watchlist, or use Recently updated' });
-});
+}).strict();
 export type DashboardPreferences = z.infer<typeof dashboardPreferencesSchema>;
 export const defaultDashboardPreferences: DashboardPreferences = {
   sections: dashboardSections.map(id => ({ id, visible: true })),

@@ -8,7 +8,7 @@ import { jobs, redis } from '../src/shared/redis.js';
 import { instruments } from '../src/modules/market-data/repository.js';
 import { MonthlyRuleModel, MonthlyUniverseModel, UniverseSnapshotModel, QualificationResultModel, QualificationRunModel } from '../src/modules/qualification/models/qualification.model.js';
 import { publishQualification, qualificationResults } from '../src/modules/qualification/services/qualification.service.js';
-import { currentMonth, addManualStock, removeManualStocks } from '../src/modules/qualification/services/universe.service.js';
+import { currentMonth, addManualStock, removeManualStocks, qualificationMembership } from '../src/modules/qualification/services/universe.service.js';
 
 test('qualification publication, manual edits and concurrent changes are atomic and isolated', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
   const name = `quantforge_test_${randomUUID().replaceAll('-', '')}`;
@@ -25,10 +25,11 @@ test('qualification publication, manual edits and concurrent changes are atomic 
     await MonthlyRuleModel.create({ _id: 'monthly', fingerprint: 'fixture', revision: 1, rule: {}, savedAt: at });
     await QualificationRunModel.create({ _id: runId, month, rule: {}, revision: 1, fingerprint: 'fixture', cutoff: at, status: 'completed', ids: ['NSE:1'], total: 1, processed: 1, qualified: 1, rejected: 0, unavailable: 0 });
     await QualificationResultModel.create({ _id: `${runId}:NSE:1`, runId, instrumentId: 'NSE:1', matched: true, status: 'qualified', checks: [] });
+    await assert.rejects(addManualStock('NSE:2', 'Independent research'), /Publish your monthly qualified list/);
     await publishQualification(runId, false);
     await assert.rejects(removeManualStocks('NSE:1'), /Only manually added/);
     const concurrent = await Promise.allSettled([addManualStock('NSE:2', 'Independent research'), addManualStock('BSE:2', 'Same company, alternate listing')]);
-    assert.equal(concurrent.filter(x => x.status === 'fulfilled').length, 1);
+    assert.equal(concurrent.filter(x => x.status === 'fulfilled').length, 2, 'Duplicate companies are an idempotent no-op');
     const universe = await MonthlyUniverseModel.findById(month).lean();
     assert.equal(universe?.members.length, 2);
     assert.equal(new Set(universe?.members.map(x => x.isin)).size, 2);
@@ -49,6 +50,23 @@ test('qualification publication, manual edits and concurrent changes are atomic 
     await assert.rejects(publishQualification(waitingId, false), /awaiting history/);
     await publishQualification(waitingId, true);
     assert.deepEqual((await MonthlyUniverseModel.findById(month).lean())?.members.map(x => x.instrumentId), ['NSE:1']);
+    await QualificationResultModel.create({ _id: `${waitingId}:BSE:2`, runId: waitingId, instrumentId: 'BSE:2', matched: false, status: 'rejected', checks: [{ field: 'marketCap', matched: false, left: 100, right: 2000 }] });
+    const outside = await qualificationResults(waitingId, 100, undefined, { outsideUniverse: 'true', pageSize: 10 });
+    assert.equal(outside.total, 2); assert.equal(outside.page, 1);
+    assert.equal(outside.rows[0].instrument?.isin, 'INE000A01002');
+    assert.equal((await qualificationResults(waitingId, 1, 'rejected', { outsideUniverse: 'true' })).total, 1);
+    assert.equal((await qualificationResults(waitingId, 1, undefined, { q: '.*' })).total, 0);
+    assert.equal((await qualificationResults(waitingId, 1, undefined, { q: 'MANUAL' })).total, 2);
+    await addManualStock('NSE:2', 'Research despite insufficient history');
+    assert.equal((await qualificationResults(waitingId, 1, undefined, { outsideUniverse: 'true' })).total, 0, 'Exclude both listings once the company is manually qualified');
+    assert.equal((await qualificationResults(waitingId, 1)).total, 3, 'Original scan results are unchanged');
+    const membership = await qualificationMembership();
+    assert.equal(membership.published, true); assert.equal(membership.members.length, 2);
+    await addManualStock('NSE:1', 'Duplicate scan stock');
+    assert.equal((await qualificationMembership()).revision, membership.revision, 'Duplicate does not create a new snapshot');
+    assert.equal((await qualificationMembership()).members.find(member => member.instrumentId === 'NSE:1')?.source, 'scan');
+    await removeManualStocks('NSE:2');
+    assert.equal((await qualificationResults(waitingId, 1, undefined, { outsideUniverse: 'true' })).total, 2, 'Removed manual additions return to the non-qualified view');
     await QualificationRunModel.create({ _id: randomUUID(), month, status: 'queued' });
     await assert.rejects(QualificationRunModel.create({ _id: randomUUID(), month, status: 'queued' }), (error: unknown) => error instanceof mongoose.mongo.MongoServerError && error.code === 11000);
   } finally {
