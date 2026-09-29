@@ -7,6 +7,8 @@ from .replay import decision
 from .backtest import run_backtest
 
 app = FastAPI(title="QuantForge calculation engine", version="0.1.0")
+if os.getenv("NODE_ENV") == "production" and not os.getenv("ENGINE_TOKEN"):
+    raise RuntimeError("Production requires ENGINE_TOKEN")
 
 
 class EvaluationRequest(BaseModel):
@@ -30,7 +32,7 @@ def health():
 def capabilities():
     return {"technical": sorted(TECHNICAL), "datedFacts": sorted(FACTS),
             "notes": {"tradedValue": "Actual monthly turnover from exchange daily reports, in INR crore.",
-                      "rvol": "Current completed-bar volume / prior 20 completed bars' mean."}}
+                      "rvol": "Current completed-bar volume / prior N completed bars' mean; N defaults to 20."}}
 
 
 @app.post("/evaluate")
@@ -68,8 +70,8 @@ def decisions(body: dict, x_engine_token: str = Header(default="")):
 def backtest(body: dict, x_engine_token: str = Header(default="")):
     authorize(x_engine_token)
     try:
-        if not 1 <= len(body["instruments"]) <= 100:
-            raise ValueError("Backtests support 1–100 selected stocks")
+        if not 1 <= len(body["instruments"]) <= 200:
+            raise ValueError("Backtests support 1–200 selected stocks")
         return run_backtest(body)
     except (ValueError, KeyError, TypeError) as error:
         raise HTTPException(422, str(error)) from error

@@ -1,3 +1,4 @@
+import { ruleFields, fieldUnits } from './ruleFields';
 import { stockIndices } from './stockIndices';
 import type { MonthlyCategory, MonthlyCondition, MonthlyOperator, MonthlyRuleTemplate } from '../types/monthly';
 
@@ -54,6 +55,11 @@ export const monthlyFields: Record<string, MonthlyFieldDefinition> = {
   winRate: numeric('Monthly backtest win rate', 'performance', '%'), profitFactor: numeric('Monthly backtest profit factor', 'performance', 'ratio'),
   drawdown: numeric('Monthly backtest drawdown', 'performance', '%'), paperTrades: numeric('Paper trades during month', 'performance', 'trades'),
 };
+// Keep legacy definitions readable, but source all executable fields from the shared catalogue.
+for (const [id, field] of Object.entries(ruleFields)) if (field.monthly) {
+  monthlyFields[id] = { ...monthlyFields[id], label: field.label, category: field.category as MonthlyCategory,
+    kind: field.unit === 'category' ? 'category' : 'number', unit: fieldUnits[field.unit], series: field.source === 'candles' };
+}
 export const monthlyOperatorLabels: Record<MonthlyOperator, string> = {
   gt: '> Greater than', gte: '≥ At least', lt: '< Less than', lte: '≤ At most', eq: '= Equal', neq: '≠ Not equal',
   between: 'Between', notBetween: 'Not between', crossAbove: 'Crosses above', crossBelow: 'Crosses below',

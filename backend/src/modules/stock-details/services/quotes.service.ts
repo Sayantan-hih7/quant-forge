@@ -6,14 +6,14 @@ import { CandleModel, InstrumentModel } from '../../market-data/models/market-da
 import type { Instrument, Candle } from '../../market-data/types.js';
 import type { StockQuote } from '../types.js';
 import { parseSnapshot } from '../providers/dhan-quotes.js';
+import { mergeQuote } from '../utils/merge-quote.js';
 
 const key = (id: string) => `quantforge:research:quote:${id}`;
 export const quoteMemory = new Map<string, StockQuote>();
 const snapshotAt = new Map<string, number>();
 export function rememberQuote(quote: StockQuote) {
   const previous = quoteMemory.get(quote.instrumentId);
-  if (previous?.lastTradeAt && (!quote.lastTradeAt || previous.lastTradeAt > quote.lastTradeAt)) return previous;
-  if (previous && previous.lastTradeAt === quote.lastTradeAt && previous.receivedAt > quote.receivedAt) return previous;
+  quote = mergeQuote(previous, quote);
   if (quoteMemory.size >= 1000 && !previous) { const id = quoteMemory.keys().next().value!; quoteMemory.delete(id); snapshotAt.delete(id); }
   quoteMemory.set(quote.instrumentId, quote);
   return quote;
@@ -24,9 +24,9 @@ export async function persistQuotes(quotes: StockQuote[]) {
   for (const q of quotes) pipeline.set(key(q.instrumentId), JSON.stringify(q), 'EX', 172800);
   await pipeline.exec();
 }
-export async function selectedInstruments(ids: string[]): Promise<Instrument[]> {
+export async function selectedInstruments(ids: string[], activeOnly = true): Promise<Instrument[]> {
   const unique = [...new Set(ids)];
-  const rows = await InstrumentModel.find({ _id: { $in: unique }, active: true }).lean();
+  const rows = await InstrumentModel.find({ _id: { $in: unique }, ...(activeOnly ? { active: true } : {}) }).lean();
   invariant(rows.length === unique.length, 'One or more stocks are no longer in the active stock universe');
   return rows;
 }

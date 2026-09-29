@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { totp, classifyLogin, broadcastLimit } from '../src/modules/market-feed/providers/motilal-auth.js';
+import { createRequire } from 'node:module';
+import { totp, classifyLogin, broadcastLimit, configureBroadcastLimit, type BroadcastLimitClient } from '../src/modules/market-feed/providers/motilal-auth.js';
 import { exchangeTimestamp, parseTick } from '../src/modules/market-feed/providers/motilal-packets.js';
 import { parseMotilalMappings } from '../src/modules/market-data/sources/motilal-master.js';
 import type { Instrument } from '../src/modules/market-data/types.js';
@@ -39,4 +40,33 @@ test('broadcast limits use the broker result without an invented fallback', () =
   assert.equal(broadcastLimit({ status: 'SUCCESS', errorcode: '', data: { MaxBroadcastLimit: 0 } }), 0);
   assert.throws(() => broadcastLimit(undefined));
   assert.throws(() => broadcastLimit({ status: 'ERROR', errorcode: 'MO2031', data: { MaxBroadcastLimit: 0 } }));
+  for (const value of [null, undefined, '', ' ', false, -1, 1.5, 'invalid']) {
+    assert.throws(() => broadcastLimit({ status: 'SUCCESS', errorcode: '', data: { MaxBroadcastLimit: value } }));
+  }
+  assert.throws(() => broadcastLimit({ data: { MaxBroadcastLimit: 0 } }));
+  assert.equal(broadcastLimit({ status: 'SUCCESS', MaxBroadcastLimit: '200' }), 200);
+});
+
+test('successful zero uses the actual Motilal SDK default and still enforces its capacity', async () => {
+  // Use the vendored setter, not a mock that assumes what zero means. Constructing
+  // the SDK and setting its limit make no provider requests and need no credentials.
+  const require = createRequire(import.meta.url);
+  const Sdk = require('../../vendor/motilal-broadcast-sdk/MOFSLOPENAPI_V3.1.cjs') as new (...args: string[]) => BroadcastLimitClient;
+  const sdk = new Sdk('test-key', 'https://example.invalid', 'WEB', 'Chrome', '125', 'test-secret');
+  const response = (limit: number) => ({ status: 'SUCCESS', errorcode: '', data: { MaxBroadcastLimit: limit } });
+  assert.equal(await configureBroadcastLimit(sdk, response(0), 200), 200);
+  assert.equal(sdk.m_intBroadcastLimit, 200);
+  await assert.rejects(configureBroadcastLimit(sdk, response(0), 201), /exceeds/);
+  assert.equal(await configureBroadcastLimit(sdk, response(5), 5), 5);
+  await assert.rejects(configureBroadcastLimit(sdk, response(5), 6), /exceeds/);
+});
+
+test('missing limits and authentication failures cannot activate the SDK default', async () => {
+  let calls = 0;
+  const sdk: BroadcastLimitClient = { m_intBroadcastLimit: 200, setMaxBroadcastLimit: () => { calls++; } };
+  for (const response of [undefined, { status: 'SUCCESS', data: {} }, { status: 'ERROR', errorcode: 'MO2031', data: { MaxBroadcastLimit: 0 } }, { status: 'SUCCESS', errorcode: 'MO8001', data: { MaxBroadcastLimit: 0 } }]) {
+    await assert.rejects(configureBroadcastLimit(sdk, response, 1));
+  }
+  assert.equal(calls, 0);
+  await assert.rejects(configureBroadcastLimit({ m_intBroadcastLimit: 0, setMaxBroadcastLimit: () => {} }, { status: 'SUCCESS', data: { MaxBroadcastLimit: 0 } }, 1), /SDK did not establish/);
 });

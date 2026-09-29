@@ -37,3 +37,21 @@ test('recent chart candles load before older history and remain available when t
     await mongoose.disconnect();
   }
 });
+
+test('chart aggregation omits incomplete provider buckets rather than displaying them as full candles', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
+  const name = `quantforge_test_${randomUUID().replaceAll('-', '')}`, uri = new URL(env.MONGODB_URI); uri.pathname = `/${name}`;
+  const stock: Instrument = { _id: `NSE:${name}`, securityId: '1', exchange: 'NSE', isin: 'INE000A01001', symbol: 'TEST', name: 'Test', series: 'EQ', active: true, primary: true, lotSize: 1, observedAt: new Date().toISOString() };
+  const day = indianDate(Date.now() - 3 * 86400000), start = Date.parse(`${day}T03:45:00Z`);
+  try {
+    await mongoose.connect(uri.toString());
+    const times = Array.from({length:10},(_,i)=>i).filter(i=>i!==2).map(i=>(start+i*60_000)/1000);
+    const result = await stockHistory(stock,'5m',{daily:async()=>{throw new Error('Unexpected daily download');},intraday:async()=>({timestamp:times,open:times.map(()=>100),high:times.map(()=>110),low:times.map(()=>99),close:times.map(()=>105),volume:times.map(()=>10)})});
+    assert.equal(result.bars.length,1);assert.equal(result.bars[0].time,new Date(start+5*60000).toISOString());
+    assert.equal(result.bars[0].volume,50);assert.equal(result.incompleteBuckets,1);assert.equal(result.baseBars.length,9);
+    assert.match(result.message!,/omitted/);
+    await redis.del(`quantforge:research:history:${stock._id}:1m:${indianDate(Date.now())}:${indianDate(Date.now()-7*86400000)}`);
+  } finally {
+    if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
+    await mongoose.disconnect();
+  }
+});

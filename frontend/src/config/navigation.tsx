@@ -10,6 +10,7 @@ import {
   SafetyOutlined,
   ApiOutlined,
   StockOutlined,
+  StarOutlined,
   AuditOutlined,
   BellOutlined,
   SettingOutlined,
@@ -29,7 +30,7 @@ export const navigation: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "Market Data",
-    items: [{ path: "/market-data/indices", label: "Indices", icon: <StockOutlined /> }],
+    items: [{ path: "/market-data/indices", label: "Indices", icon: <StockOutlined /> }, { path: "/market-data/watchlists", label: "Stocks & watchlists", icon: <StarOutlined /> }],
   },
   {
     title: "Strategy",

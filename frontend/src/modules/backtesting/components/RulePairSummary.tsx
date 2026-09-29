@@ -18,7 +18,7 @@ export function RulePairSummary({
         <div key={label}>
           <Tag color={color}>{label}</Tag>
           <strong>{rule.name}</strong>
-          <Collapse
+          {rule.enabled === false ? <p>Stops and targets only. No indicator-based sell condition.</p> : <Collapse
             ghost
             size="small"
             items={[
@@ -46,7 +46,7 @@ export function RulePairSummary({
                 ),
               },
             ]}
-          />
+          />}
         </div>
       ))}
     </div>

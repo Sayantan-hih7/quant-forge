@@ -27,17 +27,17 @@ The current stock list and liquidity ranking were chosen after much of the repla
 ## How to use the screens
 
 1. **Algo Strategies → Trading rules**: open one of the three cards. Inspect/edit Buy, Sell and Risk; save the pair together. The examples never overwrite an existing strategy when opened.
-2. **Backtests**: the latest completed report for the selected strategy opens automatically. Inspect the equity curve, dated trades, remaining positions, and Data & assumptions. For another run, select stocks and dates and choose **Prepare data & run backtest**. The worker first downloads missing daily/minute history and indicator warm-up, then calculates the report. Progress distinguishes preparation from calculation. Completed downloads are reused.
-3. **Review in Signal Runner**: carries the tested strategy and stock scope into the runner. **Check saved candles** evaluates both sides at the latest stored candle and never creates an order. It displays the candle timestamp and expandable condition checks.
-4. **Start paper monitoring**: creates a separate paper ledger using a saved strategy snapshot and explicit stock scope. Confirmation mode waits for approval; automatic mode queues paper orders. Held shares keep their exits even if they leave qualification. Manual interventions pause automatic entries. Protective exits remain automatic.
+2. **Backtests**: all qualified stocks are selected by default. Choose dates and use **Run backtest**. The worker prepares missing history and replays candles; completed downloads are reused. Use **View report** to inspect the equity curve, dated trades, remaining positions and assumptions.
+3. **Use for paper trading**: carries the tested strategy revision and stock scope into Signal Runner. Choose confirmation or automatic execution and start. Live-data subscriptions are automatic. Inspecting the latest saved candle is optional and never places an order.
+4. **Signal Runner** shows buy/sell alerts and explains why a strategy is waiting. Signals-only mode is available for watching both sides without paper orders. **Paper Trading** shows open positions, outstanding orders and trade history. Paper quantities follow current signals and saved cash/risk/position limits; historical winners are not ranked. Held shares keep their exits even after leaving qualification. Manual interventions pause new entries; protective exits remain automatic.
 5. **Stop monitoring** cancels unfilled orders and lets a new session use a newly saved revision. Held positions must be closed first so their exits are not abandoned.
 
-The three initial paper sessions use confirmation mode. On verification, Motilal login succeeded but the broker returned a **broadcast limit of 0**. Therefore live execution is blocked and the sessions show **Waiting for feed**. Dhan research quotes are separate from the execution feed. No real broker order path exists; no live paper fill is claimed while Motilal cannot supply ticks.
+The initial paper sessions use confirmation mode. The original 24 September verification found Motilal's broadcast allocation unavailable. Execution now supports a dedicated Dhan WebSocket as well as Motilal; the configured feed supplies fresh ticks for paper fills. Browser research quotes remain separate from that execution connection. No real broker order path exists.
 
 ## Implementation and limits
 
 - Backend: native ESM TypeScript, Mongoose, Axios/interceptors, BullMQ and Redis. Calculation engine: Python/Pandas.
-- Stock scope: 1–100 qualified stocks per backtest or paper session; each session's held stocks retain sell monitoring.
+- Stock scope: 1–200 qualified stocks per backtest or monitoring session; each session's held stocks retain sell monitoring. The shared execution feed's subscription limit still applies across sessions.
 - Intraday backtests: at most 90 calendar days; daily replay: at most five years. The calculation also has a 150,000 raw-candle budget; reduce stock scope if exceeded.
 - Indicator warm-up includes both operands and higher-timeframe context. Daily-only runs do not load unrelated minute data.
 - Signals use completed candles; fills use the next stored bar open, with configured slippage/fees. If a candle touches both protective levels, stop loss wins. No final forced liquidation is used for overnight strategies.

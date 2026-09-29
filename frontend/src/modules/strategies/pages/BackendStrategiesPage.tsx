@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Empty, Popconfirm, Skeleton, Space, Tabs } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { StrategyHistoryButton } from '../components/StrategyHistoryButton';
 import { StrategyLibrary } from '../components/StrategyLibrary';
 import { NewStrategyDialog } from '../components/NewStrategyDialog';
 import { StrategyBuilder } from '../components/StrategyBuilder';
@@ -31,7 +32,7 @@ export default function BackendStrategiesPage() {
   const localDrafts = Object.entries(conversations).filter(([key, value]) => key.startsWith('backend-local:') && value.draft && !strategies.some(s => s._id === key.slice('backend-local:'.length)));
   return <div className="strategy-page page-enter">
     {selected && <Button type="text" className="strategy-back-link" icon={<ArrowLeftOutlined aria-hidden />} onClick={() => { setDirty(false); setParams({}); }}>All strategies</Button>}
-    <div className="page-heading"><div><h1>{selected ? saved?.name ?? 'New strategy' : 'Algo strategies'}</h1><p>{selected ? 'Build a buy and sell plan, then test its saved rules.' : 'Create a strategy, test it on past prices, then inspect its signals.'}</p></div><Space wrap>{!selected && <Button type="primary" icon={<PlusOutlined aria-hidden />} onClick={() => setNewOpen(true)}>New strategy</Button>}<Button onClick={() => navigate('/signal-runner' + (saved ? `?strategy=${saved._id}` : ''))}>Signal runner</Button></Space></div>
+    <div className="page-heading"><div><h1>{selected ? saved?.name ?? 'New strategy' : 'Algo strategies'}</h1><p>{selected ? 'Build a buy and sell plan, then test its saved rules.' : 'Create a strategy, test it on past prices, then inspect its signals.'}</p></div><Space wrap>{saved && <StrategyHistoryButton strategy={saved} history label={`Revision history (current ${saved.revision})`} />}{!selected && <Button type="primary" icon={<PlusOutlined aria-hidden />} onClick={() => setNewOpen(true)}>New strategy</Button>}<Button onClick={() => navigate('/signal-runner' + (saved ? `?strategy=${saved._id}` : ''))}>Signal runner</Button></Space></div>
     {error && <Alert className="mb-5" type="error" showIcon title={error} action={<Button onClick={() => void refresh()}>Retry</Button>} />}
     {loading ? <Skeleton active /> : !selected ? <>
       <StrategyLibrary strategies={strategies} onNew={() => setNewOpen(true)} onEdit={open} onTest={rule => open(rule, 'backtests')} onDuplicate={create} />
@@ -48,7 +49,7 @@ export default function BackendStrategiesPage() {
         useBackendStrategies.setState(state => ({ strategies: [record, ...state.strategies.filter(s => s._id !== record._id)] }));
         setParams({ tab: 'rules', rule: record._id }, { replace: true });
         return record;
-      }} /> : saved && <BackendBacktests key={saved._id} strategies={[saved]} selected={saved._id} />}
+      }} /> : saved && <BackendBacktests key={saved._id} strategies={[saved]} selected={saved._id} initialRunId={params.get('run')??undefined} onReportClose={()=>setParams(previous=>{const next=new URLSearchParams(previous);next.delete('run');return next;},{replace:true})} />}
       {tab === 'rules' && dirty && <p className="strategy-footnote">Save your changes to enable Backtests. Your draft stays on this device when you return to the list.</p>}
     </>}
     <NewStrategyDialog open={newOpen} onClose={() => setNewOpen(false)} onCreate={create} />

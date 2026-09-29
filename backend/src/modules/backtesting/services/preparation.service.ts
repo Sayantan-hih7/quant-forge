@@ -1,3 +1,4 @@
+import { ensureRuleReports } from '../../market-data/services/daily-reports.service.js';
 import { dhanRequest } from '../../connections/services/dhan.service.js';
 import { DatasetReceiptModel } from '../../market-data/models/dataset-receipt.model.js';
 import { instruments, storedCandles } from '../../market-data/repository.js';
@@ -7,13 +8,21 @@ import type { Instrument } from '../../market-data/types.js';
 import { invariant } from '../../../shared/errors.js';
 import { BacktestRunModel, type BacktestRun } from '../models/backtest.model.js';
 import { strategyHistoryPlan } from './history-plan.js';
+import { isClosedHistoryRange } from '../../market-data/services/history-coverage.js';
+import { CALENDAR_SOURCE } from '../../../shared/market-calendar.js';
 
-export async function ensureIntradayHistory(stock: Instrument, from: string, to: string) {
+export async function ensureIntradayHistory(stock: Instrument, from: string, to: string, options: { maxWaitMs?: number } = {}) {
   let downloaded = false;
   for (const window of historyWindows(from, to, '1m')) {
     if (await DatasetReceiptModel.exists({ instrumentId: stock._id, kind: 'intraday', from: { $lte: window.from }, to: { $gte: window.to } })) continue;
+    if (isClosedHistoryRange(window.from, window.to)) {
+      await DatasetReceiptModel.updateOne({ _id: `intraday:${stock._id}:${window.from}:${window.to}` }, { $set: {
+        instrumentId: stock._id, kind: 'intraday', ...window, checkedAt: new Date().toISOString(), records: 0, sourceUrl: CALENDAR_SOURCE,
+      } }, { upsert: true });
+      continue;
+    }
     const payload = await dhanRequest('/charts/intraday', { securityId: stock.securityId, exchangeSegment: `${stock.exchange}_EQ`, instrument: 'EQUITY', interval: '1', oi: false,
-      fromDate: `${window.from} 09:15:00`, toDate: `${window.to} 09:15:00` });
+      fromDate: `${window.from} 09:15:00`, toDate: `${window.to} 09:15:00` }, options);
     const at = new Date().toISOString();
     const rows = parseDhanHistory(payload, stock, '1m', at).filter(row => row.time >= `${window.from}T03:45:00.000Z` && row.time < `${window.to}T03:45:00.000Z`);
     for (let offset = 0; offset < rows.length; offset += 500) await storedCandles.bulkWrite(rows.slice(offset, offset + 500).map(row => ({ updateOne: {
@@ -42,6 +51,11 @@ export async function prepareBacktest(run: BacktestRun) {
     if (plan.intradayFrom) changed = await ensureIntradayHistory(stock, plan.intradayFrom, plan.to) || changed;
     if (changed) progress.downloaded++; else progress.reused++;
     progress.processed++;
+  }
+  if (plan.reportsFrom) {
+    await BacktestRunModel.updateOne({ _id: run._id }, { $set: { message: 'Preparing exchange turnover reports; historical availability is verified during replay' } });
+    const reportPreparation = await ensureRuleReports(stocks.map(stock => stock._id), plan.reportsFrom, run.config.to);
+    await BacktestRunModel.updateOne({ _id: run._id }, { $set: { reportPreparation } });
   }
   await BacktestRunModel.updateOne({ _id: run._id }, { $set: { stage: 'calculating', progress, message: 'Replaying completed candles with the saved buy/sell rules', symbols: Object.fromEntries(stocks.map(s => [s._id, s.symbol])) } });
   return plan;

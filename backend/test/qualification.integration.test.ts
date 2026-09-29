@@ -53,9 +53,9 @@ test('qualification publication, manual edits and concurrent changes are atomic 
     await assert.rejects(QualificationRunModel.create({ _id: randomUUID(), month, status: 'queued' }), (error: unknown) => error instanceof mongoose.mongo.MongoServerError && error.code === 11000);
   } finally {
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
-    await disconnectDatabase(); await jobs.close(); await redis.quit();
+    await disconnectDatabase(); await jobs.waitUntilReady(); await jobs.close(); await redis.quit();
   }
 });
 
 // Even skipped integration tests must release the queue connection opened by service imports.
-if (process.env.RUN_DB_TESTS !== '1') { await jobs.close(); await redis.quit(); }
+if (process.env.RUN_DB_TESTS !== '1') { await jobs.waitUntilReady(); await jobs.close(); await redis.quit(); }

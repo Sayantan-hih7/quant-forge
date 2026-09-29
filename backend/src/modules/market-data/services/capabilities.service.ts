@@ -2,6 +2,7 @@ import { invariant } from '../../../shared/errors.js';
 import { engineClient } from '../../engine/services/engine.service.js';
 import { facts } from '../repository.js';
 import { INDEX_SOURCES } from '../sources/index-membership.js';
+import { ruleFields } from '../../../shared/rule-fields.js';
 
 const sourcedFacts = ['marketCap', 'debtEquity', 'pledge', 'delivery', 'roe', 'roce', 'pe', 'promoterHolding', 'fiiChange', 'diiChange', 'sector', 'index', 'turnover', 'tradedValue'];
 export async function ruleCapabilities() {
@@ -9,12 +10,13 @@ export async function ruleCapabilities() {
   const snapshotFields = data.datedFacts.filter(field => sourcedFacts.includes(field));
   const sectors = await facts.distinct('value', { field: 'sector', validUntil: { $gte: new Date().toISOString() } });
   return { technical: data.technical, snapshotFields,
-    monthlyFields: [...data.technical.filter(field => field !== 'vwap'), ...snapshotFields],
+    monthlyFields: [...data.technical, ...snapshotFields].filter(field => ruleFields[field]?.monthly),
     choices: { index: INDEX_SOURCES.map(x => ({ value: x.id, label: x.name })), sector: sectors.filter(x => typeof x === 'string').sort().map(x => ({ value: x, label: x })) },
   };
 }
 export async function validateSourcedRule(rule: Record<string, unknown>) {
   await engineClient.post('/validate-rule', rule);
+  if (rule.enabled === false) return;
   const capabilities = await ruleCapabilities();
   const allowed = rule.timeframe === '1mo' ? capabilities.monthlyFields : [...capabilities.technical, ...capabilities.snapshotFields];
   for (const group of rule.groups as { conditions: Record<string, unknown>[] }[]) for (const condition of group.conditions) {

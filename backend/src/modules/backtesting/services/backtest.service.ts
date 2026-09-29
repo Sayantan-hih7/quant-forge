@@ -7,6 +7,7 @@ import { engineClient, engineInstruments } from '../../engine/services/engine.se
 import { BacktestRunModel } from '../models/backtest.model.js';
 import { backtestSchema } from '../validations/backtest.validation.js';
 import { prepareBacktest } from './preparation.service.js';
+import { intradayHistoryQuality } from './history-quality.js';
 export async function queueBacktest(raw: unknown) {
   const input = backtestSchema.parse(raw);
   const strategy = await StrategyModel.findById(input.strategyId).lean(); invariant(strategy, 'Save a strategy first');
@@ -16,7 +17,7 @@ export async function queueBacktest(raw: unknown) {
   const { snapshots, qualified } = await qualifiedBacktestUniverse(input);
   invariant(!input.ids || input.ids.every(id=>qualified.includes(id)),'Selected stocks must belong to the requested qualified universe');
   const ids=input.ids?[...new Set(input.ids)]:qualified;
-  invariant(ids.length > 0 && ids.length <= 100, 'A recorded qualified universe of 1–100 stocks is required. Historical lists are only available from the time they were published');
+  invariant(ids.length > 0 && ids.length <= 200, 'A recorded qualified universe of 1–200 stocks is required. Historical lists are only available from the time they were published');
   const id = randomUUID();
   await BacktestRunModel.create({ _id: id, strategy, config: { from, to, universe: input.universe, includeManual: input.includeManual, ids }, snapshots, status: 'queued', createdAt: new Date().toISOString() });
   try { await jobs.add('backtest', { id }, { jobId: id }); }
@@ -30,6 +31,7 @@ export async function runBacktest(id: string) {
     const plan = await prepareBacktest(run);
     const instruments = await engineInstruments(run.config.ids, run.config.to, false, plan);
     const {data} = await engineClient.post('/backtest', { strategy:run.strategy, config:run.config, snapshots:run.snapshots, instruments }, { timeout: 600000 });
+    if (plan.replay === '1m') data.historyQuality = intradayHistoryQuality(instruments, run.config, run.strategy.risk.overnight);
     await BacktestRunModel.updateOne({_id:id},{$set:{status:'completed',stage:'complete',result:data,finishedAt:new Date().toISOString()},$unset:{message:1}});
   } catch(e) {
     await BacktestRunModel.updateOne({_id:id},{$set:{status:'failed',message:e instanceof AppError?e.message:'Backtest failed without a report',finishedAt:new Date().toISOString()}});

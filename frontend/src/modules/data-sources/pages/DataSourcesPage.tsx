@@ -8,6 +8,7 @@ import { MotilalConnection } from '../components/MotilalConnection';
 import { apiClient } from '../../../services/apiClient';
 import type { SourceRun } from '../types';
 import { UniverseRefreshStatus } from '../components/UniverseRefreshStatus';
+import { PaperReadiness } from '../components/PaperReadiness';
 
 export default function DataSourcesPage() {
   const { data, error, loading, refresh } = useDataSources();
@@ -31,6 +32,7 @@ export default function DataSourcesPage() {
       <DhanConnection connection={data.dhan} refresh={refresh} />
       {data.universeRefresh && <UniverseRefreshStatus status={data.universeRefresh} />}
       <MotilalConnection />
+      <PaperReadiness />
       <HistoricalImport data={data} refresh={refresh} />
       <Card title="Exchange and instrument imports" extra={<Tag>Completed month: {month}</Tag>}>
         <p className="muted">Index tags and company snapshots are dated when collected. Monthly delivery is volume-weighted across the complete set of exchange reports.</p>

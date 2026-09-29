@@ -1,10 +1,11 @@
-import {test} from 'node:test';
+import {after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import mongoose from 'mongoose';
 import {env} from '../src/config/env.js';
 import {connectDatabase,disconnectDatabase} from '../src/shared/database.js';
 import {jobs,redis} from '../src/shared/redis.js';
+after(async()=>{if(process.env.RUN_DB_TESTS!=='1'){await jobs.waitUntilReady(); await jobs.close();if(redis.status!=='end')await redis.quit();}});
 import {PaperOrderModel,PaperPositionModel,PaperSessionModel} from '../src/modules/paper-trading/models/paper.model.js';
 import {MonthlyUniverseModel} from '../src/modules/qualification/models/qualification.model.js';
 import {currentMonth} from '../src/modules/qualification/services/universe.service.js';
@@ -46,6 +47,6 @@ test('paper cash ledger handles duplicate concurrent fills, stale ticks, oversel
     assert.equal((await PaperOrderModel.findById(pending._id))?.status,'cancelled');
   }finally{
     if(mongoose.connection.readyState===1&&mongoose.connection.name===name&&/^quantforge_test_[a-f0-9]{32}$/.test(name))await mongoose.connection.dropDatabase();
-    await disconnectDatabase();await jobs.close();if(redis.status!=='end')await redis.quit();
+    await disconnectDatabase();await jobs.waitUntilReady(); await jobs.close();if(redis.status!=='end')await redis.quit();
   }
 });

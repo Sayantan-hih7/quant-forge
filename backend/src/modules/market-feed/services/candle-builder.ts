@@ -25,7 +25,7 @@ export class CandleBuilder {
   }
   private close(id:string,state:Tracking){
     const b=state.bucket;if(!b)return;
-    if(b.valid && b.start+60000-b.last<=15000)this.ready.push({instrumentId:id,interval:'1m',time:new Date(b.start).toISOString(),open:b.open,high:b.high,low:b.low,close:b.close,volume:b.volume,source:'motilal',observedAt:new Date().toISOString()});
+    if(b.valid && b.start+60000-b.last<=15000)this.ready.push({instrumentId:id,interval:'1m',time:new Date(b.start).toISOString(),open:b.open,high:b.high,low:b.low,close:b.close,volume:b.volume,source:state.quote.source,observedAt:new Date().toISOString()});
   }
   drain(now=Date.now()){
     for(const [id,state]of this.tracking)if(state.bucket && state.bucket.start+62000<=now){this.close(id,state);state.bucket=undefined;}

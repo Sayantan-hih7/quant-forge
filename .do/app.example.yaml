@@ -1,0 +1,55 @@
+# Preparation only: no database is provisioned. Supply runtime secrets before deployment.
+name: quantforge-paper
+region: blr
+envs:
+  - {key: NODE_ENV, value: production, scope: RUN_TIME}
+  - {key: FRONTEND_ORIGIN, value: '${APP_URL}', scope: RUN_TIME}
+  - {key: ENGINE_URL, value: 'http://engine:8100', scope: RUN_TIME}
+# Required secrets: MONGODB_URI, REDIS_URL, ENGINE_TOKEN, WORKSPACE_TOKEN,
+# SECRET_ENCRYPTION_KEY, OWNER_EMAIL, OWNER_PASSWORD_HASH. See docs/deployment.md.
+services:
+  - name: web
+    github: {repo: Sayantan-hih7/quant-forge, branch: main, deploy_on_push: false}
+    source_dir: /
+    dockerfile_path: backend/Dockerfile
+    run_command: node dist/server.js
+    http_port: 4100
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check: {http_path: /health, initial_delay_seconds: 15}
+    termination: {grace_period_seconds: 90}
+  - name: engine
+    github: {repo: Sayantan-hih7/quant-forge, branch: main, deploy_on_push: false}
+    source_dir: /
+    dockerfile_path: engine/Dockerfile
+    internal_ports: [8100]
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-2gb
+    health_check: {http_path: /health, port: 8100}
+    termination: {grace_period_seconds: 90}
+workers:
+  - name: jobs
+    github: {repo: Sayantan-hih7/quant-forge, branch: main, deploy_on_push: false}
+    source_dir: /
+    dockerfile_path: backend/Dockerfile
+    run_command: node dist/worker.js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+  - name: feed
+    github: {repo: Sayantan-hih7/quant-forge, branch: main, deploy_on_push: false}
+    source_dir: /
+    dockerfile_path: backend/Dockerfile
+    run_command: node dist/feed.js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+  - name: paper
+    github: {repo: Sayantan-hih7/quant-forge, branch: main, deploy_on_push: false}
+    source_dir: /
+    dockerfile_path: backend/Dockerfile
+    run_command: node dist/paper.js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+ingress:
+  rules:
+    - match: {path: {prefix: /}}
+      component: {name: web, preserve_path_prefix: true}

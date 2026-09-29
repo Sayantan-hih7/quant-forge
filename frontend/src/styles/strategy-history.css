@@ -1,0 +1,11 @@
+.strategy-history-intro p {color:var(--muted);line-height:1.6;}
+.strategy-revision-controls {display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:24px 0;}
+.strategy-revision-controls label {display:flex;flex-direction:column;gap:8px;min-width:0;}
+.strategy-revision-selected > td {background:var(--surface-raised)!important;}
+.strategy-revision-comparison {margin:20px 0;}
+.strategy-revision-comparison p {color:var(--muted);}
+.strategy-revision-comparison td {vertical-align:top;overflow-wrap:anywhere;min-width:150px;}
+.strategy-revision-uses {list-style:none;padding:0;}
+.strategy-revision-uses li {display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);}
+.strategy-history-drawer .strategy-draft-title {display:none;}
+@media(max-width:600px){.strategy-revision-controls{grid-template-columns:1fr;}.strategy-revision-uses li{flex-wrap:wrap;}}

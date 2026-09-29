@@ -1,12 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'node:path';
+import { env } from './config/env.js';
 import { ZodError } from 'zod';
 import { isAllowedFrontendOrigin } from './config/frontend-origin.js';
 import { AppError } from './shared/errors.js';
 import { databaseReady } from './shared/database.js';
 import { redis } from './shared/redis.js';
-import { startLocalSession, requireWorkspace } from './middleware/workspace.js';
+import { startLocalSession, requireWorkspace, workspaceSession, loginWorkspace, logoutWorkspace } from './middleware/workspace.js';
 import { marketDataRouter } from './modules/market-data/routes/market-data.routes.js';
 import { connectionRouter } from './modules/connections/routes/connection.routes.js';
 import { qualificationRouter } from './modules/qualification/routes/qualification.routes.js';
@@ -17,6 +19,9 @@ import { paperRouter } from './modules/paper-trading/routes/paper.routes.js';
 import { indexRouter } from './modules/market-indices/routes/index.routes.js';
 import { aiRouter } from './modules/ai/routes/ai.routes.js';
 import { stockDetailsRouter } from './modules/stock-details/routes/stock-details.routes.js';
+import { watchlistRouter } from './modules/watchlists/routes/watchlist.routes.js';
+import { dashboardRouter } from './modules/dashboard/routes/dashboard.routes.js';
+import { deploymentReadiness } from './modules/system/services/readiness.service.js';
 export const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
@@ -27,6 +32,9 @@ app.get('/health', (_req, res) => {
   res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'unavailable', execution: 'paper-only', database: databaseReady(), redis: redis.status === 'ready' });
 });
 app.post('/api/session', startLocalSession);
+app.get('/api/session', workspaceSession);
+app.post('/api/session/login', loginWorkspace);
+app.post('/api/session/logout', logoutWorkspace);
 app.use('/api', requireWorkspace);
 app.use('/api/market-data', marketDataRouter);
 app.use('/api/market-indices', indexRouter);
@@ -38,6 +46,9 @@ app.use('/api/backtests', backtestRouter);
 app.use('/api/paper', paperRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/stocks', stockDetailsRouter);
+app.use('/api/watchlists', watchlistRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.get('/api/system/readiness', async (_req, res) => res.json(await deploymentReadiness()));
 app.get('/api/events', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders(); res.write('event: ready\ndata: {}\n\n');
@@ -49,6 +60,16 @@ app.get('/api/events', async (req, res) => {
   req.on('close', close);
   await subscriber.subscribe('quantforge:events');
 });
+if (env.FRONTEND_DIST) {
+  const directory = path.resolve(env.FRONTEND_DIST);
+  app.use(express.static(directory, { index: false, setHeaders: (res, filename) => {
+    res.setHeader('Cache-Control', filename.endsWith('.html') ? 'no-store' : filename.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache');
+  } }));
+  app.get('/{*path}', (req, res, next) => {
+    if (req.path === '/api' || req.path.startsWith('/api/') || path.extname(req.path)) return next();
+    res.set('Cache-Control', 'no-store').sendFile(path.join(directory, 'index.html'));
+  });
+}
 app.use((_req, _res, next) => next(new AppError(404, 'NOT_FOUND', 'Endpoint not found')));
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (res.headersSent) return res.end();

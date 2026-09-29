@@ -7,11 +7,13 @@ import { BacktestRedirect } from './BacktestRedirect';
 const DashboardPage = lazy(() => import('../modules/dashboard/pages/DashboardPage'));
 const QualificationPage = lazy(() => import('../modules/qualification/pages/BackendQualificationPage'));
 const StrategiesPage = lazy(() => import('../modules/strategies/pages/BackendStrategiesPage'));
+const SignalRunnerPage = lazy(() => import('../modules/paper-trading/pages/BackendSignalsPage'));
 const PaperTradingPage = lazy(() => import('../modules/paper-trading/pages/BackendPaperPage'));
 const SettingsPage = lazy(() => import('../modules/settings/pages/SettingsPage'));
 const DataSourcesPage = lazy(() => import('../modules/data-sources/pages/DataSourcesPage'));
 const DhanCallbackPage = lazy(() => import('../modules/data-sources/pages/DhanCallbackPage'));
 const IndicesPage = lazy(() => import('../modules/market-data/pages/IndicesPage'));
+const WatchlistsPage = lazy(() => import('../modules/watchlists/pages/WatchlistsPage'));
 const ModulePreviewPage = lazy(() => import('../pages/ModulePreviewPage'));
 const AuthPage = lazy(() => import('../modules/auth/pages/AuthPage'));
 const VerifyPage = lazy(() => import('../modules/auth/pages/VerifyPage'));
@@ -28,10 +30,11 @@ export function AppRouter() {
       <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/market-data/indices" element={<IndicesPage />} />
+      <Route path="/market-data/watchlists" element={<WatchlistsPage />} />
       <Route path="/market-data" element={<Navigate to="/market-data/indices" replace />} />
       <Route path="/data-sources" element={<DataSourcesPage />} /><Route path="/qualification" element={<QualificationPage />} />
       <Route path="/strategies" element={<StrategiesPage />} /><Route path="/strategy-builder" element={<Navigate to="/strategies?tab=rules" replace />} />
-      <Route path="/backtesting" element={<BacktestRedirect />} /><Route path="/signal-runner" element={<PaperTradingPage runner />} /><Route path="/paper-trading" element={<PaperTradingPage />} />
+      <Route path="/backtesting" element={<BacktestRedirect />} /><Route path="/signal-runner" element={<SignalRunnerPage />} /><Route path="/paper-trading" element={<PaperTradingPage />} />
       <Route path="/signals" element={<Navigate to="/signal-runner" replace />} /><Route path="/scanner" element={<Navigate to="/signal-runner" replace />} />
       <Route path="/orders" element={<Navigate to="/paper-trading" replace />} /><Route path="/portfolio" element={<Navigate to="/paper-trading" replace />} />
       <Route path="*" element={<ModulePreviewPage />} />

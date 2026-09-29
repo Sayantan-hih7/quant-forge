@@ -4,7 +4,8 @@ import { parseDhanCompany } from '../sources/dhan-company.js';
 import { parseDhanHistory } from '../sources/dhan-history.js';
 import { DatasetReceiptModel } from '../models/dataset-receipt.model.js';
 import type { Instrument } from '../types.js';
-import { missingHistoryRanges } from './history-coverage.js';
+import { isClosedHistoryRange, missingHistoryRanges } from './history-coverage.js';
+import { CALENDAR_SOURCE } from '../../../shared/market-calendar.js';
 import { ensureDhanPublicCompany } from './dhan-public-company.service.js';
 
 const companyRefreshMs = 7 * 86400000;
@@ -55,6 +56,12 @@ export async function ensureMonthlyHistory(stock: Instrument, from: string, to: 
   const earliest = gaps.length ? await storedCandles.findOne({ instrumentId: stock._id, interval: '1d' }).sort({ time: 1 }).select('time').lean() : null;
   const firstDay = earliest ? new Date(Date.parse(earliest.time) + 19800000).toISOString().slice(0, 10) : undefined;
   for (const gap of gaps) {
+    if (isClosedHistoryRange(gap.from, gap.to)) {
+      await DatasetReceiptModel.updateOne({ _id: `daily:${stock._id}:${gap.from}:${gap.to}` }, { $set: {
+        instrumentId: stock._id, kind: 'daily', ...gap, checkedAt: new Date().toISOString(), records: 0, sourceUrl: CALENDAR_SOURCE,
+      } }, { upsert: true });
+      continue;
+    }
     // Persist each successful interval independently so cancellation/retries resume
     // from the remaining gaps. A short IPO response never invents earlier candles.
     // Dhan rejects an entirely pre-history interval with DH-907. Include one

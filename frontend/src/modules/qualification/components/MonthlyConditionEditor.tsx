@@ -1,3 +1,5 @@
+import { RuleOperandParameters } from './RuleOperandParameters';
+import { ruleFields } from '../config/ruleFields';
 import { Button, Tag } from 'antd';
 import { createContext, useContext } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -20,7 +22,7 @@ function MonthlyConditionRow({ group, index, onRemove, canRemove }: { group: num
   const range = isRange(condition.operator);
   const trend = isTrend(condition.operator);
   const distance = isDistance(condition.operator);
-  const availableFields = Object.entries(monthlyFields).filter(([key]) => !capabilities || capabilities.monthlyFields.includes(key));
+  const availableFields = Object.entries(monthlyFields).filter(([key]) => ruleFields[key]?.monthly && (!capabilities || capabilities.monthlyFields.includes(key)));
   const categories = monthlyCategories.filter(category => availableFields.some(([, field]) => field.category === category.value));
   const fields = availableFields.filter(([, field]) => field.category === condition.category).map(([value, field]) => ({ value, label: field.label }));
   const comparedFields = availableFields.filter(([key, field]) => field.kind === 'number' && field.unit === definition.unit && (!condition.operator.startsWith('cross') || field.series && (!capabilities || capabilities.technical.includes(key)))).map(([value, field]) => ({ value, label: field.label }));
@@ -31,12 +33,12 @@ function MonthlyConditionRow({ group, index, onRemove, canRemove }: { group: num
   };
   return <div className="monthly-condition" aria-label={`Monthly condition ${index + 1} in group ${group + 1}`}>
     <div className="monthly-condition-category"><span className="condition-number">{index + 1}</span><RhfSelect control={control} name={`${path}.category`} label="Category" options={categories} onSelect={(value) => { const first = availableFields.find(([, field]) => field.category === value)![0]; setValue(path, newMonthlyCondition(first), { shouldDirty: true, shouldValidate: true }); }} /></div>
-    <RhfSelect control={control} name={`${path}.field`} label="Monthly field" showSearch optionFilterProp="label" virtual={false} options={fields} onSelect={(value) => setValue(path, newMonthlyCondition(value), { shouldDirty: true, shouldValidate: true })} />
+    <div className="monthly-condition-field"><RhfSelect control={control} name={`${path}.field`} label="Monthly field" showSearch optionFilterProp="label" virtual={false} options={fields} onSelect={(value) => setValue(path, newMonthlyCondition(value), { shouldDirty: true, shouldValidate: true })} /><RuleOperandParameters control={control} field={condition.field} periodName={`${path}.period`} offsetName={`${path}.offset`} monthly /></div>
     <RhfSelect control={control} name={`${path}.operator`} label="Operator" options={operators.map((value) => ({ value, label: monthlyOperatorLabels[value] }))} onSelect={changeOperator} />
     <div className={`monthly-condition-value${numeric && !trend && !range && !distance ? ' monthly-numeric-value' : ''}`}>
       {numeric ? trend ? <RhfInputNumber control={control} name={`${path}.lookback`} label="Consecutive months" min={1} max={24} /> : range ? <div className="monthly-value-pair"><RhfInputNumber control={control} name={`${path}.value`} label={`From (${definition.unit})`} /><RhfInputNumber control={control} name={`${path}.upper`} label={`To (${definition.unit})`} /></div> : <>
         {!distance && <RhfSelect control={control} name={`${path}.operand`} label="Compare with" options={[{ value: 'value', label: 'Value' }, { value: 'field', label: 'Monthly field' }]} />}
-        {condition.operand === 'field' || distance ? <><RhfSelect control={control} name={`${path}.compareField`} label="Compared monthly field" options={comparedFields} showSearch optionFilterProp="label" virtual={false} /><div className="monthly-value-pair"><RhfInputNumber control={control} name={`${path}.multiplier`} label="Multiplier ×" min={0.01} max={100} step={0.1} />{distance && <RhfInputNumber control={control} name={`${path}.distance`} label="Distance (%)" min={0} max={100} />}</div></> : <RhfInputNumber control={control} name={`${path}.value`} label={`Value (${definition.unit})`} />}
+        {condition.operand === 'field' || distance ? <><RhfSelect control={control} name={`${path}.compareField`} label="Compared monthly field" options={comparedFields} showSearch optionFilterProp="label" virtual={false} onSelect={() => { setValue(`${path}.comparePeriod`, undefined, { shouldDirty: true }); setValue(`${path}.compareOffset`, undefined, { shouldDirty: true }); }} /><RuleOperandParameters control={control} field={condition.compareField} periodName={`${path}.comparePeriod`} offsetName={`${path}.compareOffset`} monthly /><div className="monthly-value-pair"><RhfInputNumber control={control} name={`${path}.multiplier`} label="Multiplier ×" min={0.01} max={100} step={0.1} />{distance && <RhfInputNumber control={control} name={`${path}.distance`} label="Distance (%)" min={0} max={100} />}</div></> : <RhfInputNumber control={control} name={`${path}.value`} label={`Value (${definition.unit})`} />}
         {condition.operator.startsWith('cross') && <RhfInputNumber control={control} name={`${path}.lookback`} label="Within last N months" min={1} max={24} />}
       </> : definition.kind === 'text' ? <RhfInput control={control} name={`${path}.text`} label="Keyword or phrase" placeholder="e.g. Order win" /> : <><RhfChoiceSelect control={control} name={`${path}.choices`} label="Match value" multiple={['in', 'notIn'].includes(condition.operator)} options={capabilities?.choices[condition.field] ?? definition.choices} />{condition.category === 'patterns' && <RhfInputNumber control={control} name={`${path}.lookback`} label="Within last N monthly candles" min={1} max={24} />}</>}
     </div>

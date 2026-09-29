@@ -1,4 +1,6 @@
-import type { StockQuote } from '../types';
+import type { StockQuote, QuoteStatus } from '../types';
+export const stockSource = (quote: StockQuote) => quote.source === 'motilal-stream' ? 'Motilal' : quote.source === 'historical-close' ? 'Stored Dhan history' : 'Dhan';
+export const isQuoteConnected = (quote: StockQuote | undefined, status: QuoteStatus) => status.state === 'streaming' && (!status.sessions || !!quote?.streamSession && status.sessions[quote.instrumentId] === quote.streamSession);
 export const stockNumber = (value: number | null | undefined, digits = 2) => value == null ? '—' : value.toLocaleString('en-IN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 export const stockMoney = (value: number | null | undefined) => value == null ? '—' : `₹${stockNumber(value)}`;
 export const stockSigned = (value: number | null | undefined, suffix = '') => value == null ? '—' : `${value > 0 ? '+' : value < 0 ? '−' : ''}${stockNumber(Math.abs(value))}${suffix}`;
@@ -7,7 +9,7 @@ export const stockTime = (value: string | null | undefined) => value ? new Date(
 export function priceState(quote: StockQuote | undefined, connected: boolean, now: number) {
   if (!quote) return 'Unavailable';
   if (quote.source === 'historical-close') return 'Historical close';
-  if (connected && quote.source === 'dhan-stream' && quote.lastTradeAt && now - Date.parse(quote.lastTradeAt) >= -2000
+  if (connected && quote.source.endsWith('-stream') && quote.lastTradeAt && now - Date.parse(quote.lastTradeAt) >= -2000
     && now - Date.parse(quote.lastTradeAt) < 30_000 && now - Date.parse(quote.receivedAt) < 15_000) return 'Live';
   if (quote.source === 'dhan-snapshot' && now - Date.parse(quote.receivedAt) < 30_000) return 'Snapshot';
   return 'Last received';

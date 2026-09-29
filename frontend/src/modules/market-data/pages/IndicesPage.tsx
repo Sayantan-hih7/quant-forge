@@ -47,7 +47,7 @@ export default function IndicesPage() {
 }
 
 function IndicesWorkspace({ exchange, state }: { exchange: IndexExchange; state: ReturnType<typeof useIndexQuotes> }) {
-  const { quotes, sources, loading, error, refresh, autoUpdate, setAutoUpdate } = state;
+  const { quotes, sources, loading, error, refresh, autoUpdate, setAutoUpdate, market } = state;
   const [params, setParams] = useSearchParams();
   const exchangeConfig = indexExchanges[exchange];
   const indexCategories = getIndexCategories(exchange);
@@ -147,7 +147,7 @@ function IndicesWorkspace({ exchange, state }: { exchange: IndexExchange; state:
       {error && <Alert showIcon type="warning" title={error} description="Saved values retain their original timestamps. Refresh to retry." />}
       {sources.find(s => s.exchange === exchange)?.warning && <Alert showIcon type="warning" title={sources.find(s => s.exchange === exchange)?.warning} />}
       <div className="indices-update-note" role="status">
-        <span>{autoUpdate ? 'Auto-update on · checks every 15 seconds' : 'Auto-update paused · use Refresh for the latest values'}</span>
+        <span>{market && !market.open ? `${market.reason} · showing saved snapshots${autoUpdate && market.nextOpenAt ? ` · resumes ${indexTime(market.nextOpenAt)}` : ''}` : autoUpdate ? 'Auto-update on · checks every 15 seconds during market hours' : 'Auto-update paused · use Refresh for the latest values'}</span>
         <span>Last checked: {indexTime(sources.find(s => s.exchange === exchange)?.checkedAt ?? undefined)}</span>
       </div>
       {focusId && !selected && (
@@ -264,7 +264,7 @@ function IndicesWorkspace({ exchange, state }: { exchange: IndexExchange; state:
         </footer>
       </section>
       <p className="indices-demo-note">
-        Sources: NSE and BSE public market data. Checks every 15 seconds while auto-update is on; values change when the exchange publishes an update. Daily-only indices use official closing data. Check each index’s timestamp; snapshots are not a streaming execution feed.
+        Sources: NSE and BSE public market data. Auto-update runs during regular market hours, excluding weekends and configured exchange holidays. Outside those hours, Refresh reads saved data. Values retain their source timestamps; snapshots are not a streaming execution feed.
       </p>
       <IndexDetailDrawer quote={selected} onClose={clearFocus} />
     </div>

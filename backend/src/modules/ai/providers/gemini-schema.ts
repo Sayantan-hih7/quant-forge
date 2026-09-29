@@ -8,7 +8,13 @@ export function geminiSchema(input: unknown): unknown {
   if (Array.isArray(alternatives) && alternatives.length === 2) {
     const nullable = alternatives.find(x => x && typeof x === 'object' && x.type === 'null');
     const typed = alternatives.find(x => x && typeof x === 'object' && typeof x.type === 'string' && x.type !== 'null');
-    if (nullable && typed) { const rest = { ...schema }; delete rest.anyOf; schema = { ...rest, ...typed, type: [typed.type, 'null'] }; }
+    if (nullable && typed) {
+      const rest = { ...schema }; delete rest.anyOf;
+      // A nullable enum must include null in its values as well as its types.
+      // Otherwise the converted grammar contradicts its own unused-field option.
+      schema = { ...rest, ...typed, type: [typed.type, 'null'],
+        ...(Array.isArray(typed.enum) ? { enum: [...new Set([...typed.enum, null])] } : {}) };
+    }
   }
   const constraints: Record<string, string> = {
     minLength: 'Minimum characters', maxLength: 'Maximum characters', minItems: 'Minimum items', maxItems: 'Maximum items',

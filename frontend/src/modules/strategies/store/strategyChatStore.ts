@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { StrategyMessage, TradingPlanDraft } from '../types/tradingPlan';
+import type { AiExample } from '../../../services/aiAssistant';
 
-interface Conversation { messages: StrategyMessage[]; draft?: TradingPlanDraft; proposal?: TradingPlanDraft; savedPlanId?: string; baseRevision?: number }
+export interface StrategySuggestionMeta { awaitingReply: boolean; example: AiExample | null; assumptions: string[]; baseFingerprint?: string }
+interface Conversation { messages: StrategyMessage[]; draft?: TradingPlanDraft; proposal?: TradingPlanDraft; savedPlanId?: string; baseRevision?: number; suggestionMeta?: StrategySuggestionMeta }
 interface StrategyChatState {
   conversations: Record<string, Conversation>;
   update: (key: string, value: Partial<Conversation>) => void;

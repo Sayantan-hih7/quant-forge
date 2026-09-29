@@ -13,19 +13,26 @@ import { RobotOutlined } from '@ant-design/icons';
 import { RuleAssistantDrawer } from '../../../components/forms/RuleAssistantDrawer';
 import { monthlyStarters } from '../config/assistantPrompts';
 
+// Registering newly optional RHF fields must not mark an untouched legacy rule dirty.
+const editableDefaults = (rule: MonthlyRuleDefinition): MonthlyRuleDefinition => ({ ...rule,
+  groups: rule.groups.map(group => ({ ...group, conditions: group.conditions.map(condition => ({
+    period: undefined, offset: undefined, comparePeriod: undefined, compareOffset: undefined, ...condition,
+  })) })),
+});
+
 export function SavedMonthlyRuleBuilder({ state, capabilities, refresh }: { state: QualificationState; capabilities: RuleCapabilities; refresh: () => Promise<void> }) {
   const { message } = App.useApp();
   const [revision, setRevision] = useState(state.rule?.revision ?? 0);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [summary, setSummary] = useState<MonthlyRuleDefinition | null>(null), [busy, setBusy] = useState(false);
   const ruleSchema = createMonthlyRuleSchema(capabilities.choices);
-  const form = useForm<MonthlyRuleDefinition>({ resolver: zodResolver(ruleSchema), defaultValues: state.rule?.rule ?? initialMonthlyRule });
+  const form = useForm<MonthlyRuleDefinition>({ resolver: zodResolver(ruleSchema), defaultValues: editableDefaults(state.rule?.rule ?? initialMonthlyRule) });
   const active = state.runs.some(x => ['queued', 'running'].includes(x.status));
   async function save(rule: MonthlyRuleDefinition, run: boolean) {
     setBusy(true);
     try {
       const response = await apiClient.put<{ revision: number }>('/qualification/rule', { rule, expectedRevision: revision });
-      setRevision(response.data.revision); form.reset(rule);
+      setRevision(response.data.revision); form.reset(editableDefaults(rule));
       if (run) await apiClient.post('/qualification/runs');
       message.success(run ? 'Rule saved. Monthly scan queued.' : 'Monthly rule saved.'); await refresh();
     } catch (error) { message.error((error as Error).message); } finally { setBusy(false); }

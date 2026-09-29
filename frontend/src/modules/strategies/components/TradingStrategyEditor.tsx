@@ -8,6 +8,7 @@ import { ConditionGroupsEditor } from '../../qualification/components/ConditionG
 import { horizonLabels } from '../../qualification/config/metrics';
 import { useQualificationStore } from '../../qualification/store/qualificationStore';
 import { useStrategyChatStore } from '../store/strategyChatStore';
+import type { StrategySuggestionMeta } from '../store/strategyChatStore';
 import { tradingPlanSchema } from '../schemas/tradingPlanSchema';
 import { planFingerprint, sampleTradingPlan, savedPlanDraft } from '../utils/tradingPlans';
 import { StrategyChat } from './StrategyChat';
@@ -41,7 +42,7 @@ export function TradingStrategyEditor({ owner, workspace, selected, onSelect, on
   const entries = workspace.tradingPlans ?? [];
   const updateChat = chat.update;
   useEffect(() => { updateChat(key, { draft }); }, [draft, updateChat, key]);
-  const updateProposal = (messages: StrategyMessage[], proposal?: TradingPlanDraft) => { const parsed = tradingPlanSchema.safeParse(proposal); updateChat(key, { messages, ...(parsed.success ? { proposal: parsed.data } : {}) }); };
+  const updateProposal = (messages: StrategyMessage[], proposal?: TradingPlanDraft, meta?: StrategySuggestionMeta) => { const parsed = tradingPlanSchema.safeParse(proposal); updateChat(key, { messages, ...(parsed.success ? { proposal: parsed.data } : {}), ...(meta ? { suggestionMeta: meta } : {}) }); };
   const closeAssistant = () => { setAssistantOpen(false); setAssistantBusy(false); };
   const selectStrategy = (id: string) => { if (id !== selected) { closeAssistant(); setSwitching(true); onSelect(id); } };
   const save = async (value: TradingPlanDraft) => {
@@ -62,7 +63,7 @@ export function TradingStrategyEditor({ owner, workspace, selected, onSelect, on
   const count = (rule: RuleDefinition) => rule.groups.reduce((sum, group) => sum + group.conditions.length, 0);
   const parsedProposal = tradingPlanSchema.safeParse(conversation?.proposal);
   const proposal = parsedProposal.success ? parsedProposal.data : undefined;
-  const canApply = !assistantBusy && !!proposal && planFingerprint(proposal) !== planFingerprint(draft);
+  const canApply = !assistantBusy && !conversation?.suggestionMeta?.awaitingReply && !!proposal && planFingerprint(proposal) !== planFingerprint(draft);
   return <div className="strategy-editor"><div className="strategy-toolbar"><div className="strategy-select"><label htmlFor="strategy-selection">Strategy</label><Select id="strategy-selection" aria-label="Strategy" showSearch optionFilterProp="label" value={selected} options={options} onChange={selectStrategy} disabled={switching} /></div><Button icon={<PlusOutlined aria-hidden />} loading={switching} onClick={() => selectStrategy(`new-${crypto.randomUUID()}`)}>New strategy</Button><span className="strategy-autosave">Drafts saved on this device</span><Tag color="purple">Monthly qualified stocks</Tag></div>
     <section className="strategy-manual-builder q-rule-editor" aria-label="Trading rule builder">
       <header className="strategy-builder-heading"><div><span className="strategy-eyebrow">TRADING RULE BUILDER</span><h2>{draft.name || 'New strategy'}</h2><p>Set the conditions to buy, the conditions to sell, and the risk controls.</p></div><div><Tag color={changed ? 'gold' : 'green'}>{changed ? plan ? 'Unsaved changes' : 'Not saved' : 'Saved'}</Tag><Button disabled={switching} icon={<RobotOutlined aria-hidden />} onClick={() => setAssistantOpen(true)}>AI assistant</Button></div></header>

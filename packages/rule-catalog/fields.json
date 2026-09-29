@@ -1,0 +1,1024 @@
+{
+  "open": {
+    "label": "Open price",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Price of the latest completed candle in the selected timeframe. Offset 1 selects the candle before it.",
+    "offset": true
+  },
+  "high": {
+    "label": "High price",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Price of the latest completed candle in the selected timeframe. Offset 1 selects the candle before it.",
+    "offset": true
+  },
+  "low": {
+    "label": "Low price",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Price of the latest completed candle in the selected timeframe. Offset 1 selects the candle before it.",
+    "offset": true
+  },
+  "close": {
+    "label": "Close price",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Price of the latest completed candle in the selected timeframe. Offset 1 selects the candle before it.",
+    "offset": true
+  },
+  "volume": {
+    "label": "Volume",
+    "unit": "shares",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Traded shares in the completed candle.",
+    "offset": true
+  },
+  "ema": {
+    "label": "EMA",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "EMA calculated on completed candles. Period counts candles of the selected timeframe.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "sma": {
+    "label": "SMA",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "SMA calculated on completed candles. Period counts candles of the selected timeframe.",
+    "period": {
+      "default": 50,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "rsi": {
+    "label": "RSI",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "RSI calculated on completed candles. Period counts candles of the selected timeframe.",
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "atr": {
+    "label": "ATR",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "ATR calculated on completed candles. Period counts candles of the selected timeframe.",
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "avgVolume": {
+    "label": "Average volume",
+    "unit": "shares",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Average of the preceding N candles, excluding the candle being evaluated.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "highestHigh": {
+    "label": "Highest high",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Rolling extreme over N completed candles including the evaluated candle. Use offset 1 to exclude it for breakout comparisons.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "lowestLow": {
+    "label": "Lowest low",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Rolling extreme over N completed candles including the evaluated candle. Use offset 1 to exclude it for breakout comparisons.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "bodyAboveEma": {
+    "label": "Candle body above EMA",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Percentage of the open-to-close body above the EMA calculated at that candle close. Wicks are excluded. Zero-size bodies are unavailable. Period is the EMA length.",
+    "period": {
+      "default": 21,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "bodyBelowEma": {
+    "label": "Candle body below EMA",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Percentage of the open-to-close body below the EMA calculated at that candle close. Wicks are excluded. Zero-size bodies are unavailable. Period is the EMA length.",
+    "period": {
+      "default": 21,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "bodyPercent": {
+    "label": "Candle body / range",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Absolute open-to-close body divided by high-low range, times 100. A zero-range candle is unavailable.",
+    "offset": true
+  },
+  "ema5": {
+    "label": "EMA 5",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed-period legacy indicator; use the configurable EMA or SMA for other periods.",
+    "offset": true
+  },
+  "ema20": {
+    "label": "EMA 20",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed-period legacy indicator; use the configurable EMA or SMA for other periods.",
+    "offset": true
+  },
+  "ema21": {
+    "label": "EMA 21",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed-period legacy indicator; use the configurable EMA or SMA for other periods.",
+    "offset": true
+  },
+  "ema50": {
+    "label": "EMA 50",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed-period legacy indicator; use the configurable EMA or SMA for other periods.",
+    "offset": true
+  },
+  "sma50": {
+    "label": "SMA 50",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed-period legacy indicator; use the configurable EMA or SMA for other periods.",
+    "offset": true
+  },
+  "sma200": {
+    "label": "SMA 200",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed-period legacy indicator; use the configurable EMA or SMA for other periods.",
+    "offset": true
+  },
+  "avgVolume20": {
+    "label": "20-candle average volume",
+    "unit": "shares",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1d"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "Average volume of the preceding completed candles, excluding the evaluated candle.",
+    "offset": true
+  },
+  "avgVolume6": {
+    "label": "6-candle average volume",
+    "unit": "shares",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Average volume of the preceding completed candles, excluding the evaluated candle.",
+    "offset": true
+  },
+  "rvol": {
+    "label": "Relative volume",
+    "unit": "ratio",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "Completed-candle volume divided by the preceding N candles mean volume. Not a same-time-of-day comparison.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "volumeRatio": {
+    "label": "Volume ratio",
+    "unit": "ratio",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Completed-candle volume divided by the preceding N candles mean volume. Not a same-time-of-day comparison.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true
+  },
+  "macd": {
+    "label": "MACD (12,26)",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed 12/26 EMA MACD; signal uses a 9-period EMA.",
+    "offset": true
+  },
+  "macdSignal": {
+    "label": "MACD signal (12,26,9)",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Fixed 12/26 EMA MACD; signal uses a 9-period EMA.",
+    "offset": true
+  },
+  "bollingerUpper": {
+    "label": "Bollinger upper band",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Middle SMA(period) plus 2 standard deviations of completed-candle closes. Period counts candles of the selected timeframe.",
+    "period": { "default": 20, "min": 5, "max": 500 },
+    "offset": true
+  },
+  "bollingerLower": {
+    "label": "Bollinger lower band",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Middle SMA(period) minus 2 standard deviations of completed-candle closes. Period counts candles of the selected timeframe.",
+    "period": { "default": 20, "min": 5, "max": 500 },
+    "offset": true
+  },
+  "bollingerBandwidth": {
+    "label": "Bollinger bandwidth",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Upper band minus lower band, as a percentage of the middle band. Falling values indicate a volatility squeeze.",
+    "period": { "default": 20, "min": 5, "max": 500 },
+    "offset": true
+  },
+  "adx": {
+    "label": "ADX",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Wilder's Average Directional Index. Measures trend strength regardless of direction, from 0 to 100. Period counts candles of the selected timeframe.",
+    "period": { "default": 14, "min": 2, "max": 500 },
+    "offset": true
+  },
+  "diPlus": {
+    "label": "+DI (ADX)",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Positive directional indicator from the ADX system. Compare against -DI to judge trend direction; use with ADX for trend strength.",
+    "period": { "default": 14, "min": 2, "max": 500 },
+    "offset": true
+  },
+  "diMinus": {
+    "label": "-DI (ADX)",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Negative directional indicator from the ADX system. Compare against +DI to judge trend direction; use with ADX for trend strength.",
+    "period": { "default": 14, "min": 2, "max": 500 },
+    "offset": true
+  },
+  "supertrend": {
+    "label": "Supertrend (10, 3x ATR)",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Trend-following stop line using a fixed 10-period ATR and 3x multiplier. Price crossing this line is the classic Supertrend buy/sell signal.",
+    "offset": true
+  },
+  "doji": {
+    "label": "Doji candle",
+    "unit": "flag",
+    "category": "patterns",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "1 when the candle's body is 5% or less of its high-low range, 0 otherwise.",
+    "offset": true
+  },
+  "hammer": {
+    "label": "Hammer candle",
+    "unit": "flag",
+    "category": "patterns",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "1 when the candle has a small body near the top of its range with a lower wick at least twice the body and little to no upper wick, 0 otherwise. Shape only; trend context is not checked.",
+    "offset": true
+  },
+  "bullishEngulfing": {
+    "label": "Bullish engulfing",
+    "unit": "flag",
+    "category": "patterns",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "1 when a bullish candle's body fully engulfs the prior bearish candle's body, 0 otherwise.",
+    "offset": true
+  },
+  "bearishEngulfing": {
+    "label": "Bearish engulfing",
+    "unit": "flag",
+    "category": "patterns",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "1 when a bearish candle's body fully engulfs the prior bullish candle's body, 0 otherwise.",
+    "offset": true
+  },
+  "accDist": {
+    "label": "Accumulation/Distribution line",
+    "unit": "points",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "monthly": true,
+    "trading": true,
+    "description": "Cumulative volume-weighted line combining each candle's close position within its range with volume. Rising values indicate accumulation (buying pressure); falling values indicate distribution.",
+    "offset": true
+  },
+  "vwap": {
+    "label": "VWAP",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "1d"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "Session VWAP estimate from completed bars using typical price and volume. Resets each trading session.",
+    "offset": true
+  },
+  "priceChange": {
+    "label": "Price change",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Percentage change from the previous completed candle close.",
+    "offset": true
+  },
+  "return1m": {
+    "label": "1-month return",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Close-to-close return over 1 completed months.",
+    "offset": true
+  },
+  "return3m": {
+    "label": "3-month return",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Close-to-close return over 3 completed months.",
+    "offset": true
+  },
+  "return6m": {
+    "label": "6-month return",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Close-to-close return over 6 completed months.",
+    "offset": true
+  },
+  "return12m": {
+    "label": "12-month return",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Close-to-close return over 12 completed months.",
+    "offset": true
+  },
+  "high52w": {
+    "label": "52-week high",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1d",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Daily-price extreme across the preceding 364 calendar days as of the selected completed day/month. Requires a full year of history, not 52 candles.",
+    "offset": true
+  },
+  "low52w": {
+    "label": "52-week low",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1d",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Daily-price extreme across the preceding 364 calendar days as of the selected completed day/month. Requires a full year of history, not 52 candles.",
+    "offset": true
+  },
+  "marketCap": {
+    "label": "Market cap",
+    "unit": "crore",
+    "category": "fundamentals",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "debtEquity": {
+    "label": "Debt / equity",
+    "unit": "ratio",
+    "category": "fundamentals",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "roe": {
+    "label": "Return on equity",
+    "unit": "percent",
+    "category": "fundamentals",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "roce": {
+    "label": "Return on capital employed",
+    "unit": "percent",
+    "category": "fundamentals",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "pe": {
+    "label": "P/E",
+    "unit": "ratio",
+    "category": "fundamentals",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "pledge": {
+    "label": "Promoter pledge",
+    "unit": "percent",
+    "category": "ownership",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "promoterHolding": {
+    "label": "Promoter holding",
+    "unit": "percent",
+    "category": "ownership",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "fiiChange": {
+    "label": "FII holding change",
+    "unit": "percent",
+    "category": "ownership",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "diiChange": {
+    "label": "DII holding change",
+    "unit": "percent",
+    "category": "ownership",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "delivery": {
+    "label": "Monthly delivery percentage",
+    "unit": "percent",
+    "category": "price-volume",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "tradedValue": {
+    "label": "Monthly traded value",
+    "unit": "crore",
+    "category": "price-volume",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "turnover": {
+    "label": "Monthly average daily turnover",
+    "unit": "crore",
+    "category": "price-volume",
+    "source": "facts",
+    "frames": [
+      "1d"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Average daily turnover across all sessions in a verified completed month (INR crore), NOT the last completed day turnover. Existing saved rules retain this meaning.",
+    "offset": false
+  },
+  "sector": {
+    "label": "Sector",
+    "unit": "category",
+    "category": "sector-market",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "index": {
+    "label": "Index membership",
+    "unit": "category",
+    "category": "sector-market",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": false,
+    "description": "Dated reported observation. Missing or expired reports remain unavailable.",
+    "offset": false
+  },
+  "dailyTurnover": {
+    "label": "Completed-day turnover",
+    "unit": "crore",
+    "category": "price-volume",
+    "source": "dailyReports",
+    "frames": [
+      "1d"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "Actual exchange turnover in INR crore for the latest completed daily candle. Requires its dated exchange report; never estimated as price times volume. Reports published after the close cannot trigger a same-close signal. For yesterday during an intraday session use offset 0; for the session before the evaluated daily candle use offset 1.",
+    "offset": true
+  },
+  "avgDailyTurnover": {
+    "label": "Average daily turnover (N sessions)",
+    "unit": "crore",
+    "category": "price-volume",
+    "source": "dailyReports",
+    "frames": [
+      "1d"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "Mean actual exchange turnover over N completed sessions including the latest closed session. Every session needs a report.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 252
+    },
+    "offset": true
+  }
+}

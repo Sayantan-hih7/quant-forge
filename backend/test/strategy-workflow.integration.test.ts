@@ -1,20 +1,24 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { env } from '../src/config/env.js';
 import { connectDatabase, disconnectDatabase } from '../src/shared/database.js';
 import { jobs, redis } from '../src/shared/redis.js';
+after(async () => { if (process.env.RUN_DB_TESTS !== '1') { await jobs.waitUntilReady(); await jobs.close(); if (redis.status !== 'end') await redis.quit(); } });
 import { InstrumentModel } from '../src/modules/market-data/models/market-data.model.js';
 import { MonthlyUniverseModel, UniverseSnapshotModel } from '../src/modules/qualification/models/qualification.model.js';
 import { currentMonth } from '../src/modules/qualification/services/universe.service.js';
 import { backtestUniverseOptions } from '../src/modules/backtesting/services/universe.service.js';
 import { queueBacktest } from '../src/modules/backtesting/services/backtest.service.js';
 import { BacktestRunModel } from '../src/modules/backtesting/models/backtest.model.js';
-import { StrategyModel } from '../src/modules/strategies/models/strategy.model.js';
+import { StrategyModel, StrategyRevisionModel } from '../src/modules/strategies/models/strategy.model.js';
+import { strategyHistory } from '../src/modules/strategies/services/strategy-history.service.js';
 import { researchPresets } from '../src/modules/strategies/config/research-presets.js';
 import { createPaperSession } from '../src/modules/paper-trading/services/paper.service.js';
 import { PaperSessionModel } from '../src/modules/paper-trading/models/paper.model.js';
+import { saveStrategy } from '../src/modules/strategies/services/strategy.service.js';
+import { riskSchema } from '../src/modules/strategies/validations/strategy.validation.js';
 
 test('stock scopes match current/manual/historical eligibility, and stale strategy handoffs cannot start work', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
   const name = `quantforge_test_${randomUUID().replaceAll('-', '')}`, uri = new URL(env.MONGODB_URI); uri.pathname = '/' + name; env.MONGODB_URI = uri.toString();
@@ -41,8 +45,30 @@ test('stock scopes match current/manual/historical eligibility, and stale strate
     await assert.rejects(createPaperSession({ strategyId: id, expectedRevision: 1, ids: ['NSE:1'], mode: 'confirmation' }), /strategy changed/i);
     assert.equal(await BacktestRunModel.countDocuments(), 0);
     assert.equal(await PaperSessionModel.countDocuments(), 0);
+    const protectedDraft={...draft,exit:{...draft.exit,enabled:false,groups:[]},risk:riskSchema.parse({...draft.risk,stopMode:'candleLow',breakevenAfterTarget1:false,stopManagement:undefined,exitTargets:[
+      {basis:'risk',value:2,closePercent:40,moveStopTo:0},
+      {basis:'risk',value:5,closePercent:30,moveStopTo:1},
+      {basis:'risk',value:8,closePercent:30},
+    ]})};
+    const saved=await saveStrategy(id,protectedDraft,2);
+    assert.equal(saved.revision,3);
+    const history=await strategyHistory(id);
+    assert.deepEqual(history.revisions.map(r=>r.strategy.revision),[3,2]);
+    assert.deepEqual(history.missingRanges,['1']);
+    assert.deepEqual(history.revisions[1].strategy.risk,draft.risk,'Saving preserves the original legacy definition before updating');
+    await assert.rejects(saveStrategy(id,protectedDraft,2),/changed elsewhere/);
+    assert.equal(await StrategyRevisionModel.countDocuments(),2,'Stale saves cannot add or replace history');
+    const loaded=await StrategyModel.findById(id).lean();
+    assert.equal(loaded?.exit.enabled,false);
+    assert.deepEqual(loaded?.exit.groups,[]);
+    assert.deepEqual(loaded?.risk.exitTargets,protectedDraft.risk.exitTargets);
+    await assert.rejects(saveStrategy(id,{...protectedDraft,entry:{...draft.entry,enabled:false}},3),/Buy conditions cannot be disabled/);
+    const contradictory={...protectedDraft,entry:{...draft.entry,groups:[{logic:'AND',conditions:[70,30].map((value,index)=>({left:'rsi',leftFrame:'1d',operator:index===0?'gt':'lt',rightType:'value',right:'ema20',rightFrame:'1d',value,multiplier:1,tolerance:2}))}]}};
+    await assert.rejects(saveStrategy(id,contradictory,3),/Buy rules cannot match/);
+    assert.equal((await StrategyModel.findById(id).lean())?.revision,3,'Contradictory saves do not alter the saved revision');
+    assert.equal(await PaperSessionModel.countDocuments(),0,'Saving does not start paper execution');
   } finally {
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
-    await disconnectDatabase(); await jobs.close(); if (redis.status !== 'end') await redis.quit();
+    await disconnectDatabase(); await jobs.waitUntilReady(); await jobs.close(); if (redis.status !== 'end') await redis.quit();
   }
 });

@@ -4,8 +4,10 @@ export interface StockQuote {
   open: number | null; high: number | null; low: number | null; volume: number | null;
   averagePrice: number | null; lowerCircuit: number | null; upperCircuit: number | null;
   lastTradeAt: string | null; receivedAt: string;
-  source: 'dhan-snapshot' | 'dhan-stream' | 'historical-close';
+  source: 'dhan-snapshot' | 'dhan-stream' | 'motilal-stream' | 'historical-close';
+  streamSession?: string;
 }
 export interface ChartBar { time: string; open: number; high: number; low: number; close: number; volume: number }
-export type StockTimeframe = '1m' | '5m' | '15m' | '1d' | '1w' | '1mo';
-export type StreamStatus = { state: 'connecting' | 'streaming' | 'reconnecting' | 'unavailable'; message?: string };
+export type StockTimeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | '1w' | '1mo';
+export interface LiveChartBar extends ChartBar { instrumentId: string; partial: boolean; updatedAt: string; streamSession?: string }
+export type StreamStatus = { state: 'connecting' | 'streaming' | 'reconnecting' | 'unavailable'; message?: string; sessions?: Record<string, string>; providers?: string[]; unavailableIds?: string[]; marketClosed?: boolean };

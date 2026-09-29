@@ -1,4 +1,5 @@
-﻿import { expect, test } from '@playwright/test';
+import { respondToStrategyReview } from './helpers/strategyReview';
+import { expect, test } from '@playwright/test';
 import { sampleTradingPlan } from '../src/modules/strategies/utils/tradingPlans';
 import { tradingPlanSchema } from '../src/modules/strategies/schemas/tradingPlanSchema';
 
@@ -8,6 +9,7 @@ test.beforeEach(async ({ page }) => {
   let record = { ...sampleTradingPlan('intraday'), _id: id, revision: 1, savedAt: new Date().toISOString() };
   await page.route('**/api/strategies', route => route.fulfill({ json: [record] }));
   await page.route('**/api/strategies/*', route => {
+    if (route.request().url().endsWith('/strategies/review')) return respondToStrategyReview(route);
     if (route.request().method() !== 'PUT') return route.fulfill({ json: [] });
     const body = route.request().postDataJSON();
     record = { ...body.draft, _id: route.request().url().split('/').at(-1)!, revision: body.expectedRevision + 1, savedAt: new Date().toISOString() };
@@ -35,7 +37,7 @@ test('manual buy/sell/risk edits save together and keep the backtest route', asy
   await page.getByRole('navigation', { name: 'Strategy editor steps' }).getByRole('button', { name: '4 Risk' }).click();
   await page.getByLabel('Risk per trade (%)', { exact: true }).fill('0.5');
   await page.getByRole('navigation', { name: 'Strategy editor steps' }).getByRole('button', { name: '3 Sell rules' }).click();
-  await page.getByLabel('Threshold (RSI)', { exact: true }).fill('40');
+  await page.getByLabel('Threshold (points)', { exact: true }).fill('40');
   const saved = page.waitForRequest(request => request.method() === 'PUT' && request.url().includes('/strategies/'));
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   const data = (await saved).postDataJSON();

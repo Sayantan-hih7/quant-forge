@@ -4,9 +4,9 @@ One local workspace, long-only NSE/BSE cash equities, through paper trading. All
 
 ## Processes and persistence
 
-- `server.ts`: Express API, local workspace session, feature routes and browser SSE.
+- `server.ts`: Express API, local workspace session or hosted owner login, feature routes, browser SSE, and production React assets.
 - `worker.ts`: BullMQ durable source imports, monthly qualification and Python backtest jobs.
-- `feed.ts`: isolated Motilal SDK child, authenticated subscriptions, all-tick minute aggregation, Redis quote cache and a bounded tick stream. Pub/Sub is used for expendable UI notifications.
+- `feed.ts`: one shared subscription owner for paper sessions and stock views. Motilal and Dhan transports run together for overflow, with per-provider sessions, incremental subscriptions, scheduled reconnect, all-tick minute aggregation, Redis quote cache and a bounded execution tick stream. Pub/Sub carries expendable UI notifications. See [shared market feed](shared-market-feed.md).
 - `paper.ts`: independent paper worker; rule decisions and durable order/position accounting. It never calls broker order APIs.
 - `engine/quantforge`: Python indicators, completed-timeframe aggregation, rule evaluation and chronological backtests. No broker credentials or MongoDB access.
 
@@ -20,7 +20,7 @@ Redis stores BullMQ jobs, leases, short-lived authenticated workspace sessions, 
 | --- | --- |
 | NSE/BSE cash-equity identity | Public Dhan detailed master; ISIN/exchange/security ID |
 | Motilal subscription code | Motilal exchange CSV, joined by exchange/ISIN and verified code |
-| Live LTP and cumulative volume | Isolated Motilal broadcast SDK; no fabricated timestamps |
+| Live LTP and cumulative volume | Shared Motilal broadcast SDK + Dhan WebSocket overflow/fallback; no fabricated timestamps |
 | Daily/one-minute OHLCV | Dhan Data API, bounded request rate and date windows |
 | Market cap, valuation, debt/equity, profitability, ownership | Dhan `/v2/data/companyinfo`; dated snapshots |
 | Missing ROE / ROCE | Dhan public company financial pages, matched by ISIN; reported annual ratios or ROE calculated from matching annual statements. Cached up to seven days; observation time is never backdated. See [monthly qualification](monthly-qualification.md). |
@@ -30,22 +30,22 @@ Redis stores BullMQ jobs, leases, short-lived authenticated workspace sessions, 
 | Index prices and charts | Independent NSE/NSE Indices/BSE website adapters; 114 curated indices, with dated daily reports for daily-only indices and persisted fallback data. See [index data](index-data.md). |
 | Growth/news/patterns/F&O | Unsupported until verified source adapters exist |
 
-Broker login uses password/PAN or other supported 2FA, TOTP/OTP, then a separate access-token request. Retail broadcast-limit requests omit the client code; including it returns MO2031. SDK 3.1 discards the limit method's response, so its Axios instance is observed for that response only. A zero limit is displayed explicitly and does not fall back to a made-up entitlement.
+Broker login uses password/PAN or other supported 2FA, TOTP/OTP, then a separate access-token request. Retail broadcast-limit requests omit the client code; including it returns MO2031. SDK 3.1 discards the limit method's response, so its Axios instance is observed for that response only. Successful numeric limits pass through the vendor's setter: an explicit zero selects SDK 3.1's default of 200, while lower positive account limits remain enforced. Missing, malformed or failed responses stop the connection. Motilal handles up to 200 unique instruments; Dhan covers overflow or full fallback. Total demand is bounded at 5,000 so complete Dhan failover fits one connection. Only fresh timestamped ticks are eligible for execution. Market-hours tests on 2026-09-29 confirmed actual streaming despite a successful zero-limit response.
 
 ## Evaluation and execution
 
 Monthly scans freeze the saved rule and collection cutoff, evaluate primary company listings in batches, and use completed monthly technical candles plus dated available facts. Users review missing coverage before publishing. Manual stocks retain independent notes, without a claim that they passed the rule. Monthly scheduling is currently manual.
 
-Trading decisions evaluate the published current-month entry universe plus held positions for exits. Sessions pin the original buy/sell/risk snapshot. Five-stock calculation batches limit payload size. Signal IDs include the session, stock, side and candle close. The runner reports stale/missing observations and waits for actual data.
+Trading decisions evaluate the published current-month entry universe plus held positions for exits. Sessions pin the original buy/sell/risk snapshot. Five-stock calculation batches limit payload size. Signal IDs and durable evaluation checkpoints include the session, stock, side and candle close. Missing observations are retried without consuming a candle. Daily decisions can run after hours with orders expiring thirty minutes after the next regular session opens.
 
-Paper orders require a later fresh Motilal quote. Account cash is integer paise; every fill updates orders, positions and session cash atomically. Long-only checks, risk sizing, maximum open positions, entry membership, fees and slippage apply to manual and strategy orders. Manual intervention pauses automatic entries. Stops, targets and session exits bypass confirmation because they protect already-held paper positions. There are no broker orders.
+Paper orders require a later fresh quote from the active Motilal or Dhan execution-feed session. Disconnect immediately disables quote eligibility. Account cash is integer paise; every fill updates orders, positions and session cash atomically. Long-only checks, risk sizing, maximum open positions, entry membership, fees and slippage apply to manual and strategy orders. Manual intervention pauses automatic entries. Stops, targets and session exits bypass confirmation because they protect already-held paper positions. There are no broker orders.
 
-The feed processes each tick before coalescing browser quotes. Minute candles reject startup fragments and gaps. A bounded Redis tick stream preserves intrabatch stop crossings for paper processing. Restart/outage gaps need explicit history backfill; automated repair is not implemented. Missing ticks cannot guarantee a fill or prevent a gap beyond a stop.
+The feed processes each tick before coalescing browser quotes. Minute candles reject startup fragments and gaps. A bounded Redis tick stream preserves intrabatch stop crossings for paper processing. The paper worker independently warms and refreshes Dhan history for monitored/held stocks, with shared request limits and visible missing-data status. History repair does not replay missed executions. Missing ticks cannot guarantee a fill or prevent a gap beyond a stop.
 
 Backtests precompute causal indicator series, select observations whose bars have closed at each decision, fill on the next stored bar open, and process portfolio cash/positions chronologically. Same-bar stop/target ambiguity chooses the stop. Gaps through a stop use the worse opening price. Trailing highs affect subsequent bars. Final open positions are marked, not forced closed. Historical list membership is evaluated at each timestamp; current-list research is labelled biased. Missing stock history fails a report rather than yielding fake results. Partial-history completeness, corporate actions, liquidity/slippage realism and exchange holidays remain validation limits.
 
 ## Deployment boundary
 
-The API binds to loopback locally. Cookie bootstrap verifies the exact local origin and is disabled in production. Production workspace authentication must be added before exposing the UI/API publicly. Tokens are encrypted at rest; credentials stay in private environment variables and the SDK child never forwards its raw logs/errors. Python receives only its engine token and calculation inputs.
+The API binds to loopback locally. Cookie bootstrap verifies the allowed local origin and is disabled in production. Hosted owner login uses salted scrypt passwords, Redis session expiry/revocation, Secure HttpOnly cookies, origin checks and a shared rate limit. Production startup requires owner configuration and an HTTPS frontend origin. Tokens are encrypted at rest; credentials stay in private environment variables and the SDK child never forwards its raw logs/errors. Python receives only its engine token and calculation inputs.
 
 See [deployment preparation](deployment.md). Docker/Compose uses separate local databases; the scrapped project is read-only reference material.

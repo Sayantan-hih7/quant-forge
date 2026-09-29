@@ -6,6 +6,7 @@ import { indexInstruments } from '../config/index-catalog.js';
 import { bseChart, bseDailySnapshots, bseSnapshots, nseDailySnapshots, nseSnapshots } from '../providers/exchange.provider.js';
 import { mergeSnapshots, tradingDate } from '../providers/parsers.js';
 import type { IndexExchange, IndexSnapshot } from '../types.js';
+import { marketSession, marketTime } from '../../../shared/market-calendar.js';
 
 // Shared cooldown across every browser; public snapshots are never presented as a tick feed.
 const refreshMs = 15_000;
@@ -15,9 +16,11 @@ const unlock = async (key: string, owner: string) => {
   await redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end", 1, key, owner);
 };
 async function refreshExchange(exchange: IndexExchange, cached: IndexCache | null) {
+  if (!marketTime().open) return;
   const key = `quantforge:indices:refresh:${exchange}`; const owner = randomUUID();
   if (!(await redis.set(key, owner, 'PX', 180_000, 'NX'))) return;
   try {
+    if (!marketTime().open) return;
     const now = new Date().toISOString(); const dailyDue = stale(cached?.dailyAttemptedAt, 3_600_000);
     await IndexCacheModel.updateOne({ _id: exchange }, { $set: { attemptedAt: now, ...(dailyDue ? { dailyAttemptedAt: now } : {}) } }, { upsert: true });
     const results = await Promise.allSettled([
@@ -29,7 +32,7 @@ async function refreshExchange(exchange: IndexExchange, cached: IndexCache | nul
     const warnings = results.filter(r => r.status === 'rejected').map(r => (r.reason as Error).message);
     // Publish successful exchange data immediately; slower daily-only indices follow separately.
     await IndexCacheModel.updateOne({ _id: exchange }, { $set: { quotes, warning: warnings.join('. '), ...(incoming.length ? { succeededAt: now } : {}) } });
-    if (exchange === 'BSE' && dailyDue) {
+    if (exchange === 'BSE' && dailyDue && marketTime().open) {
       const excluded = quotes.filter(q => q.kind === 'snapshot').map(q => q.id);
       incoming = await bseDailySnapshots(excluded);
       quotes = mergeSnapshots(quotes, incoming);
@@ -40,11 +43,12 @@ async function refreshExchange(exchange: IndexExchange, cached: IndexCache | nul
   } finally { await unlock(key, owner).catch(() => {}); }
 }
 export async function indexQuotes() {
+  const market = marketSession();
   const caches = await IndexCacheModel.find().lean();
   const sources = [];
   for (const exchange of ['NSE','BSE'] as const) {
     const cache = caches.find(c => c._id === exchange) ?? null;
-    if (stale(cache?.attemptedAt) && !inFlight.has(exchange)) {
+    if (market.open && stale(cache?.attemptedAt) && !inFlight.has(exchange)) {
       const promise = refreshExchange(exchange, cache).catch(() => {}).finally(() => inFlight.delete(exchange));
       inFlight.set(exchange, promise);
     }
@@ -53,7 +57,7 @@ export async function indexQuotes() {
   }
   const quotes = caches.flatMap(c => c.quotes.map(q => ({ ...q,
     status: q.kind === 'eod' ? 'eod' : (stale(q.asOf, 10 * 60_000) || stale(q.fetchedAt, 180_000)) ? 'stale' : 'snapshot' } as const)));
-  return { quotes, sources, refreshAfterMs: sources.some(s => s.refreshing) ? 3000 : refreshMs, servedAt: new Date().toISOString() };
+  return { quotes, sources, market, refreshAfterMs: sources.some(s => s.refreshing) ? 3000 : refreshMs, servedAt: new Date().toISOString() };
 }
 const chartRequests = new Map<string, Promise<unknown>>();
 export async function indexChart(id: string) {
@@ -63,6 +67,7 @@ export async function indexChart(id: string) {
   if (i.exchange !== 'BSE' || !i.providerCode || quote?.kind === 'eod') return fallback;
   const saved = await IndexChartModel.findById(id).lean();
   const sameDate = (points: {time:number}[]) => !quote || points.every(p => tradingDate(p.time) === tradingDate(quote.asOf));
+  if (!marketTime().open) return saved && sameDate(saved.points) ? { ...saved, chartKind: 'intraday' } : fallback;
   if (saved && !stale(saved.fetchedAt, 60_000) && sameDate(saved.points)) return { ...saved, chartKind: 'intraday' };
   const existing = chartRequests.get(id); if (existing) return existing;
   const request = (async () => {

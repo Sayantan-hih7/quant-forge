@@ -9,12 +9,14 @@ import { IndexFreshness } from './IndexFreshness';
 export function IndexHighlights({
   quotes,
   onSelect,
+  showSparklines = true,
 }: {
   quotes: IndexQuote[];
   onSelect: (quote: IndexQuote) => void;
+  showSparklines?: boolean;
 }) {
   return (
-    <section className="index-highlights" aria-label="Benchmark snapshots">
+    <section className="index-highlights" data-count={quotes.length} aria-label="Benchmark snapshots">
       {quotes.map((quote) => (
         <button
           key={quote.id}
@@ -34,7 +36,7 @@ export function IndexHighlights({
                 <IndexChange value={quote.change} /> pts
               </small>
             </div>
-            <IndexSparkline quote={quote} />
+            {showSparklines && <IndexSparkline quote={quote} />}
           </div>
           <IndexFreshness quote={quote} />
         </button>

@@ -5,91 +5,185 @@ import { engineClient, engineInstruments, type EvaluationResult } from '../../en
 import { feedStatus } from '../../market-feed/services/feed.service.js';
 import { MonthlyUniverseModel } from '../../qualification/models/qualification.model.js';
 import { currentMonth } from '../../qualification/services/universe.service.js';
-import { PaperOrderModel, PaperPositionModel, PaperSessionModel, PaperSignalModel } from '../models/paper.model.js';
+import { PaperOrderModel, PaperPositionModel, PaperSessionModel, PaperSignalModel, PaperEvaluationModel, PaperObservationModel, PaperEntryEventModel } from '../models/paper.model.js';
+import { freshEntry } from './entry-events.js';
+import { evaluationWindow, signalOrderExpiry } from './evaluation-window.js';
+import { strategyHistoryPlan } from '../../backtesting/services/history-plan.js';
 import { fillPaperOrder } from './fill.service.js';
 import { sessionTime } from './paper.service.js';
 import { monitoringIds } from './scope.service.js';
 import {redis} from '../../../shared/redis.js';
 import type {LiveQuote} from '../../market-feed/types/feed.types.js';
 import {protectiveTrigger} from './protection.js';
-interface Decision {id:string;entry:EvaluationResult;exit:EvaluationResult;barEnd:string|null;atr:number|null}
-const evaluated=new Map<string,string>();
+import { queueIntradaySquareOff } from './square-off.service.js';
+interface Decision {id:string;entry:EvaluationResult;exit:EvaluationResult;barEnd:string|null;atr:number|null;signalLow?:number|null;referencePrice?:number|null}
 let lastTickId:string|undefined;
 async function recentTicks(){
   // Restart from current time. Missed ticks must never become retrospective fills.
   lastTickId??=`${Date.now()}-0`;
-  const records=await redis.xrange('quantforge:market:ticks',`(${lastTickId}`,'+','COUNT',1000);
+  const records=await redis.xrange('quantforge:market:ticks',`(${lastTickId}`,'+','COUNT',5000);
   return {ticks:records.map(([,fields])=>JSON.parse(fields[1]) as LiveQuote),cursor:records.at(-1)?.[0]??lastTickId};
 }
-export async function processPaperOrders(){
+export async function processPaperOrders(canContinue = () => true){
+  if(!canContinue())return;
   const now=new Date().toISOString();
   await PaperOrderModel.updateMany({status:{$in:['pending','confirmation']},expiresAt:{$lte:now}},{$set:{status:'expired',message:'Order expired before an eligible fill'}});
+  await queueIntradaySquareOff(Date.now(),canContinue);
   const feed=await feedStatus();
   if(!sessionTime().open || feed.state!=='live'){lastTickId=`${Date.now()}-0`;return;}
   const {ticks,cursor}=await recentTicks(),current=feed.quotes.filter(x=>x.fresh);
   const quotes=ticks.filter(q=>current.some(c=>c.instrumentId===q.instrumentId && c.session===q.session) && Date.now()-Date.parse(q.at)<=15000 && Date.parse(q.at)<=Date.now()+1000);
   const sessions=await PaperSessionModel.find({active:true}).lean();
-  for(const session of sessions){
-    const held=await PaperPositionModel.find({sessionId:session._id}).lean();
-    for(const position of held){
-      const risk=session.strategy.risk;
-      const {quote,reason,stop}=protectiveTrigger(position,risk,quotes,!risk.overnight && (sessionTime().minute>=915 || position.openedAt.slice(0,10)<now.slice(0,10)));
-      if(reason && quote){
-        await mongoose.connection.transaction(async transaction=>{
-          // Protection replaces an unconfirmed discretionary sell immediately.
-          await PaperOrderModel.updateMany({sessionId:session._id,instrumentId:position.instrumentId,status:{$in:['confirmation','pending']},source:{$ne:'protection'}},{$set:{status:'cancelled',message:'Replaced by protective exit'}},{session:transaction});
-          const active=await PaperOrderModel.exists({sessionId:session._id,instrumentId:position.instrumentId,status:'pending',source:'protection'}).session(transaction);
-          if(!active)await PaperOrderModel.create([{_id:randomUUID(),sessionId:session._id,instrumentId:position.instrumentId,side:'SELL',quantity:0,source:'protection',status:'pending',createdAt:now,eligibleAfter:quote.at,expiresAt:new Date(Date.now()+60000).toISOString(),reason}],{session:transaction});
-        });
-      } else if(stop>position.stopPaise)await PaperPositionModel.updateOne({_id:position._id},{$max:{stopPaise:stop}});
-    }
+  const ids=sessions.map(s=>s._id);
+  const [positions,orders]=await Promise.all([
+    PaperPositionModel.find({sessionId:{$in:ids}}).select('sessionId instrumentId').lean(),
+    PaperOrderModel.find({sessionId:{$in:ids},status:{$in:['pending','confirmation']}}).select('sessionId instrumentId').lean(),
+  ]);
+  const interested=new Map<string,Set<string>>();
+  for(const item of [...positions,...orders]){
+    const set=interested.get(item.instrumentId)??new Set<string>();set.add(item.sessionId);interested.set(item.instrumentId,set);
   }
-  for(const order of await PaperOrderModel.find({status:'pending'}).lean()){
-    const quote=quotes.find(q=>q.instrumentId===order.instrumentId && q.at>order.eligibleAfter);if(quote)await fillPaperOrder(order._id,quote);
+  // Consume ticks in order: a target fill changes the size and stop before the
+  // next tick is inspected, including when several ticks arrive in one batch.
+  for(const quote of quotes){
+    if(!canContinue())return;
+    const relevant=interested.get(quote.instrumentId);
+    if(relevant)await processPaperQuote(quote,[...relevant],Date.now(),canContinue);
   }
   lastTickId=cursor;
 }
-export async function evaluatePaperStrategies(){
+
+/** Internal only: caller verifies the feed session. Never accepts user prices. */
+export async function processPaperQuote(quote:LiveQuote,sessionIds:string[],now=Date.now(),canContinue=()=>true){
+  if(!canContinue() || !sessionTime(now).open || !Number.isFinite(quote.price) || quote.price<=0 || !Number.isFinite(Date.parse(quote.at)) || now-Date.parse(quote.at)>15000 || Date.parse(quote.at)>now+1000)return;
+  const protect=async()=>{
+    for(const sessionId of sessionIds){
+      if(!canContinue())return;
+      await mongoose.connection.transaction(async transaction=>{
+        const session=await PaperSessionModel.findById(sessionId).session(transaction).lean();
+        if(!session?.active || !canContinue())return;
+        const position=await PaperPositionModel.findOne({sessionId,instrumentId:quote.instrumentId}).session(transaction).lean();
+        if(!position)return;
+        const risk=session.strategy.risk;
+        const trigger=protectiveTrigger(position,risk,[quote],!risk.overnight && (sessionTime(now).minute>=915 || position.openedAt.slice(0,10)<new Date(now).toISOString().slice(0,10)));
+        const {highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt}=trigger.state;
+        await PaperPositionModel.updateOne({_id:position._id},{$max:{stopPaise:trigger.stop},$set:{highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt}},{session:transaction});
+        if(!trigger.reason)return;
+        const active=await PaperOrderModel.findOne({sessionId,instrumentId:quote.instrumentId,status:{$in:['pending','confirmation']}}).session(transaction).lean();
+        // A confirmed sell rule/manual exit should finish, not be replaced by
+        // a smaller profit-taking leg. Stops still have priority.
+        if(trigger.targetIndex!==undefined && active?.status==='pending' && active.side==='SELL' && active.source!=='protection')return;
+        // Stops / session exits override an outstanding partial target. An
+        // already queued protection order is otherwise kept, never retriggered.
+        if(active?.source==='protection' && !(active.targetIndex!==undefined && trigger.targetIndex===undefined))return;
+        if(active)await PaperOrderModel.updateOne({_id:active._id},{$set:{status:'cancelled',message:'Replaced by protective exit'}},{session:transaction});
+        const index=trigger.targetIndex;
+        const quantity=index===undefined?0:index===position.targets!.length-1?position.quantity:Math.min(position.quantity,position.targets![index].quantity);
+        await PaperOrderModel.create([{_id:randomUUID(),sessionId,instrumentId:position.instrumentId,side:'SELL',quantity,source:'protection',status:'pending',createdAt:new Date(now).toISOString(),eligibleAfter:quote.at,expiresAt:new Date(now+60000).toISOString(),reason:trigger.reason,targetIndex:index,positionOpenedAt:position.openedAt}],{session:transaction});
+      });
+    }
+  };
+  await protect();
+  for(const order of await PaperOrderModel.find({sessionId:{$in:sessionIds},instrumentId:quote.instrumentId,status:'pending',eligibleAfter:{$lt:quote.at}}).lean()){
+    if(!canContinue())return;
+    await fillPaperOrder(order._id,quote,now);
+  }
+  // A gap can cross another target. Queue it after this fill and wait for a
+  // later tick; a single quote must never fill two target legs retrospectively.
+  await protect();
+}
+export async function evaluatePaperStrategies(now = Date.now(), canContinue = () => true){
+  const startedAt=Date.now();
   const sessions=await PaperSessionModel.find({active:true}).lean();if(!sessions.length)return;
   const universe=await MonthlyUniverseModel.findById(currentMonth()).lean();
-  const feed=await feedStatus();
   for(const session of sessions){
+    if(!canContinue())return;
     const held=await PaperPositionModel.find({sessionId:session._id}).lean();
     const ids=monitoringIds(universe?.members.map(x=>x.instrumentId)??[],session.ids,held.map(x=>x.instrumentId),session.entriesPaused);
     const update=async(message:string)=>{await PaperSessionModel.updateOne({_id:session._id},{$set:{checkedAt:new Date().toISOString(),message}});};
-    if(!ids.length){await update('No published stocks to monitor. Held positions still use their saved exit rules.');continue;}
-    if(ids.length>100){await update('This worker supports up to 100 qualified and held stocks per session.');continue;}
-    if(feed.state!=='live'){await update('Waiting for the Motilal feed. No signals or fills are being invented.');continue;}
-    const cadence=String(session.strategy.entry.cadence),minutes=cadence==='daily'?375:Number(cadence.slice(0,-1));
-    const local=sessionTime(),boundary=cadence==='daily'?`${local.date}:daily`:`${local.date}:${Math.floor((local.minute-555)/minutes)}`;
-    if(evaluated.get(session._id)===boundary)continue;
-    if(cadence==='daily'?local.minute<930:!local.open || local.minute<555+minutes)continue;
-    // Allow a few seconds for the feed worker to publish the completed bucket.
-    if(new Date().getUTCSeconds()<5)continue;
+    if(!ids.length){await update(session.entriesPaused?'New entries are paused. Pending manual orders still wait for fresh quotes; resume new buys to check entry rules again.':'No qualified stocks in this selection. Publish a list or update the monitored selection.');continue;}
+    if(ids.length>200){await update('This worker supports up to 200 qualified and held stocks per session.');continue;}
+    const cadence=String(session.strategy.entry.cadence), window=evaluationWindow(cadence,session.createdAt,now);
+    if(!window){await update(sessionTime(now).knownYear?'Waiting for the next completed candle. Fills require fresh live ticks during market hours.':'Trading calendar needs updating before monitoring can resume.');continue;}
     try{
-      const cutoff=new Date().toISOString(),data:{results:Decision[]}={results:[]};
-      for(let index=0;index<ids.length;index+=5){
-        const instruments=await engineInstruments(ids.slice(index,index+5),cutoff);
+      const cutoff=window.barEnd,data:{results:Decision[]}={results:[]};
+      const sideFor=(id:string)=>held.some(p=>p.instrumentId===id)?'SELL':'BUY';
+      const evaluationId=(id:string)=>`${session._id}:${id}:${session.mode==='signals'?'WATCH':sideFor(id)}:${window.barEnd}`;
+      const completed=new Set((await PaperEvaluationModel.find({_id:{$in:ids.map(evaluationId)}}).select('_id').lean()).map(row=>row._id));
+      const pendingIds=ids.filter(id=>!completed.has(evaluationId(id)));if(!pendingIds.length)continue;
+      const today=sessionTime(now).date, plan=strategyHistoryPlan(session.strategy,today,today);
+      for(let index=0;index<pendingIds.length;index+=5){
+        if(!canContinue())return;
+        const instruments=await engineInstruments(pendingIds.slice(index,index+5),cutoff,false,plan);
         const response=await engineClient.post<{results:Decision[]}>('/decisions',{strategy:session.strategy,cutoff,instruments});
         data.results.push(...response.data.results);
       }
+      const priorEvents = await PaperEntryEventModel.find({sessionId:session._id,instrumentId:{$in:pendingIds}}).lean();
+      const observedEntry = (result:Decision) => freshEntry(session.strategy.entry,result.entry,new Set(priorEvents.filter(row=>row.instrumentId===result.id).map(row=>row.eventKey!))).evaluation;
+      if(data.results.length)await PaperObservationModel.bulkWrite(data.results.map(result=>({updateOne:{filter:{_id:`${session._id}:${result.id}`},update:{$set:{sessionId:session._id,instrumentId:result.id,barEnd:result.barEnd,checkedAt:new Date(now).toISOString(),current:!!result.barEnd&&Date.parse(result.barEnd)===Date.parse(window.barEnd),entry:observedEntry(result),exit:result.exit,referencePrice:result.referencePrice??null}},upsert:true}})));
       let unavailable=0,signals=0;
       for(const result of data.results){
-        if(!result.barEnd || Date.parse(result.barEnd)<Date.parse(session.createdAt) || Date.now()-Date.parse(result.barEnd)>(cadence==='daily'?3600000:minutes*60000)){unavailable++;continue;}
+        const decisionTime=now+Date.now()-startedAt;
+        if(!canContinue())return;
+        if(decisionTime>=Date.parse(window.expiresAt)){unavailable++;continue;}
+        if(!result.barEnd || Date.parse(result.barEnd)!==Date.parse(window.barEnd)){unavailable++;continue;}
+        if(session.mode==='signals'){
+          await mongoose.connection.transaction(async transaction=>{
+            const current=await PaperSessionModel.findById(session._id).session(transaction).lean();
+            if(!current?.active||current.mode!=='signals'||current.entriesPaused||!canContinue())return;
+            if(current.ids&&!current.ids.includes(result.id))return;
+            if(!await MonthlyUniverseModel.exists({_id:currentMonth(),'members.instrumentId':result.id}).session(transaction))return;
+            let allDecided=true;
+            for(const side of ['BUY','SELL'] as const){
+              const consumed = side === 'BUY' ? await PaperEntryEventModel.find({sessionId:session._id,instrumentId:result.id}).session(transaction).lean() : [];
+              const fresh = freshEntry(session.strategy.entry,result.entry,new Set(consumed.map(x=>x.eventKey!)));
+              const evaluation=side==='BUY'?fresh.evaluation:result.exit;
+              if(evaluation.matched===null){unavailable++;allDecided=false;continue;}
+              if(!evaluation.matched)continue;
+              const signalId=`${session._id}:${result.id}:${side}:${window.barEnd}`;
+              if(await PaperSignalModel.exists({_id:signalId}).session(transaction))continue;
+              await PaperSignalModel.create([{_id:signalId,sessionId:session._id,instrumentId:result.id,side,barEnd:window.barEnd,createdAt:new Date(decisionTime).toISOString(),expiresAt:window.expiresAt,referencePrice:result.referencePrice??undefined,checks:evaluation.checks,message:side==='SELL'?'Sell conditions met. For existing holdings only; this is not a short-sale instruction.':'Buy conditions met. Signals-only monitoring does not create orders.'}],{session:transaction});
+              if(side==='BUY' && fresh.eventKeys.length) await PaperEntryEventModel.insertMany(fresh.eventKeys.map(eventKey=>({_id:`${session._id}:${result.id}:${eventKey}`,sessionId:session._id,instrumentId:result.id,eventKey,createdAt:new Date(now).toISOString()})),{session:transaction});
+              signals++;
+            }
+            if(allDecided&&!await PaperEvaluationModel.exists({_id:evaluationId(result.id)}).session(transaction))await PaperEvaluationModel.create([{_id:evaluationId(result.id),processedAt:new Date(now)}],{session:transaction});
+          });
+          continue;
+        }
         const selling=held.some(p=>p.instrumentId===result.id),side=selling?'SELL':'BUY',evaluation=selling?result.exit:result.entry;
-        if(evaluation.matched===null){unavailable++;continue;}if(!evaluation.matched)continue;
-        const signalId=`${session._id}:${result.id}:${side}:${result.barEnd}`;
+        if(selling && Date.parse(result.barEnd)<=Date.parse(held.find(p=>p.instrumentId===result.id)!.openedAt))continue;
+        if(evaluation.matched===null){unavailable++;continue;}
+        const signalId=`${session._id}:${result.id}:${side}:${window.barEnd}`;
         await mongoose.connection.transaction(async transaction=>{
-          if(await PaperSignalModel.exists({_id:signalId}).session(transaction))return;
+          if(!canContinue())return;
+          if(await PaperEvaluationModel.exists({_id:signalId}).session(transaction))return;
+          const current=await PaperSessionModel.findById(session._id).session(transaction).lean();
+          if(!current?.active||current.mode==='signals')return;
+          if(!selling && current.ids&&!current.ids.includes(result.id))return;
+          const currentlyHeld=await PaperPositionModel.exists({sessionId:session._id,instrumentId:result.id}).session(transaction);
+          if(!!currentlyHeld!==selling)return;
+          if(!selling && (current.entriesPaused || !await MonthlyUniverseModel.exists({_id:currentMonth(),'members.instrumentId':result.id}).session(transaction)))return;
+          const consumed = selling ? [] : await PaperEntryEventModel.find({sessionId:session._id,instrumentId:result.id}).session(transaction).lean();
+          const fresh = freshEntry(session.strategy.entry,result.entry,new Set(consumed.map(x=>x.eventKey!)));
+          if(!selling && fresh.evaluation.matched===null){unavailable++;return;}
+          if(!selling && !fresh.evaluation.matched || selling && !evaluation.matched){await PaperEvaluationModel.create([{_id:signalId,processedAt:new Date(now)}],{session:transaction});return;}
           const active=await PaperOrderModel.exists({sessionId:session._id,instrumentId:result.id,status:{$in:['pending','confirmation']}}).session(transaction);
-          const atrMissing=!selling && session.strategy.risk.stopMode==='ATR' && !result.atr;
+          const atrMissing=!selling && (session.strategy.risk.stopMode==='ATR' && !result.atr || session.strategy.risk.stopMode==='candleLow' && !(result.signalLow && result.signalLow>0));
+          // Missing stop data can arrive during a later refresh: do not consume this candle yet.
+          if(atrMissing){unavailable++;return;}
+          if(await PaperSignalModel.exists({_id:signalId}).session(transaction)){await PaperEvaluationModel.create([{_id:signalId,processedAt:new Date(now)}],{session:transaction});return;}
           const orderId=active||atrMissing?undefined:randomUUID();
-          await PaperSignalModel.create([{_id:signalId,sessionId:session._id,instrumentId:result.id,side,barEnd:result.barEnd!,createdAt:cutoff,checks:evaluation.checks,orderId,message:atrMissing?'ATR history missing':active?'An order already awaits action':undefined}],{session:transaction});
-          if(orderId)await PaperOrderModel.create([{_id:orderId,sessionId:session._id,instrumentId:result.id,side,quantity:0,source:'signal',status:session.mode==='automatic'?'pending':'confirmation',createdAt:cutoff,eligibleAfter:cutoff,expiresAt:new Date(Date.now()+(cadence==='daily'?4*86400000:minutes*60000)).toISOString(),reason:selling?'Sell rule on completed candle':'Buy rule on completed candle',atr:result.atr??undefined}],{session:transaction});
+          const createdAt=new Date(decisionTime).toISOString();
+          const dayLimit=!selling && session.strategy.risk.entryOrderType==='limit';
+          const expiresAt=signalOrderExpiry(window.expiresAt,dayLimit,session.strategy.risk.overnight);
+          if(Date.parse(expiresAt)<=decisionTime)return;
+          await PaperSignalModel.create([{_id:signalId,sessionId:session._id,instrumentId:result.id,side,barEnd:window.barEnd,createdAt,expiresAt,referencePrice:result.referencePrice??undefined,checks:(selling?evaluation:fresh.evaluation).checks,orderId,message:active?'An order already awaits action':undefined}],{session:transaction});
+          if(orderId)await PaperOrderModel.create([{_id:orderId,sessionId:session._id,instrumentId:result.id,side,quantity:0,source:'signal',status:current.mode==='automatic'?'pending':'confirmation',createdAt,eligibleAfter:createdAt,expiresAt,reason:selling?'Sell rule on completed candle':'Buy rule on completed candle',atr:result.atr??undefined,signalLow:result.signalLow??undefined,limitPaise:dayLimit?Math.round(session.strategy.risk.entryLimitPrice!*100):undefined}],{session:transaction});
+          if(!selling && fresh.eventKeys.length) await PaperEntryEventModel.insertMany(fresh.eventKeys.map(eventKey=>({_id:`${session._id}:${result.id}:${eventKey}`,sessionId:session._id,instrumentId:result.id,eventKey,createdAt})),{session:transaction});
+          await PaperEvaluationModel.create([{_id:signalId,processedAt:new Date(now)}],{session:transaction});
           signals++;
         });
       }
-      evaluated.set(session._id,boundary);
       await update(`Checked ${ids.length} stocks · ${signals} new signals · ${unavailable} missing or stale observations.`);
     }catch(e){await update(e instanceof AppError?e.message:'Rule evaluation unavailable; existing protective exits remain active.');}
   }

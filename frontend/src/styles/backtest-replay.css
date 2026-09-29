@@ -1,0 +1,27 @@
+.bt-replay { display: grid; gap: 18px; min-width: 0; }
+.bt-replay-heading, .bt-replay-chart-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bt-replay-heading p { margin: 6px 0 0; color: var(--muted); }
+.bt-replay-controls { padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; }
+.bt-replay-controls .ant-slider { flex-basis: calc(100% - 12px); margin: 8px 6px; }
+.bt-replay-clock { display: flex; flex-basis: 100%; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.bt-replay-clock span { color: var(--muted); }
+.bt-replay-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.bt-replay-metrics > div { display: grid; align-content: start; gap: 6px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; }
+.bt-replay-metrics span, .bt-replay-metrics small { font-size: 11px; color: var(--muted); }
+.bt-replay-metrics strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.bt-replay-explanation { padding: 20px; border: 1px solid var(--border); border-left: 3px solid #5477e7; border-radius: 8px; }
+.bt-replay-eyebrow { font-size: 10px; letter-spacing: .1em; color: var(--muted); }
+.bt-replay-explanation h4 { margin: 8px 0; font-size: 16px; }
+.bt-replay-explanation p { margin: 8px 0; line-height: 1.65; }
+.bt-replay-checks { padding-left: 22px; margin-bottom: 0; }
+.bt-replay-checks li { padding: 10px 0; border-top: 1px solid var(--border); }
+.bt-replay-checks li > span { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.bt-replay-loading { display: grid; justify-items: center; text-align: center; padding: 55px 25px; gap: 16px; }
+.bt-replay-loading span { max-width: 540px; }
+.bt-replay-footnote { font-size: 11px; line-height: 1.6; margin: 0; }
+.bt-replay .chart-indicator-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; }
+.bt-replay-stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.bt-replay-visual { min-width: 0; display: grid; gap: 14px; }
+.bt-replay-stage .bt-replay-explanation { padding: 16px; }
+@media (max-width: 1100px) { .bt-replay-stage { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 680px) { .bt-replay-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bt-replay-controls { padding: 12px; } .bt-replay-explanation { padding: 14px; } }

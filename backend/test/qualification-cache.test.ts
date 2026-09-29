@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { env } from '../src/config/env.js';
 import { jobs, redis } from '../src/shared/redis.js';
-import { missingHistoryRanges } from '../src/modules/market-data/services/history-coverage.js';
+import { isClosedHistoryRange, missingHistoryRanges } from '../src/modules/market-data/services/history-coverage.js';
 import { ensureMonthlyHistory, reuseCompanySnapshot } from '../src/modules/market-data/services/dhan-cache.service.js';
 import { DatasetReceiptModel } from '../src/modules/market-data/models/dataset-receipt.model.js';
 import { storedCandles } from '../src/modules/market-data/repository.js';
@@ -31,6 +31,14 @@ test('successful snapshots suppress repeated missing-metric requests but refresh
   assert.equal(reuseCompanySnapshot({ ...receipt, checkedAt: '2026-09-17' }, ['roe'], [], now), false);
   assert.equal(reuseCompanySnapshot(null, ['roe'], [], now), false);
   assert.equal(reuseCompanySnapshot(null, ['marketCap'], ['marketCap'], now), true);
+});
+
+test('closed-day gaps exclude weekends and holidays but never assume an unknown calendar or trading day', () => {
+  assert.equal(isClosedHistoryRange('2026-09-26', '2026-09-28'), true);
+  assert.equal(isClosedHistoryRange('2026-09-14', '2026-09-15'), true);
+  assert.equal(isClosedHistoryRange('2026-09-25', '2026-09-28'), false);
+  assert.equal(isClosedHistoryRange('2027-09-25', '2027-09-27'), false);
+  assert.equal(isClosedHistoryRange('bad', 'bad'), false);
 });
 
 test('incremental downloads persist successful gaps, resume after failure and do not invent IPO history', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
@@ -72,6 +80,11 @@ test('incremental downloads persist successful gaps, resume after failure and do
     assert.equal(prefix?.to, '2021-06-01'); assert.equal(prefix?.records, 0);
     assert.equal(await storedCandles.countDocuments(), 1);
     assert.equal(await ensureMonthlyHistory(stock, '2020-01-01', '2026-09-01', {}, prefixRequest), false);
+    const noRequest = async () => { throw new Error('A closed weekend must not request provider candles'); };
+    assert.equal(await ensureMonthlyHistory(stock, '2026-09-26', '2026-09-28', {}, noRequest), true);
+    const weekend = await DatasetReceiptModel.findOne({ instrumentId: stock._id, from: '2026-09-26' }).lean();
+    assert.equal(weekend?.records, 0); assert.match(weekend?.sourceUrl ?? '', /nseindia/);
+    assert.equal(await storedCandles.countDocuments(), 1, 'Calendar coverage never creates artificial candles');
   } finally {
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
     await mongoose.disconnect();

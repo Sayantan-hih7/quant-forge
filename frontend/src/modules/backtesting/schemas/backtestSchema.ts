@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { exitTargetSchema, validateExitTargets } from '../../strategies/schemas/exitTargetsSchema';
+import { stopManagementSchema, validateStopSettings } from '../../strategies/schemas/stopSettingsSchema';
 
 export const todayIST = () =>
   new Intl.DateTimeFormat("en-CA", {
@@ -28,16 +30,24 @@ export const backtestSchema = z
     riskPercent: z.number().min(0.1).max(5),
     maxPositions: z.number().int().min(1).max(20),
     timeframe: z.enum(["1m", "5m", "15m", "1h", "1d"]),
-    stopMode: z.enum(["ATR", "fixed", "trailing"]),
+    stopMode: z.enum(["ATR", "fixed", "trailing", "amount", "price", "candleLow"]),
+    stopValue: z.number().finite().min(0.01).max(10000000).nullable().optional(),
+    entryOrderType: z.enum(['market', 'limit']).optional(),
+    entryLimitPrice: z.number().finite().min(0.01).max(10000000).nullable().optional(),
+    stopManagement: stopManagementSchema.optional(),
     stopPercent: z.number().min(0.1).max(25),
     atrPeriod: z.number().int().min(2).max(100),
     atrMultiplier: z.number().min(0.5).max(10),
     targetR: z.number().min(0.5).max(10),
+    exitTargets: z.array(exitTargetSchema).min(2).max(5).optional(),
+    breakevenAfterTarget1: z.boolean().optional(),
     overnight: z.boolean(),
     slippagePercent: z.number().min(0).max(2),
     feePercent: z.number().min(0).max(2),
   })
   .superRefine((value, ctx) => {
+    validateExitTargets(value, ctx);
+    validateStopSettings(value, ctx);
     if (value.endDate < value.startDate)
       ctx.addIssue({
         code: "custom",

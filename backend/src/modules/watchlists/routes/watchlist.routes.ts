@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { WatchlistModel } from '../models/watchlist.model.js';
+import { watchlistStock } from '../validations/watchlist.validation.js';
+import { addWatchlistStock, browseStocks, listWatchlists, removeWatchlistStock, saveWatchlist } from '../services/watchlist.service.js';
+export const watchlistRouter = Router();
+watchlistRouter.get('/', async (_req, res) => res.json(await listWatchlists()));
+watchlistRouter.get('/stocks', async (req, res) => res.json(await browseStocks(req.query)));
+watchlistRouter.post('/', async (req, res) => res.status(201).json(await saveWatchlist(req.body)));
+watchlistRouter.patch('/:id', async (req, res) => res.json(await saveWatchlist(req.body, req.params.id)));
+watchlistRouter.delete('/:id', async (req, res) => { await WatchlistModel.deleteOne({ _id: req.params.id }); res.sendStatus(204); });
+watchlistRouter.post('/:id/stocks', async (req, res) => res.json(await addWatchlistStock(req.params.id, watchlistStock.parse(req.body).instrumentId)));
+watchlistRouter.delete('/:id/stocks/:instrumentId', async (req, res) => res.json(await removeWatchlistStock(req.params.id, req.params.instrumentId)));

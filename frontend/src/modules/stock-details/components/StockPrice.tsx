@@ -1,12 +1,12 @@
 import { Tooltip } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { StockQuote } from '../types';
-import { priceState, stockMoney, stockSigned, stockTime, stockTone } from '../utils/format';
+import { priceState, stockMoney, stockSigned, stockTime, stockTone, stockSource } from '../utils/format';
 export function StockPrice({ quote, connected, now, large = false }: { quote?: StockQuote; connected: boolean; now: number; large?: boolean }) {
   const state = priceState(quote, connected, now);
   return <div className={`stock-price ${large ? 'stock-price--large' : ''}`}>
     <strong>{stockMoney(quote?.price)}</strong>
-    <Tooltip title={quote ? `${state} · ${stockTime(quote.lastTradeAt)} · ${quote.source.startsWith('dhan') ? 'Dhan' : 'Stored Dhan history'}` : 'A current quote has not been received for this stock.'}>
+    <Tooltip title={quote ? `${stockSource(quote)} · Last trade ${stockTime(quote.lastTradeAt)}${connected ? ' · Feed connected; a quiet stock keeps its last trade price.' : ''}` : 'A current quote has not been received for this stock.'}>
       <span className={`stock-price-state ${state === 'Live' ? 'stock-price-state--live' : ''}`}>{state === 'Live' && <i />}{state}</span>
     </Tooltip>
   </div>;

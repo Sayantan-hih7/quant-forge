@@ -41,6 +41,36 @@ async function fixture(page: Page) {
   });
 }
 
+test('qualified pagination and sorting subscribe to the visible sorted stocks', async ({ page }) => {
+  await fixture(page);
+  const rows = Array.from({ length: 65 }, (_, i) => ({ ...stocks[0], instrumentId: `NSE:${1000 + i}`, instrument: { symbol: `TEST${String(i).padStart(2, '0')}`, name: `Company ${i}`, exchange: 'NSE' }, metrics: { sector: 'Banking', delivery: i } }));
+  await page.route('**/api/qualification/universe', route => route.fulfill({ json: rows }));
+  await page.route('**/api/stocks/quotes?*', route => { const ids = new URL(route.request().url()).searchParams.get('ids')!.split(','); return route.fulfill({ json: { quotes: ids.map(id => quote(id, Number(id.split(':')[1]))) } }); });
+  await page.goto('/qualification');
+  const tableRows = page.locator('.monthly-rule-builder tbody tr.ant-table-row');
+  await expect(tableRows).toHaveCount(20);
+  await expect(page.getByText('1–20 of 65 stocks')).toBeVisible();
+  await page.locator('.ant-pagination-options-size-changer').click();
+  await page.getByRole('option', { name: '10 / page', exact: true }).click();
+  await expect(tableRows).toHaveCount(10);
+  await page.getByRole('columnheader', { name: 'Stock', exact: true }).click();
+  await expect(tableRows.first()).toContainText('TEST64');
+  await expect.poll(() => page.evaluate(() => {
+    const feeds = (window as unknown as { stockTestFeeds: { ids: string[]; onmessage: unknown }[] }).stockTestFeeds;
+    return feeds.filter(f => f.onmessage).at(-1)?.ids;
+  })).toEqual(Array.from({ length: 10 }, (_, i) => `NSE:${1055 + i}`));
+  await page.getByTitle('Next Page').click();
+  await expect(tableRows.first()).toContainText('TEST54');
+  await page.getByRole('columnheader', { name: 'Last price', exact: true }).click();
+  await expect(tableRows.first()).toContainText('TEST00');
+  await expect(page.getByText('1–10 of 65 stocks')).toBeVisible();
+  await page.getByRole('columnheader', { name: 'Last price', exact: true }).click();
+  await expect(tableRows.first()).toContainText('TEST64');
+  await page.getByRole('searchbox', { name: 'Search qualified stocks' }).fill('TEST02');
+  await expect(tableRows).toHaveCount(1);
+  await expect(tableRows.first()).toContainText('TEST02');
+});
+
 test('qualified stock prices open an interactive chart and preserve manual qualification and list filters', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await fixture(page); await page.goto('/qualification');
@@ -51,16 +81,18 @@ test('qualified stock prices open an interactive chart and preserve manual quali
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByRole('figure', { name: 'FEDERALBNK price and volume chart' })).toBeVisible();
   await expect(drawer.locator('canvas').first()).toBeVisible();
-  await expect(drawer.getByLabel('Chart data timestamp')).toContainText('Completed daily sessions. The live price updates separately.');
+  await expect(drawer.getByLabel('Chart data timestamp')).toContainText('Stored candles through');
   await expect(drawer.getByText('Day high', { exact: true })).toBeVisible();
   await expect(drawer.getByText('₹80,740.00 Cr', { exact: true })).toBeVisible();
   await drawer.getByText('View qualification rules', { exact: true }).click();
   await expect(drawer.getByText('Qualification conditions', { exact: true })).toBeVisible();
   await drawer.getByText('15m', { exact: true }).click();
-  await expect(drawer.getByLabel('Chart data timestamp')).toContainText('Completed candles. The live price updates separately.');
+  await expect(drawer.getByLabel('Chart data timestamp')).toContainText('Stored candles through');
   await expect(drawer.getByRole('figure')).toBeVisible();
   await drawer.getByText('Line', { exact: true }).click();
-  await drawer.getByRole('checkbox').uncheck();
+  await drawer.getByRole('button', { name: 'Indicators', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove EMA 5' }).click();
+  await drawer.getByRole('heading', { name: 'Price & volume' }).click();
   await page.screenshot({ path: '../.tools/artifacts/stock-details-light.png' });
   await drawer.getByRole('button', { name: 'Next stock' }).click();
   await expect(drawer.getByRole('figure', { name: 'SBIN price and volume chart' })).toBeVisible();
@@ -97,4 +129,28 @@ test('live quote updates reach the list and open details; disconnect removes the
   await expect(page.getByRole('dialog').getByText('Live', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('dialog').getByText('Last received', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog').getByText('₹330.00', { exact: true })).toBeVisible();
+});
+
+test('Motilal streams start even when the Dhan snapshot fails and session changes remove misleading live labels', async ({ page }) => {
+  await fixture(page);
+  await page.route('**/api/stocks/quotes?*', route => route.fulfill({ status: 503, json: { message: 'Snapshot unavailable' } }));
+  await page.goto('/qualification');
+  await page.getByRole('button', { name: 'View FEDERALBNK details' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { stockTestFeeds: { onmessage: unknown }[] }).stockTestFeeds.filter(f => f.onmessage).length)).toBe(2);
+  const update = { ...quote('NSE:1023', 330), source: 'motilal-stream', streamSession: 'mo-1' };
+  await page.evaluate(value => {
+    const feeds = (window as unknown as { stockTestFeeds: { onmessage: ((event: { data: string }) => void) | null }[] }).stockTestFeeds;
+    for (const feed of feeds) feed.onmessage?.({ data: JSON.stringify({ quotes: [value], status: { state: 'streaming', providers: ['motilal'], sessions: { 'NSE:1023': 'mo-1' } } }) });
+  }, update);
+  const drawer = page.getByRole('dialog');
+  await expect(drawer.getByText('₹330.00', { exact: true })).toBeVisible();
+  await expect(drawer.getByText('Live', { exact: true })).toBeVisible();
+  await expect(drawer.getByText('Feed connected · Motilal', { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const feeds = (window as unknown as { stockTestFeeds: { onmessage: ((event: { data: string }) => void) | null }[] }).stockTestFeeds;
+    for (const feed of feeds) feed.onmessage?.({ data: JSON.stringify({ status: { state: 'streaming', providers: ['dhan'], sessions: { 'NSE:1023': 'dhan-2' } } }) });
+  });
+  await expect(drawer.getByText('Live', { exact: true })).toHaveCount(0);
+  await expect(drawer.getByText('Last received', { exact: true })).toBeVisible();
+  await expect(drawer.getByText('Feed connected · Dhan', { exact: true })).toBeVisible();
 });

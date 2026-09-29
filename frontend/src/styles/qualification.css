@@ -94,7 +94,6 @@
 .condition-group > header .ant-form-item { margin: 0; width: 115px; }
 .condition-group > header .ant-form-item-label { display: none; }
 .condition-row { display: grid; grid-template-columns: 18px minmax(130px, 1fr) 115px minmax(155px, 1.4fr) 22px; gap: 9px; align-items: start; padding-top: 13px; }
-.condition-row + .condition-row { border-top: 1px dashed var(--border); }
 .condition-number { color: var(--muted); font: 10px var(--font-data); padding-top: 29px; }
 .condition-operand { display: grid; grid-template-columns: 1fr; }
 .condition-operand .ant-form-item, .condition-target .ant-form-item { margin-bottom: 9px; }
@@ -102,6 +101,22 @@
 .condition-relative { display: grid; grid-template-columns: 1fr 85px; gap: 8px; }
 .condition-delete { margin-top: 25px; }
 .condition-row .ant-form-item-explain-error { font-size: 10px; line-height: 1.5; }
+.condition-row-edit, .condition-row-summary { position: relative; }
+.condition-row-edit + .condition-row-edit, .condition-row-edit + .condition-row-summary,
+.condition-row-summary + .condition-row-edit, .condition-row-summary + .condition-row-summary { border-top: 1px dashed var(--border); }
+.condition-preset { display: flex; align-items: center; gap: 10px; padding-top: 13px; flex-wrap: wrap; }
+.condition-preset .muted { font-size: 11px; }
+.condition-preset-select { min-width: 260px; }
+.condition-preset-row { display: grid; grid-template-columns: 18px 1fr 22px; gap: 9px; align-items: start; padding-top: 9px; }
+.condition-preset-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
+.condition-preview { margin: 4px 0 0 27px; font-size: 11px; color: var(--muted); }
+.condition-preview strong { font-weight: 600; margin-right: 4px; }
+.condition-row-actions { display: flex; justify-content: flex-end; padding: 6px 0 4px 27px; }
+.condition-row-summary { display: grid; grid-template-columns: 18px 1fr auto auto; gap: 9px; align-items: start; padding: 13px 0; }
+.condition-row-summary .condition-number { padding-top: 3px; }
+.condition-summary-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.condition-summary-body strong { font-size: 12px; }
+.condition-summary-body p { margin: 0; font-size: 11px; }
 .q-editor-actions, .q-editor-actions > div { display: flex; align-items: center; gap: 8px; }
 .q-editor-actions { justify-content: space-between; margin: 18px 0; }
 .q-active-rule-footer { display: flex; align-items: center; gap: 15px; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 16px; }

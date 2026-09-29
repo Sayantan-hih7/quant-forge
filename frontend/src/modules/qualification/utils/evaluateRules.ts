@@ -10,9 +10,18 @@ export function conditionMatches(stock: CandidateStock, condition: Condition): b
     case 'gte': return left >= right;
     case 'lt': return left < right;
     case 'lte': return left <= right;
+    case 'eq': return left === right;
+    case 'neq': return left !== right;
+    case 'between': return left >= right && left <= (condition.upper ?? right);
+    case 'notBetween': return !(left >= right && left <= (condition.upper ?? right));
     case 'within': return right !== 0 && Math.abs(left - right) / Math.abs(right) * 100 <= condition.tolerance;
+    case 'aboveBy': return right !== 0 && (left - right) / Math.abs(right) * 100 >= condition.tolerance;
+    case 'belowBy': return right !== 0 && (left - right) / Math.abs(right) * 100 <= -condition.tolerance;
     case 'crossAbove': return left > right && metricValue(stock, condition.left, condition.leftFrame, true) <= metricValue(stock, condition.right, condition.rightFrame, true) * condition.multiplier;
     case 'crossBelow': return left < right && metricValue(stock, condition.left, condition.leftFrame, true) >= metricValue(stock, condition.right, condition.rightFrame, true) * condition.multiplier;
+    // This mock evaluator only has "current" and "one prior" values, not an arbitrary lookback series.
+    case 'increasing': return left > metricValue(stock, condition.left, condition.leftFrame, true);
+    case 'decreasing': return left < metricValue(stock, condition.left, condition.leftFrame, true);
   }
 }
 export function ruleMatches(stock: CandidateStock, rule: RuleDefinition) {

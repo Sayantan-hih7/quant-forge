@@ -80,7 +80,7 @@ export async function runQualification(id: string) {
     }
     const dataGaps = await QualificationResultModel.aggregate<{ field: string; stocks: number }>([
       { $match: { runId: id, status: 'unavailable' } }, { $unwind: '$checks' }, { $match: { 'checks.matched': null } },
-      { $group: { _id: { stock: '$instrumentId', field: { $ifNull: ['$checks.historyField', '$checks.field'] } } } },
+      { $group: { _id: { stock: '$instrumentId', field: { $ifNull: ['$checks.missingField', '$checks.historyField', '$checks.field'] } } } },
       { $group: { _id: '$_id.field', stocks: { $sum: 1 } } }, { $project: { _id: 0, field: '$_id', stocks: 1 } }, { $sort: { stocks: -1, field: 1 } },
     ]);
     await QualificationRunModel.updateOne({ _id: id, status: 'running' }, { $set: { status: 'completed', finishedAt: new Date().toISOString(), dataGaps } });
@@ -133,7 +133,7 @@ export async function qualificationResults(id: string, page: number, status?: 'q
   ]);
   const evidence = new Map(observations.map(fact => [`${fact.instrumentId}:${fact.field}`, { source: fact.source, sourceUrl: fact.sourceUrl, period: fact.period }]));
   return { rows: rows.map(row => ({ ...row, instrument: byId.get(row.instrumentId!),
-    checks: row.checks.map(check => ({ ...check, evidence: evidence.get(`${row.instrumentId}:${check.field}`) })),
+    checks: row.checks.map(check => ({ ...check, evidence: evidence.get(`${row.instrumentId}:${check.missingField ?? check.field}`) })),
   })), total };
 }
 export async function cancelQualification(id: string) {

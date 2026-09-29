@@ -15,6 +15,8 @@ import { useWorkspaceNavigation } from "../../hooks/useWorkspaceNavigation";
 import { useAuthStore } from "../../store/authStore";
 import { useDemoStore } from "../../store/demoStore";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import axios from 'axios';
+import { useWorkspaceSession } from '../../store/workspaceSession';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -38,6 +40,7 @@ export function TopBar({ onOpenMenu, realData = false }: { onOpenMenu: () => voi
   const { token } = theme.useToken();
   const navigate = useNavigate();
   const { session, signOut } = useAuthStore();
+  const workspace = useWorkspaceSession();
   const isClient = session?.role === "client";
   const navItems = useWorkspaceNavigation().flatMap((group) => group.items);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -70,8 +73,8 @@ export function TopBar({ onOpenMenu, realData = false }: { onOpenMenu: () => voi
         </div>
         <IndianClock />
         <div className="topbar-connection positive">
-          <ThunderboltOutlined /> {realData ? 'DATA SETUP' : paused ? "PAUSED" : "SIMULATED"}{" "}
-          <span className="muted">{realData ? 'Paper workspace' : 'No broker feed'}</span>
+          <ThunderboltOutlined /> {realData ? 'PAPER TRADING' : paused ? "PAUSED" : "SIMULATED"}{" "}
+          <span className="muted">{realData ? 'No real orders' : 'No broker feed'}</span>
         </div>
         <Flex className="topbar-actions" align="center">
           <ThemeSwitcher />
@@ -103,8 +106,11 @@ export function TopBar({ onOpenMenu, realData = false }: { onOpenMenu: () => voi
             { key: 'profile', label: session?.email, disabled: true },
             { key: 'settings', label: 'Account settings' },
             { key: 'logout', label: 'Sign out', danger: true },
-          ], onClick: ({ key }) => {
-            if (key === 'logout') { signOut(); navigate('/login', { replace: true }); }
+          ], onClick: async ({ key }) => {
+            if (key === 'logout') {
+              if (workspace.hosted) { await axios.post('/api/session/logout', {}, { withCredentials: true }); workspace.setSession(true, false); }
+              else { signOut(); navigate('/login', { replace: true }); }
+            }
             if (key === 'settings') navigate(isClient ? '/client/settings' : '/settings');
           } }}>
             <Button

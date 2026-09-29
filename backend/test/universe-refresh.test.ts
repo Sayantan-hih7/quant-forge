@@ -13,7 +13,7 @@ import { registerUniverseSchedule } from '../src/modules/market-data/services/un
 import { createReadinessCache, monthlyRequiredFields } from '../src/modules/qualification/services/readiness.service.js';
 import type { Instrument } from '../src/modules/market-data/types.js';
 
-after(async () => { await jobs.close(); if (redis.status !== 'end') await redis.quit(); });
+after(async () => { await jobs.waitUntilReady(); await jobs.close(); if (redis.status !== 'end') await redis.quit(); });
 
 test('monthly refresh cycle changes at 02:00 IST, including the year boundary', () => {
   assert.deepEqual(universeCycle(new Date('2026-09-30T20:29:59Z')), { month: '2026-09', dueAt: '2026-08-31T20:30:00.000Z' });

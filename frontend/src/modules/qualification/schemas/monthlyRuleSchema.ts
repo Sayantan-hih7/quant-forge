@@ -1,3 +1,4 @@
+import { fieldParameterError } from '../config/ruleFields';
 import { z } from 'zod';
 import { isDistance, isRange, monthlyCategories, monthlyFields, monthlyOperators } from '../config/monthlyFields';
 import type { MonthlyCategory, MonthlyOperator } from '../types/monthly';
@@ -7,6 +8,8 @@ const baseSchema = z.object({
   name: z.string().trim().min(3).max(60), description: z.string().trim().max(200), timeframe: z.literal('1mo'), logic: z.enum(['AND', 'OR']),
   groups: z.array(z.object({ logic: z.enum(['AND', 'OR']), conditions: z.array(z.object({
     category: z.enum(monthlyCategories.map((category) => category.value) as [MonthlyCategory, ...MonthlyCategory[]]),
+    period: finite.int().min(2).max(500).optional(), offset: finite.int().min(0).max(120).optional(),
+    comparePeriod: finite.int().min(2).max(500).optional(), compareOffset: finite.int().min(0).max(120).optional(),
     field: z.string(), timeframe: z.literal('1mo'), operator: z.string() as z.ZodType<MonthlyOperator>, operand: z.enum(['value', 'field']),
     value: finite, upper: finite, compareField: z.string(), multiplier: finite.positive().max(100), distance: finite.min(0).max(100),
     lookback: finite.int().min(1).max(24), choices: z.array(z.string()), text: z.string().max(120),
@@ -15,6 +18,9 @@ const baseSchema = z.object({
 export const createMonthlyRuleSchema = (choices?: Record<string, { value: string; label: string }[]>) => baseSchema.superRefine((rule, ctx) => {
   rule.groups.forEach((group, gi) => group.conditions.forEach((condition, ci) => {
     const issue = (field: string, message: string) => ctx.addIssue({ code: 'custom', path: ['groups', gi, 'conditions', ci, field], message });
+    const leftError = fieldParameterError(condition.field, condition.period, condition.offset);
+    if (leftError) issue('period', leftError);
+    if (condition.operand === 'field') { const rightError = fieldParameterError(condition.compareField, condition.comparePeriod, condition.compareOffset); if (rightError) issue('comparePeriod', rightError); }
     const field = monthlyFields[condition.field];
     if (!field) return issue('field', 'Choose a supported monthly field');
     if (field.category !== condition.category) issue('field', 'Choose a field from this category');

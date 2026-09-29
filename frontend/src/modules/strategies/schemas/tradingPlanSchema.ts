@@ -1,12 +1,28 @@
 import { z } from 'zod';
 import { ruleSchema } from '../../qualification/schemas/ruleSchema';
 import { backtestSchema } from '../../backtesting/schemas/backtestSchema';
+import { validateExitTargets } from './exitTargetsSchema';
+import { validateStopSettings } from './stopSettingsSchema';
 
 export const strategyRiskSchema = backtestSchema.innerType().pick({
   initialCapital: true, riskPercent: true, maxPositions: true, timeframe: true,
   stopMode: true, stopPercent: true, atrPeriod: true, atrMultiplier: true,
   targetR: true, overnight: true, slippagePercent: true, feePercent: true,
-}).refine((risk) => risk.timeframe !== '1d' || risk.overnight, { path: ['overnight'], message: 'Daily execution requires overnight holding.' });
+  exitTargets: true, breakevenAfterTarget1: true,
+  stopValue: true, stopManagement: true, entryOrderType: true, entryLimitPrice: true,
+}).superRefine(validateExitTargets).superRefine(validateStopSettings).refine((risk) => risk.timeframe !== '1d' || risk.overnight, { path: ['overnight'], message: 'Daily execution requires overnight holding.' }).transform(risk => {
+  // Hidden RHF controls can retain saved defaults during mode changes. Send only
+  // values belonging to the selected mode; never submit an inactive price.
+  const active = { ...risk };
+  if (active.exitTargets) active.exitTargets = active.exitTargets.map(target => {
+    const next = { ...target };
+    if (next.moveStopTo === null) delete next.moveStopTo;
+    return next;
+  });
+  if (active.entryOrderType !== 'limit') delete active.entryLimitPrice;
+  if (active.stopMode !== 'price' && active.stopMode !== 'amount') delete active.stopValue;
+  return active;
+});
 export type StrategyRisk = z.infer<typeof strategyRiskSchema>;
 export const tradingPlanSchema = z.object({ name: z.string().trim().min(3).max(50), entry: ruleSchema, exit: ruleSchema, risk: strategyRiskSchema }).superRefine((plan, ctx) => {
   if (plan.entry.side !== 'BUY' || plan.exit.side !== 'SELL' || plan.entry.tier !== 'tactical' || plan.exit.tier !== 'tactical') ctx.addIssue({ code: 'custom', message: 'A strategy needs a tactical buy entry and sell exit.' });

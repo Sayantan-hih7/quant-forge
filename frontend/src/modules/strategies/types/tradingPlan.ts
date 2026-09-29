@@ -1,5 +1,6 @@
 import type { RuleDefinition } from '../../qualification/types';
 import type { StrategyRisk } from '../schemas/tradingPlanSchema';
+import type { AiQuestion } from '../../../services/aiAssistant';
 
 export interface TradingPlanDraft {
   name: string;
@@ -16,4 +17,4 @@ export interface TradingPlan {
   updatedAt: string;
   needsReview?: boolean;
 }
-export interface StrategyMessage { id: string; role: 'user' | 'assistant'; text: string }
+export interface StrategyMessage { id: string; role: 'user' | 'assistant'; text: string; questions?: AiQuestion[]; blockers?: string[]; assumptions?: string[]; explanationOnly?: boolean }

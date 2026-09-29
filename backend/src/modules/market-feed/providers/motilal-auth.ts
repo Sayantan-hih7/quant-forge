@@ -34,10 +34,28 @@ export function classifyLogin(raw: unknown) {
   return verified === 'TRUE';
 }
 export function broadcastLimit(raw: unknown) {
-  const data = object(raw);
-  if (data.status !== undefined) accepted(data);
+  const data = accepted(raw);
   const nested = object(data.data);
-  const limit = Number(nested.MaxBroadcastLimit ?? data.MaxBroadcastLimit);
+  const value = nested.MaxBroadcastLimit ?? data.MaxBroadcastLimit;
+  invariant(typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value.trim())), 'Motilal did not return a verified broadcast subscription limit');
+  const limit = Number(value);
   invariant(Number.isSafeInteger(limit) && limit >= 0, 'Motilal did not return a verified broadcast subscription limit');
+  return limit;
+}
+
+export interface BroadcastLimitClient {
+  m_intBroadcastLimit: number;
+  setMaxBroadcastLimit(value: number): unknown;
+}
+
+export async function configureBroadcastLimit(client: BroadcastLimitClient, raw: unknown, requested: number) {
+  const reported = broadcastLimit(raw);
+  // The vendor's setter maps an explicit successful zero to its default (200 in
+  // SDK 3.1). Zero is not an authentication failure. Missing/failed responses
+  // must still fail before invoking the setter; never invent an account limit.
+  await client.setMaxBroadcastLimit(reported);
+  const limit = client.m_intBroadcastLimit;
+  invariant(Number.isSafeInteger(limit) && limit > 0, 'Motilal SDK did not establish a broadcast subscription limit');
+  invariant(Number.isSafeInteger(requested) && requested > 0 && requested <= limit, 'The requested stock count exceeds the Motilal broadcast limit.');
   return limit;
 }

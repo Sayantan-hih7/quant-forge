@@ -85,3 +85,34 @@ test('auto-update can be paused, manually refreshed and resumed', async ({page})
   await page.clock.fastForward(16000);await expect.poll(()=>calls).toBeGreaterThan(pausedCalls+1);
   await expect(page.locator('.index-highlight-price').first()).toHaveText(`${100+calls}.00`);
 });
+
+test('index polling stops at close, skips a holiday weekend, and resumes at the next open', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-01T15:29:50+05:30') });
+  let calls = 0;
+  await page.route('**/api/market-indices', route => {
+    calls++;
+    return route.fulfill({ json: { quotes, sources: [], refreshAfterMs: 15000, market: { open: calls === 1, reason: calls === 1 ? 'Market open' : 'Market closed', date: '2026-10-01', knownYear: true, closesAt: '2026-10-01T10:00:00.000Z', nextOpenAt: '2026-10-05T03:45:00.000Z' } } });
+  });
+  await page.goto('/market-data/indices');
+  await expect(page.getByText('4 / 57 indices available')).toBeVisible();
+  const initial = calls;
+  await page.clock.fastForward(20000);
+  await expect(page.getByText(/Market closed · showing saved snapshots/)).toBeVisible();
+  expect(calls).toBe(initial);
+  await page.clock.fastForward(3 * 86400000);
+  expect(calls).toBe(initial);
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect.poll(() => calls).toBe(initial + 1);
+  await page.clock.fastForward(18 * 3600000);
+  await expect.poll(() => calls).toBeGreaterThan(initial + 1);
+});
+
+test('opening indices on a holiday only reads the saved snapshot once', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-02T10:00:00+05:30') });
+  let calls = 0;
+  await page.route('**/api/market-indices', route => { calls++; return route.fulfill({ json: { quotes, sources: [], refreshAfterMs: 15000, market: { open: false, reason: 'Market holiday', date: '2026-10-02', knownYear: true, closesAt: '2026-10-02T10:00:00Z', nextOpenAt: '2026-10-05T03:45:00Z' } } }); });
+  await page.goto('/market-data/indices');
+  await expect(page.getByText(/Market holiday · showing saved snapshots/)).toBeVisible();
+  await page.clock.fastForward(3600000);
+  expect(calls).toBe(1);
+});

@@ -1,4 +1,16 @@
+import { marketTime } from '../../../shared/market-calendar.js';
 export interface HistoryRange { from: string; to: string }
+
+/** Only skip days the configured regular-session calendar can establish as closed. */
+export function isClosedHistoryRange(from: string, to: string) {
+  const start = Date.parse(`${from}T09:15:00+05:30`), end = Date.parse(`${to}T09:15:00+05:30`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return false;
+  for (let at = start; at < end; at += 86_400_000) {
+    const day = marketTime(at);
+    if (!day.knownYear || day.tradingDay) return false;
+  }
+  return true;
+}
 
 /** Half-open calendar ranges, matching Dhan's inclusive from / exclusive to. */
 export function missingHistoryRanges(from: string, to: string, covered: HistoryRange[]): HistoryRange[] {

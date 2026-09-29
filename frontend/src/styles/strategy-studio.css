@@ -105,6 +105,30 @@
 .strategy-ai-layout .strategy-chat-header { padding: 16px; }
 .strategy-ai-layout .strategy-chat-log { height: 250px; }
 .strategy-ai-layout .strategy-chat-header p { max-width: 190px; }
+.strategy-ai-layout .strategy-chat-header h2 { font-size: 15px; }
+.strategy-ai-layout .strategy-chat-header p { max-width: none; font-size: 12px; }
+.strategy-ai-layout .strategy-message p { font-size: 13px; line-height: 1.65; }
+.strategy-ai-layout .strategy-message strong { font-size: 11px; }
+.assistant-questions { padding: 18px; margin: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); }
+.assistant-questions h3 { font-size: 14px; margin: 0 0 6px; }
+.assistant-questions > p { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+.assistant-questions .ant-form-item { margin-bottom: 4px; }
+.assistant-questions .ant-form-item-label > label { white-space: normal; height: auto; font-size: 13px; }
+.assistant-question-reason { font-size: 12px; margin: 6px 0 18px; }
+.ai-risk-preview h3 { margin: 0 0 8px; font-size: 16px; }
+.ai-risk-preview > p { font-size: 12px; line-height: 1.7; }
+.ai-risk-preview ol { padding-left: 22px; list-style: decimal; }
+.ai-risk-preview li { padding: 10px 12px; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; }
+.ai-risk-preview li.changed { border-color: var(--primary); background: var(--primary-subtle); }
+.ai-risk-preview li > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.ai-risk-preview li strong { font-size: 13px; }
+.ai-risk-preview li p { font-size: 12px; line-height: 1.7; margin: 8px 0 0; }
+.ai-risk-preview details { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.ai-risk-preview summary { cursor: pointer; }
+.ai-risk-preview .risk-example-flow { grid-template-columns: minmax(0, 1fr); }
+.risk-ai-entry { display: flex; justify-content: space-between; align-items: center; gap: 20px; background: var(--primary-subtle); padding: 18px; border: 1px solid var(--border); border-radius: 10px; }
+.risk-ai-entry p { color: var(--muted); margin: 6px 0 0; max-width: 650px; line-height: 1.6; }
+@media (max-width: 640px) { .risk-ai-entry { align-items: start; flex-direction: column; }.assistant-questions { margin: 8px; padding: 12px; } }
 .strategy-ai-layout .strategy-preview-body { padding: 16px; }
 .strategy-ai-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .strategy-ai-footer > span { margin-right: auto; color: var(--muted); font-size: 10px; }

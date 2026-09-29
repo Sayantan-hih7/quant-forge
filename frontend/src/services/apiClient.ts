@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { useWorkspaceSession } from '../store/workspaceSession';
 
 export const apiClient = axios.create({ baseURL: '/api', timeout: 20_000, withCredentials: true });
 let connecting: Promise<unknown> | null = null;
@@ -10,8 +11,12 @@ apiClient.interceptors.request.use(config => {
   config.headers.set('Accept', 'application/json');
   return config;
 });
-apiClient.interceptors.response.use(response => response, async (error: AxiosError<{ message?: string }>) => {
+apiClient.interceptors.response.use(response => response, async (error: AxiosError<{ message?: string; code?: string }>) => {
   const config = error.config;
+  if (error.response?.status === 401 && (error.response.data?.code === 'LOGIN_REQUIRED' || useWorkspaceSession.getState().hosted)) {
+    useWorkspaceSession.getState().setSession(true, false);
+    return Promise.reject(requestError(error));
+  }
   if (error.response?.status === 401 && config && !config.headers.has('X-Session-Retry')) {
     connecting ??= axios.post('/api/session', {}, { withCredentials: true }).finally(() => { connecting = null; });
     try { await connecting; }

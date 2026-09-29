@@ -1,73 +1,55 @@
-import { Button } from "antd";
-import {
-  ExperimentOutlined,
-  PlusCircleOutlined,
-  RadarChartOutlined,
-} from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
-import { MetricCards } from "../components/MetricCards";
-import { MarketTicker } from "../components/MarketTicker";
-import { EngineTelemetry } from "../components/EngineTelemetry";
-import { StockOpportunities } from "../components/StockOpportunities";
-import { SignalBroadcast } from "../../signals/components/SignalBroadcast";
-import { useDemoStore } from "../../../store/demoStore";
-import { useAuthStore } from "../../../store/authStore";
+import { Alert, Button, Skeleton, Space, Tag } from 'antd';
+import { ArrowRightOutlined, ReloadOutlined, SettingOutlined, StarOutlined } from '@ant-design/icons';
+import { Link, useNavigate } from 'react-router-dom';
+import { useStockResource } from '../../stock-details/hooks/useStockResource';
+import { useIndexQuotes } from '../../market-data/hooks/useIndexQuotes';
+import { IndexHighlights } from '../../market-data/components/IndexHighlights';
+import { WorkspaceMetrics } from '../components/WorkspaceMetrics';
+import { BacktestsWidget, MonitoringWidget, QualificationWidget, SignalsWidget, WatchlistsWidget } from '../components/DashboardWidgets';
+import { defaultDashboardPreferences } from '../config/preferences';
+import { dashboardTime as time } from '../utils/format';
+import type { WorkspaceDashboard } from '../types/workspace';
+import '../../../styles/indices.css';
+import '../../../styles/watchlists.css';
+import '../../../styles/workspace-dashboard.css';
+
+const fullWidth = new Set(['summary', 'market', 'watchlists']);
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const paused = useDemoStore((s) => s.enginePaused);
-  const firstName = useAuthStore((s) => s.session?.name.split(' ')[0] ?? 'Manish');
-  return (
-    <div className="dashboard page-enter">
-      <div className="page-heading">
-        <div>
-          <div className="greeting-line">
-            <h1>
-              Good morning, {firstName}<span className="greeting-dot">.</span>
-            </h1>
-            <span className={`engine-status ${paused ? "is-paused" : ""}`}>
-              <span className="status-dot" />
-              UI DEMO {paused ? "· ENTRIES PAUSED" : "· NO LIVE ORDERS"}
-            </span>
-          </div>
-          <p>
-            UI workspace <span>·</span> {new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", day: "numeric", month: "long", year: "numeric" })} <span>·</span> Mock data only
-          </p>
-        </div>
-        <div className="page-actions">
-          <Button
-            icon={<RadarChartOutlined />}
-            onClick={() => navigate("/signal-runner")}
-          >
-            Signal runner
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusCircleOutlined />}
-            onClick={() => navigate('/qualification?tab=rules')}
-          >
-            Rule builder
-          </Button>
-          <Button
-            icon={<ExperimentOutlined />}
-            onClick={() => navigate("/paper-trading")}
-          >
-            Paper trading
-          </Button>
-        </div>
-      </div>
-      <MetricCards />
-      <MarketTicker />
-      <StockOpportunities />
-      <div className="dashboard-bottom">
-        <div className="dashboard-column">
-          <EngineTelemetry />
-
-        </div>
-        <div className="dashboard-column">
-          <SignalBroadcast />
-
-        </div>
-      </div>
-    </div>
-  );
+  const resource = useStockResource<WorkspaceDashboard>('/dashboard', 15000), data = resource.data, navigate = useNavigate();
+  const preferences = data?.preferences ?? defaultDashboardPreferences;
+  const visible = preferences.sections.filter(section => section.visible);
+  const marketVisible = !!data && visible.some(section => section.id === 'market');
+  const indices = useIndexQuotes(marketVisible);
+  const benchmarks = preferences.indexIds.flatMap(id => { const quote = indices.quotes.find(q => q.id === id); return quote ? [quote] : []; });
+  const widgets = data ? {
+    summary: <WorkspaceMetrics data={data} ids={preferences.metricIds} />,
+    market: <><div className="workspace-section-title"><h2>Market overview</h2><Link to="/market-data/indices">All indices <ArrowRightOutlined /></Link></div>
+      <p className="workspace-caption">{!indices.autoUpdate ? 'Automatic index updates are paused. You can resume them on the Indices page.' : indices.market && !indices.market.open ? `${indices.market.reason} · saved exchange snapshots. Updates resume at the next regular session.` : 'Exchange snapshots update during regular market hours.'}</p>
+      {indices.error && <p className="negative">Index updates unavailable: {indices.error}</p>}
+      <IndexHighlights quotes={benchmarks} showSparklines={preferences.showSparklines} onSelect={quote => navigate(`/market-data/indices?index=${encodeURIComponent(quote.id)}`)} /></>,
+    monitoring: <MonitoringWidget key={preferences.monitoringPageSize} data={data} pageSize={preferences.monitoringPageSize} />,
+    qualification: <QualificationWidget data={data} />,
+    signals: <SignalsWidget data={data} side={preferences.signalSide} />,
+    backtests: <BacktestsWidget data={data} />,
+    watchlists: <WatchlistsWidget data={data} preferences={preferences} />,
+  } : null;
+  return <div className={`workspace-dashboard is-${preferences.density}`}>
+    <div className="workspace-page-heading"><div><span className="indices-eyebrow">YOUR TRADING WORKSPACE</span><h1>Dashboard <Tag color="blue">Paper trading</Tag></h1><p>{data ? `${data.market.date} · ${data.market.reason} · Updated ${time(data.at)}` : 'Loading your workspace…'}</p></div><Space wrap>
+      <Button icon={<SettingOutlined aria-hidden />} onClick={() => navigate('/settings?tab=dashboard')}>Customize</Button>
+      <Button icon={<ReloadOutlined aria-hidden />} onClick={() => { resource.retry(); if (marketVisible) void indices.refresh(); }} loading={resource.loading}>Refresh</Button>
+      <Button type="primary" onClick={() => navigate('/market-data/watchlists')} icon={<StarOutlined />}>My watchlists</Button>
+    </Space></div>
+    {resource.error && <Alert type="warning" showIcon title="Workspace could not be refreshed" description={resource.error} action={<Button onClick={resource.retry}>Retry</Button>} />}
+    {!data || !widgets ? <Skeleton active paragraph={{ rows: 8 }} /> : <>
+      {data.paper.sessions.length > 0 && (!data.paper.workerRunning || data.market.open && data.paper.feed !== 'live') && <Alert className="workspace-alert" type="warning" showIcon title={!data.paper.workerRunning ? 'The paper worker is offline' : 'Live feed needs attention'} description={data.paper.workerRunning ? data.paper.feedMessage : 'Monitoring and paper fills need the paper worker running.'} action={<Link to="/data-sources">Check connections</Link>} />}
+      {data.paper.confirmations > 0 && <Alert className="workspace-alert" type="info" showIcon title={`${data.paper.confirmations} paper orders await your confirmation`} action={<Link to="/paper-trading">Review orders</Link>} />}
+      <div className="dashboard-widget-grid">{visible.map((section, index) => {
+        let preceding = 0;
+        for (let i = index - 1; i >= 0 && !fullWidth.has(visible[i].id); i--) preceding++;
+        const lastInRun = index === visible.length - 1 || fullWidth.has(visible[index + 1].id);
+        const wide = fullWidth.has(section.id) || (lastInRun && preceding % 2 === 0);
+        return <div key={section.id} data-dashboard-section={section.id} className={wide ? 'dashboard-widget-wide' : undefined}>{widgets[section.id]}</div>;
+      })}</div>
+    </>}
+  </div>;
 }

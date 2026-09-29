@@ -11,7 +11,7 @@ export function aggregateBars(bars: ChartBar[], frame: StockTimeframe): ChartBar
       const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); key = d.toISOString().slice(0, 10);
     } else if (frame === '1d') key = day;
     else {
-      const minutes = Number(frame.slice(0, -1));
+      const minutes = Number(frame.slice(0, -1)) * (frame.endsWith('h') ? 60 : 1);
       const sessionStart = Date.parse(`${day}T09:15:00+05:30`);
       key = new Date(sessionStart + Math.floor((Date.parse(bar.time) - sessionStart) / (minutes * 60_000)) * minutes * 60_000).toISOString();
     }

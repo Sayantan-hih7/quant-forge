@@ -2,7 +2,8 @@
 import math
 import pandas as pd
 from .market import timeframe, stamp
-from .rules import Observations, FACTS, indicator, evaluate_observations, validate_rule, wilder
+from .rules import Observations, FACTS, evaluate_observations, validate_rule, wilder
+from .field_catalog import REPORT_FIELDS, parameters
 
 
 class ReplayObservations(Observations):
@@ -17,14 +18,18 @@ class ReplayObservations(Observations):
             self.frames[frame] = timeframe(self.daily, self.intraday, frame, self.end)
         return self.frames[frame]
 
-    def values(self, field, frame):
+    def values(self, field, frame, period=None, offset=0):
+        period, offset = parameters(field, period, offset)
         if field in FACTS:
-            self.cache.pop((field, frame), None)
-            return super().values(field, frame)
-        key = field, frame
+            self.cache.pop((field, frame, period, offset), None)
+            return super().values(field, frame, period, offset)
+        key = field, frame, period, offset
         bars = self.bars(frame)
+        if field in REPORT_FIELDS:
+            values = self.calculate(field, frame, period).shift(offset)
+            return values.loc[bars.end <= self.cutoff]
         if key not in self.series:
-            self.series[key] = indicator(bars, field)
+            self.series[key] = self.calculate(field, frame, period).shift(offset)
         return self.series[key].loc[bars.end <= self.cutoff] if not bars.empty else self.series[key]
 
     def atr(self, frame, period):
@@ -38,6 +43,12 @@ class ReplayObservations(Observations):
         values = self.series[key].loc[bars.end <= self.cutoff]
         value = float(values.iloc[-1]) if len(values) else math.nan
         return value if math.isfinite(value) and value > 0 else None
+
+    def signal_low(self, frame):
+        """Freeze a completed candle's low at decision time, never the fill day's low."""
+        bars = self.bars(frame)
+        completed = bars.loc[bars.end <= self.cutoff] if len(bars) else bars
+        return float(completed.low.iloc[-1]) if len(completed) else None
 
 
 def decision(strategy, instrument, cutoff):
@@ -53,4 +64,6 @@ def decision(strategy, instrument, cutoff):
     return {"id": instrument["id"], "entry": evaluate_observations(strategy["entry"], instrument["id"], data),
             "exit": evaluate_observations(strategy["exit"], instrument["id"], data),
             "barEnd": bars.end.iloc[-1].isoformat() if len(bars) else None,
-            "atr": data.atr(strategy["risk"]["timeframe"], strategy["risk"]["atrPeriod"])}
+            "referencePrice": float(bars.close.iloc[-1]) if len(bars) else None,
+            "atr": data.atr(strategy["risk"]["timeframe"], strategy["risk"]["atrPeriod"]),
+            "signalLow": data.signal_low(strategy['risk']['timeframe']) if strategy['risk']['stopMode'] == 'candleLow' else None}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"FRONTEND_TSC_EXIT:$?\")",
+      "Bash(echo \"BACKEND_TSC_EXIT:$?\")",
+      "Bash(node --import tsx --test test/ai.test.ts)",
+      "Bash(node --import tsx --test test/strategy-workflow.integration.test.ts)",
+      "Bash(curl -s -m 10 http://127.0.0.1:8100/health)",
+      "Bash(curl -s -m 15 -X POST http://127.0.0.1:8100/validate-rule -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(python -m pytest -q)",
+      "Bash(python -m pytest tests/test_technical_indicators.py -v)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('has bollingerUpper:',j.technical.includes\\('bollingerUpper'\\)\\);console.log\\('has adx:',j.technical.includes\\('adx'\\)\\);console.log\\('has supertrend:',j.technical.includes\\('supertrend'\\)\\);console.log\\('has doji:',j.technical.includes\\('doji'\\)\\);console.log\\('has accDist:',j.technical.includes\\('accDist'\\)\\);}\\)\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('has adx:',j.technical.includes\\('adx'\\)\\);console.log\\('has supertrend:',j.technical.includes\\('supertrend'\\)\\);}\\)\")",
+      "Bash(echo \"TSC_EXIT:$?\")",
+      "Bash(node --import tsx --test test/*.test.ts)"
+    ]
+  }
+}

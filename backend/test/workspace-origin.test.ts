@@ -51,7 +51,7 @@ test('local sessions and protected writes work on both Vite addresses; foreign o
     }
     env.NODE_ENV = 'production';
     const production = await fetch(`${base}/api/session`, { method: 'POST', headers: { Origin: 'http://localhost:5173' } });
-    assert.equal(production.status, 403);
+    assert.equal(production.status, 401);
   } finally {
     env.NODE_ENV = original.mode; env.FRONTEND_ORIGIN = original.origin;
     server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
