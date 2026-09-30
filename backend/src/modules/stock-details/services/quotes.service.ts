@@ -8,6 +8,7 @@ import type { Instrument, Candle } from '../../market-data/types.js';
 import type { StockQuote } from '../types.js';
 import { parseSnapshot } from '../providers/dhan-quotes.js';
 import { mergeQuote } from '../utils/merge-quote.js';
+import { closingQuoteChanges } from './closing-change.service.js';
 
 const key = (id: string) => `quantforge:research:quote:${id}`;
 export const quoteMemory = new Map<string, StockQuote>();
@@ -31,12 +32,12 @@ export async function selectedInstruments(ids: string[], activeOnly = true): Pro
   invariant(rows.length === unique.length, 'One or more stocks are no longer in the active stock universe');
   return rows;
 }
-export async function stockQuotes(stocks: Instrument[]) {
+export async function stockQuotes(stocks: Instrument[], options:{snapshotMaxAgeMs?:number}={}) {
   const ids = stocks.map(x => x._id), at = new Date().toISOString();
   const cached = await redis.mget(ids.map(key));
   for (const value of cached) if (value) rememberQuote(JSON.parse(value) as StockQuote);
   let message: string | undefined;
-  const missing = stocks.filter(x => { const q = quoteMemory.get(x._id); return !q || q.source === 'historical-close' || Date.now() - Date.parse(q.receivedAt) > 10_000 || Date.now() - (snapshotAt.get(x._id) ?? 0) > 60_000; });
+  const missing = stocks.filter(x => { const q = quoteMemory.get(x._id); return !q || q.source === 'historical-close' || Date.now() - Date.parse(q.receivedAt) > (options.snapshotMaxAgeMs??10_000) || Date.now() - Math.max(snapshotAt.get(x._id) ?? 0,Date.parse(q.depth?.receivedAt??'')||0) > (options.snapshotMaxAgeMs??60_000); });
   if (missing.length && await tryDhanQuoteSlot()) {
     try {
       // The quote endpoint has its own 1 request/second limit, separate from candle imports.
@@ -67,5 +68,6 @@ export async function stockQuotes(stocks: Instrument[]) {
         source: 'historical-close', lastTradeAt: `${bar.time.slice(0, 10)}T10:00:00.000Z`, receivedAt: bar.observedAt, change: null, percent: null });
     }
   }
-  return { quotes: ids.map(id => quoteMemory.get(id)).filter((x): x is StockQuote => !!x), message, checkedAt: at };
+  const quotes = await closingQuoteChanges(ids.map(id => quoteMemory.get(id)).filter((x): x is StockQuote => !!x));
+  return { quotes, message, checkedAt: at };
 }

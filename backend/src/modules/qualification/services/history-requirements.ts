@@ -1,7 +1,9 @@
+import { fieldRequiredCandles, type IndicatorKind, type CalculationSettings } from '../../../shared/indicator-settings.js';
 import { ruleFields } from '../../../shared/rule-fields.js';
 export const monthlyFactFields = new Set(['marketCap', 'debtEquity', 'pledge', 'delivery', 'roe', 'roce', 'pe', 'promoterHolding', 'fiiChange', 'diiChange', 'sector', 'index', 'turnover', 'tradedValue']);
 export const dhanCompanyFields = new Set(['marketCap', 'debtEquity', 'roe', 'roce', 'pe', 'promoterHolding', 'fiiChange', 'diiChange', 'sector']);
-export function indicatorMonths(field: string, period?: number) {
+export function indicatorMonths(field: string, period?: number, settings?: CalculationSettings) {
+  if (ruleFields[field]?.indicator) return fieldRequiredCandles(field, ruleFields[field].indicator as IndicatorKind, period ?? ruleFields[field].period?.default ?? 14, settings);
   if (['high52w', 'low52w'].includes(field)) return 13;
   const length = period ?? ruleFields[field]?.period?.default;
   if (field === 'adx') return 2 * (length ?? 14) - 1;
@@ -16,13 +18,13 @@ export function monthlyHistoryRequirements(rule: Record<string, unknown>, month:
   const requirements = new Map<string, number>();
   for (const group of rule.groups as { conditions: Record<string, unknown>[] }[] ?? []) for (const c of group.conditions) {
     const extra = ['crossAbove', 'crossBelow', 'increasing', 'decreasing'].includes(String(c.operator)) ? Number(c.lookback ?? 1) : 0;
-    for (const [field, period, offset] of [[String(c.field), c.period, c.offset], ...(c.operand === 'field' ? [[String(c.compareField), c.comparePeriod, c.compareOffset]] : [])] as [string, number | undefined, number | undefined][]) {
-      if (!monthlyFactFields.has(field)) requirements.set(field, Math.max(requirements.get(field) ?? 0, indicatorMonths(field, period) + (offset ?? 0) + extra));
+    for (const [field, period, offset, settings] of [[String(c.field), c.period, c.offset, c.settings], ...(c.operand === 'field' ? [[String(c.compareField), c.comparePeriod, c.compareOffset, c.compareSettings]] : [])] as [string, number | undefined, number | undefined, CalculationSettings | undefined][]) {
+      if (!monthlyFactFields.has(field)) requirements.set(field, Math.max(requirements.get(field) ?? 0, indicatorMonths(field, period, settings) + (offset ?? 0) + extra));
     }
   }
   const minimum = Math.max(0, ...requirements.values());
   // Additional warm-up reduces EMA/RSI seed effects. Never use the forming month.
-  const months = Math.max(0, ...[...requirements].map(([field, count]) => /^(ema|rsi|macd|atr|adx|diPlus|diMinus|supertrend|bodyAboveEma|bodyBelowEma)/.test(field) ? Math.max(count * 3, 36) : count));
+  const months = Math.max(0, ...[...requirements].map(([field, count]) => /^(dema|connorsRsi|ema|rsi|macd|atr|adx|diPlus|diMinus|supertrend|keltner|stochRsi|bodyAboveEma|bodyBelowEma)/.test(field) ? Math.max(count * 3, 36) : count));
   const [year, number] = month.split('-').map(Number);
   return { minimum, months, from: new Date(Date.UTC(year, number - 1 - months, 1)).toISOString().slice(0, 10), to: `${month}-01`, fields: Object.fromEntries(requirements) };
 }

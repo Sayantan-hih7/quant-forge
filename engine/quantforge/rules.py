@@ -3,6 +3,8 @@ import math
 import numpy as np
 import pandas as pd
 from .market import candles, timeframe, stamp, IST
+from .indicator_settings import settings_for, operand_settings, settings_key, required_bars
+from .extended_indicators import extended_indicator, pivot_series, validate_pivot_frame
 from .field_catalog import FIELDS, REPORT_FIELDS, parameters, operand_parameters
 
 TECHNICAL = {"close", "open", "high", "low", "volume", "ema5", "ema20", "ema21", "ema50",
@@ -40,6 +42,8 @@ def validate_rule(rule):
             if frame not in frames and not (frame == "latest" and left in FACTS):
                 raise ValueError("Unsupported observation timeframe")
             parameters(left, *operand_parameters(c, monthly))
+            settings_for(left, operand_settings(c, monthly))
+            validate_pivot_frame(left, '1mo' if monthly else c.get('leftFrame','1d'), operand_settings(c, monthly))
             if left in FIELDS:
                 definition = FIELDS[left]
                 if monthly and not definition['monthly']:
@@ -59,6 +63,8 @@ def validate_rule(rule):
             if c.get("operand", c.get("rightType")) in ("field", "indicator"):
                 right_frame = "1mo" if monthly else c.get("rightFrame", frame)
                 parameters(right, *operand_parameters(c, monthly, True))
+                settings_for(right, operand_settings(c, monthly, True))
+                validate_pivot_frame(right, '1mo' if monthly else c.get('rightFrame','1d'), operand_settings(c, monthly, True))
                 if right in FIELDS and (monthly and not FIELDS[right]['monthly'] or not monthly and right not in FACTS and right_frame not in FIELDS[right]['frames']):
                     raise ValueError(f'{right}: unsupported comparison timeframe')
                 if left in FIELDS and right in FIELDS and FIELDS[left]['unit'] != FIELDS[right]['unit']:
@@ -100,10 +106,14 @@ def rsi(close, n=14):
     return (100 - 100/(1+gain/loss.replace(0, np.nan))).where(loss != 0, 100).where((gain+loss) != 0, 50)
 
 
-def indicator(df, field, period=None):
+def indicator(df, field, period=None, settings=None):
     period, _ = parameters(field, period)
     if df.empty:
         return pd.Series(dtype=float)
+    configured = settings_for(field, settings)
+    new_kinds = {'dema','connorsRsi','averagePrice','wma','vwma','hma','sar','ichimoku','donchian','keltner','atrBands','stochastic','stochRsi','cci','roc','momentum','mfi','williamsR','obv','cmf','aroon','choppiness'}
+    if configured or FIELDS.get(field, {}).get('indicator') in new_kinds or field in ('supertrend','macdHistogram'):
+        return extended_indicator(df, field, period, configured)
     if field in ("open", "high", "low", "close", "volume"):
         return df[field]
     if field in ('ema', 'sma'):
@@ -191,8 +201,8 @@ def supertrend(df, period=10, multiplier=3):
     i0 = start[0]
     result[i0] = final_lower[i0]
     for i in range(i0+1, len(df)):
-        if not (basic_upper[i] < final_upper[i-1] or close[i-1] > final_upper[i-1]): final_upper[i] = final_upper[i-1]
-        if not (basic_lower[i] > final_lower[i-1] or close[i-1] < final_lower[i-1]): final_lower[i] = final_lower[i-1]
+        if not (basic_upper.iloc[i] < final_upper[i-1] or close[i-1] > final_upper[i-1]): final_upper[i] = final_upper[i-1]
+        if not (basic_lower.iloc[i] > final_lower[i-1] or close[i-1] < final_lower[i-1]): final_lower[i] = final_lower[i-1]
         if result[i-1] == final_upper[i-1]:
             result[i] = final_upper[i] if close[i] <= final_upper[i] else final_lower[i]
         else:
@@ -221,6 +231,7 @@ class Observations:
         self.cutoff = stamp(cutoff)
         self.daily = candles(instrument.get("daily", []), cutoff)
         self.intraday = candles(instrument.get("intraday", []), cutoff, "1m")
+        self.benchmarks = {name:candles(rows,cutoff) for name,rows in instrument.get('benchmarks',{}).items()}
         self.facts = instrument.get("facts", [])
         self.reports = instrument.get('reports', [])
         self.cache = {}
@@ -245,8 +256,16 @@ class Observations:
             self.frame_cache[frame] = df
         return self.frame_cache[frame]
 
-    def calculate(self, field, frame, period=None):
+    def calculate(self, field, frame, period=None, settings=None):
         bars = self.bars(frame)
+        if field == 'relativeStrength':
+            benchmark=self.benchmarks.get((settings or {}).get('benchmark','NIFTY 50'),pd.DataFrame())
+            if benchmark.empty or bars.empty: return pd.Series(float('nan'),index=bars.index)
+            comparison=timeframe(benchmark,pd.DataFrame(),frame,getattr(self,'end',self.cutoff)).close.reindex(bars.index)
+            ratio=bars.close/comparison.replace(0,np.nan);n=period or 20
+            return ((ratio/ratio.shift(n)-1)*100).where(ratio.rolling(n+1).count()==n+1)
+        if FIELDS.get(field,{}).get('indicator')=='pivots':
+            return pivot_series(self.daily,bars,field,settings or {})
         if field in REPORT_FIELDS:
             # Align to EVERY daily candle so an absent last-day report stays NaN.
             by_date = {row['date']: row for row in self.reports if stamp(row['knownAt']) <= self.cutoff}
@@ -258,11 +277,11 @@ class Observations:
             # Monthly values observe only daily bars completed before month end.
             return pd.Series([daily_values.loc[self.daily.end <= end].iloc[-1] if (self.daily.end <= end).any() else np.nan
                               for end in bars.end], index=bars.index, dtype=float)
-        return indicator(bars, field, period)
+        return indicator(bars, field, period, settings)
 
-    def values(self, field, frame, period=None, offset=0):
+    def values(self, field, frame, period=None, offset=0, settings=None):
         period, offset = parameters(field, period, offset)
-        key = field, frame, period, offset
+        key = field, frame, period, offset, settings_key(settings)
         if key in self.cache:
             return self.cache[key]
         if field in FACTS:
@@ -272,7 +291,7 @@ class Observations:
             found.sort(key=lambda x: (x.get("priority", 1), x.get("period") or "", stamp(x["knownAt"])))
             result = pd.Series([x["values"][field] for x in found], dtype=object)
         else:
-            result = self.calculate(field, frame, period).shift(offset)
+            result = self.calculate(field, frame, period, settings).shift(offset)
         self.cache[key] = result
         return result
 
@@ -287,7 +306,7 @@ def condition(c, data, monthly):
     field = c.get("field", c.get("left"))
     frame = "1mo" if monthly else c.get("leftFrame", "1d")
     left_period, left_offset = operand_parameters(c, monthly)
-    left = data.values(field, frame, left_period, left_offset)
+    left = data.values(field, frame, left_period, left_offset, operand_settings(c, monthly))
     def unavailable(operand, observation_frame, period, offset):
         period = parameters(operand, period, offset)[0]
         label = FIELDS.get(operand, {}).get('label', operand)
@@ -310,18 +329,18 @@ def condition(c, data, monthly):
     if monthly:
         # Diagnose both operands, including the lookback. A failed data request is
         # not evidence of an IPO, and preferred EMA warm-up is not minimum age.
-        required = [(field, left_period, left_offset)]
+        required = [(field, left_period, left_offset, False)]
         if c.get('operand') == 'field':
-            required.append((c.get('compareField'), *operand_parameters(c, monthly, True)))
+            required.append((c.get('compareField'), *operand_parameters(c, monthly, True), True))
         # A missing fundamental must remain a data gap even if its technical
         # comparison also lacks history.
-        if any(operand in FACTS and data.values(operand, frame).empty for operand, _, _ in required):
+        if any(operand in FACTS and data.values(operand, frame).empty for operand, _, _, _ in required):
             required = []
-        for operand, period, offset in sorted(required, key=lambda item: indicator_months(item[0], item[1]) + item[2], reverse=True):
+        for operand, period, offset, is_right in sorted(required, key=lambda item: indicator_months(item[0], item[1]) + item[2], reverse=True):
             if operand not in TECHNICAL:
                 continue
             bars = data.bars('1mo')
-            needed = indicator_months(operand, period) + offset + (int(c.get('lookback', 1)) if c['operator'] in {'crossAbove', 'crossBelow', 'increasing', 'decreasing'} else 0)
+            needed = (required_bars(operand, period, operand_settings(c, monthly, is_right)) if FIELDS.get(operand, {}).get('indicator') else indicator_months(operand, period)) + offset + (int(c.get('lookback', 1)) if c['operator'] in {'crossAbove', 'crossBelow', 'increasing', 'decreasing'} else 0)
             if len(bars) < needed:
                 code = data.monthly_history_issue or ('insufficient_monthly_history' if len(bars) or not data.daily.empty or data.monthly_history_checked else 'missing_history')
                 monthly_missing[(operand, period, offset)] = {**unavailable(operand, frame, period, offset), 'code': code, 'historyField': operand, 'availableMonths': len(bars), 'requiredMonths': needed,
@@ -354,7 +373,7 @@ def condition(c, data, monthly):
             return missing
         left_missing = missing
         missing = right_missing
-        right = data.values(right_field, right_frame, right_period, right_offset) if use_field else None
+        right = data.values(right_field, right_frame, right_period, right_offset, operand_settings(c, monthly, True)) if use_field else None
         multiplier = float(c.get("multiplier", 1)) if use_field else 1
         b = float(right.iloc[-1] if use_field else c.get("value", 0)) * multiplier
         if not math.isfinite(b):

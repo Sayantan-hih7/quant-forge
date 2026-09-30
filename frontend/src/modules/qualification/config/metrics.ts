@@ -18,14 +18,14 @@ export function allowedFrames(metric: Metric, tier: Tier) {
   return metrics[metric].frames.filter((frame) => tier === 'tactical' || !['1m', '5m', '15m', '4h'].includes(frame));
 }
 export function describeCondition(condition: Condition) {
-  const left = `${fieldLabel(condition.left, condition.leftPeriod, condition.leftOffset)} (${frameLabels[condition.leftFrame]})`;
+  const left = `${fieldLabel(condition.left, condition.leftPeriod, condition.leftOffset, condition.leftSettings)} (${frameLabels[condition.leftFrame]})`;
   if (condition.operator === 'between' || condition.operator === 'notBetween') {
     return `${left} ${condition.operator === 'between' ? 'between' : 'not between'} ${condition.value} and ${condition.upper ?? condition.value} ${metrics[condition.left].unit}`.trim();
   }
   if (condition.operator === 'increasing' || condition.operator === 'decreasing') {
     return `${left} ${condition.operator} over ${condition.lookback ?? 3} candles`;
   }
-  const right = condition.rightType === 'value' ? `${condition.value} ${metrics[condition.left].unit}` : `${condition.multiplier !== 1 ? condition.multiplier + ' × ' : ''}${fieldLabel(condition.right, condition.rightPeriod, condition.rightOffset)} (${frameLabels[condition.rightFrame]})`;
+  const right = condition.rightType === 'value' ? `${condition.value} ${metrics[condition.left].unit}` : `${condition.multiplier !== 1 ? condition.multiplier + ' × ' : ''}${fieldLabel(condition.right, condition.rightPeriod, condition.rightOffset, condition.rightSettings)} (${frameLabels[condition.rightFrame]})`;
   const opLabel = condition.operator === 'within' ? 'within ' + condition.tolerance + '% of'
     : condition.operator === 'aboveBy' ? 'above by at least ' + condition.tolerance + '% of'
     : condition.operator === 'belowBy' ? 'below by at least ' + condition.tolerance + '% of'
@@ -48,8 +48,8 @@ export function conditionKind(condition: Condition): ConditionKind {
 /** Plain-language read of a condition, shown once it is set so a trader can confirm it before adding another. */
 export function conditionInsight(condition: Condition) {
   const kind = conditionKind(condition);
-  const left = fieldLabel(condition.left, condition.leftPeriod, condition.leftOffset);
-  const right = condition.rightType === 'value' ? `${condition.value} ${metrics[condition.left]?.unit ?? ''}`.trim() : fieldLabel(condition.right, condition.rightPeriod, condition.rightOffset);
+  const left = fieldLabel(condition.left, condition.leftPeriod, condition.leftOffset, condition.leftSettings);
+  const right = condition.rightType === 'value' ? `${condition.value} ${metrics[condition.left]?.unit ?? ''}`.trim() : fieldLabel(condition.right, condition.rightPeriod, condition.rightOffset, condition.rightSettings);
   const occurrence = (condition.lookback ?? 1) > 1 ? `within the last ${condition.lookback} completed candles` : 'on the latest completed candle';
   const detail = condition.operator === 'crossAbove' ? `Matches when ${left} moves from at-or-below to above ${right} ${occurrence}.`
     : condition.operator === 'crossBelow' ? `Matches when ${left} moves from at-or-above to below ${right} ${occurrence}.`

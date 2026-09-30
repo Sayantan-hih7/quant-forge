@@ -68,6 +68,7 @@ function ConditionRow({
     .filter(([id, definition]) => ruleFields[id]?.trading && (tier === "tactical" || definition.base))
     .map(([value, definition]) => ({ value, label: definition.label }));
   const changeMetric = (side: "left" | "right", metric: Metric) => {
+    setValue(`${path}.${side}Settings`, undefined, { shouldDirty: true });
     setValue(`${path}.${side}Period`, undefined, { shouldDirty: true });
     setValue(`${path}.${side}Offset`, undefined, { shouldDirty: true });
     setValue(`${path}.${side}Frame`, allowedFrames(metric, tier).includes(condition[side === 'left' ? 'leftFrame' : 'rightFrame']) ? condition[side === 'left' ? 'leftFrame' : 'rightFrame'] : allowedFrames(metric, tier)[0], {

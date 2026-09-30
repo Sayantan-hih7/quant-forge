@@ -9,8 +9,8 @@ export function monthlyDraft(value: unknown, capabilities: Capabilities) {
   const proposal = monthlyProposalSchema.parse(value);
   for (const condition of proposal.conditions) {
     const field = monthlyCatalog[condition.field];
-    for (const [id, period, offset] of [[condition.field, condition.period, condition.offset], ...(condition.operand === 'field' ? [[condition.compareField, condition.comparePeriod, condition.compareOffset]] : [])] as [string, number | undefined, number | undefined][]) {
-      const error = parameterError(id, period, offset); invariant(!error, error ?? 'Invalid parameters');
+    for (const [id, period, offset, settings] of [[condition.field, condition.period, condition.offset, condition.settings], ...(condition.operand === 'field' ? [[condition.compareField, condition.comparePeriod, condition.compareOffset, condition.compareSettings]] : [])] as [string, number | undefined, number | undefined, import('../../../shared/indicator-settings.js').CalculationSettings | undefined][]) {
+      const error = parameterError(id, period, offset, settings); invariant(!error, error ?? 'Invalid parameters');
     }
     invariant(capabilities.monthlyFields.includes(condition.field), `No supported source for ${condition.field}`);
     if (field.categorical) {
@@ -42,8 +42,8 @@ export function tradingDraft(value: unknown, capabilities: Capabilities) {
   const allowed = [...capabilities.technical, ...capabilities.snapshotFields];
   for (const side of [proposal.entry, proposal.exit].filter(side => side.enabled !== false)) for (const group of side.groups) for (const condition of group.conditions) {
     const field = tradingCatalog[condition.left];
-    for (const [id, period, offset] of [[condition.left, condition.leftPeriod, condition.leftOffset], ...(condition.rightType === 'indicator' ? [[condition.right, condition.rightPeriod, condition.rightOffset]] : [])] as [string, number | undefined, number | undefined][]) {
-      const error = parameterError(id, period, offset); invariant(!error, error ?? 'Invalid parameters');
+    for (const [id, period, offset, settings] of [[condition.left, condition.leftPeriod, condition.leftOffset, condition.leftSettings], ...(condition.rightType === 'indicator' ? [[condition.right, condition.rightPeriod, condition.rightOffset, condition.rightSettings]] : [])] as [string, number | undefined, number | undefined, import('../../../shared/indicator-settings.js').CalculationSettings | undefined][]) {
+      const error = parameterError(id, period, offset, settings); invariant(!error, error ?? 'Invalid parameters');
     }
     invariant(allowed.includes(condition.left) && field.frames.includes(condition.leftFrame), 'Unsupported trading field or timeframe');
     if (condition.rightType === 'indicator') {
@@ -79,8 +79,8 @@ export function draftContext(scope: 'monthly' | 'strategy', draft?: Record<strin
   const groups = (value: unknown, monthly: boolean) => Array.isArray(value) ? value.slice(0, 6).map(value => {
     const group = pick(value, ['logic', 'conditions']);
     return { logic: group.logic, conditions: Array.isArray(group.conditions) ? group.conditions.slice(0, 12).map((condition: unknown) => pick(condition,
-      monthly ? ['period', 'offset', 'comparePeriod', 'compareOffset', 'field', 'operator', 'operand', 'value', 'upper', 'compareField', 'multiplier', 'distance', 'lookback', 'choices', 'timeframe']
-        : ['leftPeriod', 'leftOffset', 'rightPeriod', 'rightOffset', 'left', 'leftFrame', 'operator', 'rightType', 'value', 'upper', 'lookback', 'right', 'rightFrame', 'multiplier', 'tolerance'])) : [],
+      monthly ? ['settings', 'compareSettings', 'period', 'offset', 'comparePeriod', 'compareOffset', 'field', 'operator', 'operand', 'value', 'upper', 'compareField', 'multiplier', 'distance', 'lookback', 'choices', 'timeframe']
+        : ['leftSettings', 'rightSettings', 'leftPeriod', 'leftOffset', 'rightPeriod', 'rightOffset', 'left', 'leftFrame', 'operator', 'rightType', 'value', 'upper', 'lookback', 'right', 'rightFrame', 'multiplier', 'tolerance'])) : [],
     }; }) : [];
   if (scope === 'monthly') return { timeframe: '1mo', logic: draft.logic, groups: groups(draft.groups, true) };
   const side = (value: unknown) => { const base = pick(value, ['enabled', 'horizon', 'cadence', 'logic', 'side', 'groups']); return { ...base, groups: groups(base.groups, false) }; };

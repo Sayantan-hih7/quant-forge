@@ -3,6 +3,7 @@ import math
 import pandas as pd
 from .market import timeframe, stamp
 from .rules import Observations, FACTS, evaluate_observations, validate_rule, wilder
+from .indicator_settings import settings_key
 from .field_catalog import REPORT_FIELDS, parameters
 
 
@@ -18,18 +19,18 @@ class ReplayObservations(Observations):
             self.frames[frame] = timeframe(self.daily, self.intraday, frame, self.end)
         return self.frames[frame]
 
-    def values(self, field, frame, period=None, offset=0):
+    def values(self, field, frame, period=None, offset=0, settings=None):
         period, offset = parameters(field, period, offset)
         if field in FACTS:
-            self.cache.pop((field, frame, period, offset), None)
-            return super().values(field, frame, period, offset)
-        key = field, frame, period, offset
+            self.cache.pop((field, frame, period, offset, settings_key(settings)), None)
+            return super().values(field, frame, period, offset, settings)
+        key = field, frame, period, offset, settings_key(settings)
         bars = self.bars(frame)
         if field in REPORT_FIELDS:
-            values = self.calculate(field, frame, period).shift(offset)
+            values = self.calculate(field, frame, period, settings).shift(offset)
             return values.loc[bars.end <= self.cutoff]
         if key not in self.series:
-            self.series[key] = self.calculate(field, frame, period).shift(offset)
+            self.series[key] = self.calculate(field, frame, period, settings).shift(offset)
         return self.series[key].loc[bars.end <= self.cutoff] if not bars.empty else self.series[key]
 
     def atr(self, frame, period):

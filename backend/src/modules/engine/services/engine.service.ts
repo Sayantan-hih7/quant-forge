@@ -1,3 +1,5 @@
+import { benchmarkHistory, type BenchmarkName } from '../../stock-details/services/benchmark-history.service.js';
+import { ruleBenchmarks } from '../../stock-details/services/benchmark-requirements.js';
 import axios from 'axios';
 import { env } from '../../../config/env.js';
 import { AppError, invariant } from '../../../shared/errors.js';
@@ -14,7 +16,7 @@ engineClient.interceptors.response.use(response => response, (error: unknown) =>
     typeof detail === 'string' ? detail.slice(0, 1500) : 'The calculation engine is unavailable'));
 });
 export interface EvaluationResult { id: string; matched: boolean | null; status: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history'; checks: { matched: boolean | null; field: string; eventKey?: string; missingField?: string; reason?: string; code?: string; availableMonths?: number; requiredMonths?: number; left?: number; right?: number }[] }
-export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false) {
+export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { benchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false) {
   const [prices, observations, reports] = await Promise.all([
     factsOnly ? Promise.resolve([]) : storedCandles.find({ instrumentId: { $in: ids }, time: { $lt: cutoff }, ...(monthly ? { interval: '1d' } : {}), ...(window ? { $or: [
       ...(window.dailyFrom ? [{ interval: '1d' as const, time: { $gte: `${window.dailyFrom}T00:00:00.000Z`, $lt: cutoff } }] : []),
@@ -33,7 +35,9 @@ export async function engineInstruments(ids: string[], cutoff: string, monthly =
   }
   const reportsByStock = new Map<string, typeof reports>();
   for (const report of reports) { const rows = reportsByStock.get(report.instrumentId) ?? []; rows.push(report); reportsByStock.set(report.instrumentId, rows); }
-  return ids.map(id => ({ id, reports: reportsByStock.get(id) ?? [],
+  const benchmarks:Record<string,unknown[]>={};
+  if(!factsOnly)for(const name of window?.benchmarks??[]) { const from=window?.dailyFrom??new Date(Date.parse(cutoff)-2196*86400000).toISOString().slice(0,10);const history=await benchmarkHistory(name,'1d',from,cutoff);benchmarks[name]=history.bars; }
+  return ids.map(id => ({ id, benchmarks, reports: reportsByStock.get(id) ?? [],
     daily: (byStock.get(id)??[]).filter(x=>x.interval==='1d'),
     intraday: (byStock.get(id)??[]).filter(x=>x.interval==='1m'),
     facts: (factsByStock.get(id) ?? []).map(x => ({ knownAt: x.knownAt, validUntil: x.validUntil, period: x.period,
@@ -41,7 +45,9 @@ export async function engineInstruments(ids: string[], cutoff: string, monthly =
   }));
 }
 export async function evaluateBatch(rule: Record<string, unknown>, ids: string[], cutoff: string, options: { factsOnly?: boolean } = {}) {
-  const instruments = await engineInstruments(ids, cutoff, rule.timeframe === '1mo', undefined, options.factsOnly);
+  const needed=ruleBenchmarks([rule]);
+  const scope=needed.length?{benchmarks:needed,dailyFrom:monthlyHistoryRequirements(rule,new Date(Date.parse(cutoff)+19800000).toISOString().slice(0,7)).from}:undefined;
+  const instruments = await engineInstruments(ids, cutoff, rule.timeframe === '1mo', scope, options.factsOnly);
   const history = monthlyHistoryRequirements(rule, new Date(Date.parse(cutoff) + 19800000).toISOString().slice(0, 7));
   const receipts = rule.timeframe === '1mo' && history.minimum && !options.factsOnly
     ? await DatasetReceiptModel.find({ instrumentId: { $in: ids }, kind: 'daily', checkedAt: { $lte: cutoff }, from: { $lt: history.to }, to: { $gt: history.from } }).select('instrumentId from to').lean() : [];

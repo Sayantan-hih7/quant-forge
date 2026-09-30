@@ -4,13 +4,16 @@ import type { LiveChartBar, QuoteStatus, StockQuote } from '../types';
 
 export function useStockQuotes(ids: string[], enabled = true, candles = false) {
   const key = [...new Set(ids)].sort().join(',');
+  const identity = `${key}:${enabled}:${candles}`;
   const [quotes, setQuotes] = useState<Record<string, StockQuote>>({});
-  const [status, setStatus] = useState<QuoteStatus>({ state: 'connecting' });
-  const [error, setError] = useState<string>();
+  const [transport, setTransport] = useState<{ identity: string; status: QuoteStatus }>({ identity: '', status: { state: 'connecting' } });
+  const [failure, setFailure] = useState<{ identity: string; error?: string }>();
   const [now, setNow] = useState(Date.now);
   const [liveBars, setLiveBars] = useState<Record<string, LiveChartBar[]>>({});
   useEffect(() => {
     if (!key || !enabled) return;
+    const setStatus = (status: QuoteStatus) => setTransport({ identity, status });
+    const setError = (error?: string) => setFailure({ identity, error });
     let disposed = false, stream: EventSource | undefined, loading = false;
     let sessions: Record<string, string> | undefined;
     const controller = new AbortController();
@@ -75,6 +78,10 @@ export function useStockQuotes(ids: string[], enabled = true, candles = false) {
     const clock = window.setInterval(() => setNow(Date.now()), 2000);
     document.addEventListener('visibilitychange', visibility);
     return () => { disposed = true; controller.abort(); stream?.close(); clearInterval(refresh); clearInterval(clock); document.removeEventListener('visibilitychange', visibility); };
-  }, [key, enabled, candles]);
-  return { quotes, status, error, now, liveBars };
+  }, [key, enabled, candles, identity]);
+  // Keep last received quotes by instrument, but never reuse another selection's
+  // connection state or live candle previews while its replacement connects.
+  const status: QuoteStatus = transport.identity === identity ? transport.status : { state: 'connecting' };
+  return { quotes, status, error: failure?.identity === identity ? failure.error : undefined, now,
+    liveBars: transport.identity === identity ? liveBars : {} };
 }

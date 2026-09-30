@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import * as controller from '../controllers/qualification.controller.js';
+import { reviewMonthlyRule } from '../services/monthly-review.service.js';
 
 export const qualificationRouter = Router();
 qualificationRouter.get('/', controller.state);
 qualificationRouter.get('/universe', controller.universe);
 qualificationRouter.get('/membership', controller.membership);
 qualificationRouter.put('/rule', controller.saveRule);
+qualificationRouter.post('/rule/review', (req,res) => { res.json(reviewMonthlyRule(req.body)); });
 qualificationRouter.post('/runs', controller.start);
 qualificationRouter.get('/runs/:id/results', controller.results);
 qualificationRouter.post('/runs/:id/cancel', controller.cancel);

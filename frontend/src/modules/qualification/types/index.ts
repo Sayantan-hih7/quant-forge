@@ -1,3 +1,4 @@
+import type { CalculationSettings } from '../../stock-details/utils/indicatorCatalog';
 import type { FieldId } from '../config/ruleFields';
 import type { StockIndex } from '../config/stockIndices';
 import type { MonthlyRuleTemplate } from './monthly';
@@ -9,6 +10,7 @@ export type Timeframe = 'latest' | '1m' | '5m' | '15m' | '4h' | '1d' | '1w' | '1
 export type Metric = FieldId | 'growth';
 export type Operator = 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'between' | 'notBetween' | 'crossAbove' | 'crossBelow' | 'increasing' | 'decreasing' | 'within' | 'aboveBy' | 'belowBy';
 export interface Condition {
+  leftSettings?: CalculationSettings; rightSettings?: CalculationSettings;
   leftPeriod?: number; leftOffset?: number; rightPeriod?: number; rightOffset?: number;
   left: Metric; leftFrame: Timeframe; operator: Operator;
   rightType: 'value' | 'indicator'; value: number;

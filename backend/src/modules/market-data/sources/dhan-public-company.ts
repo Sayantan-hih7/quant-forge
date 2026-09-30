@@ -41,7 +41,7 @@ function annualValue(section: unknown, field: string, year: string) {
   return index < 0 ? null : numberOrNull(values[index]);
 }
 
-export function parseDhanPublicCompany(html: string, stock: Instrument, sourceUrl: string, observedAt: string): Fact[] {
+export function dhanFinancialData(html: string, stock: Pick<Instrument, 'isin'>, sourceUrl: string) {
   invariant(/^https:\/\/dhan\.co\/stocks\/[a-z0-9-]+-share-price\/$/.test(sourceUrl), 'Invalid Dhan public source URL');
   // Read embedded JSON only; never execute a provider's script or HTML.
   const json = html.match(/<script\b[^>]*\bid=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script\s*>/i)?.[1];
@@ -52,6 +52,11 @@ export function parseDhanPublicCompany(html: string, stock: Instrument, sourceUr
   const props = object(object(root.props).pageProps), financials = object(props.fundamentalsData);
   invariant(Array.isArray(props.stock_data) && props.stock_data.some(row => object(row).CSM_ISIN_CODE === stock.isin)
     && financials.isin === stock.isin, 'Dhan public financial data does not match this company ISIN');
+  return financials;
+}
+
+export function parseDhanPublicCompany(html: string, stock: Instrument, sourceUrl: string, observedAt: string): Fact[] {
+  const financials = dhanFinancialData(html, stock, sourceUrl);
   const ratios = object(financials.roce_roe);
   const statementBasis = ratios.TYPES_OF_COMPANY === 'CONSOLIDATED' ? 'consolidated'
     : ratios.TYPES_OF_COMPANY === 'STANDALONE' ? 'standalone' : undefined;

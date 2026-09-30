@@ -2,6 +2,14 @@
 
 Open **Qualification → Qualified stocks**. The current table page receives last prices and daily movement. Click a ticker or **Chart & details** for the research drawer. Previous/next follows the filtered list; closing the drawer preserves the list position and filters.
 
+## Recent and related stocks
+
+**Market Data → Stocks & watchlist** shows the last four viewed companies above the stock browser; **Show all** expands to the last ten. Viewing a stock in the shared detail drawer records it after its listing is loaded. History stays in this browser, survives reloads, and can be cleared. ISIN deduplication keeps one entry per security and reopens its most recently viewed exchange.
+
+The stock **Overview → Related stocks** section shows up to six other active companies in the same reported sector and exchange. It orders by proximity of saved market cap (absolute log-ratio); missing market caps follow alphabetically. Without the viewed company's market cap, ordering is alphabetical. Unknown/unclassified sectors produce an explanation rather than unrelated suggestions. Duplicate series and the current company's other listing are excluded.
+
+`GET /api/stocks/:id/related` reads existing, dated company facts, sharing a five-minute peer-data cache. It does not download a new universe or start scans. Opening a related stock keeps the original list in place and offers **Back to [original stock]**. Original paper fills, position controls and strategy markers are hidden when researching a different company and restored on return.
+
 The chart uses **TradingView Lightweight Charts**, with candlesticks/line, volume and optional EMA 5/21. Intervals: 1m, 5m, 15m, daily, weekly and monthly. Zoom, pan and crosshair inspection are supported. This is the open-source charting library, not TradingView's licensed Advanced Charts terminal.
 
 ## Data flow

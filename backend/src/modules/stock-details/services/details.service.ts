@@ -16,12 +16,16 @@ export async function stockDetail(id: string) {
     catch { message = 'Company data could not be refreshed. Previously saved metrics are shown with their dates; unavailable values are left blank.'; }
   }
   const facts = await latestFacts(id, new Date().toISOString());
-  const member = universe?.members.find(x => x.instrumentId === id);
+  const member = universe?.members.find(x => x.instrumentId === id)
+    ?? universe?.members.find(x => !!instrument.isin && x.isin === instrument.isin);
   let qualification = null;
   if (member && universe) {
     const run = member.source === 'scan' ? await QualificationRunModel.findById(universe.runId).select('cutoff rule').lean() : null;
-    const result = member.source === 'scan' ? await QualificationResultModel.findOne({ runId: universe.runId, instrumentId: id }).lean() : null;
+    const result = member.source === 'scan' ? await QualificationResultModel.findOne({ runId: universe.runId, instrumentId: member.instrumentId }).lean() : null;
+    const listing = member.instrumentId === id ? instrument
+      : await InstrumentModel.findById(member.instrumentId).select('symbol exchange').lean();
     qualification = { source: member.source, month: universe.month, note: member.note, addedAt: member.addedAt,
+      instrumentId: member.instrumentId, exchange: listing?.exchange ?? member.instrumentId.split(':')[0], symbol: listing?.symbol,
       cutoff: run?.cutoff ?? null, rule: run?.rule ?? null, checks: result?.checks ?? [] };
   }
   return { instrument, facts, qualification, message };

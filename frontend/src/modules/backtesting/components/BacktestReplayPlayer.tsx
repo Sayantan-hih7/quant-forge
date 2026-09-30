@@ -1,3 +1,4 @@
+import type { VolumeStyle } from '../../stock-details/utils/volumeSettings';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Empty, Select, Slider, Space, Spin, Tag } from 'antd';
 import { CaretRightOutlined, PauseOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
@@ -37,6 +38,7 @@ function ReplayPlayback({ view, run, entryAt, symbol }: { view: BacktestReplayVi
   const entryIndex = steps.findIndex(s => s.event?.kind === 'entry');
   const [index, setIndex] = useState(Math.max(0, signalIndex));
   const [playing, setPlaying] = useState(false), [speed, setSpeed] = useState(1);
+  const [showVolume,setShowVolume]=useState(true),[volumeStyle,setVolumeStyle]=useState<VolumeStyle>();
   const [custom, setCustom] = useState<ChartIndicator[]>([]), [showStrategy, setShowStrategy] = useState(true);
   const seeded = useMemo(() => strategyIndicators(run.strategy), [run.strategy]);
   const frame = useMemo(() => replayFrame(timeline.bars, steps, index), [timeline, steps, index]);
@@ -54,13 +56,13 @@ function ReplayPlayback({ view, run, entryAt, symbol }: { view: BacktestReplayVi
   }, []);
   const lines = useMemo(() => {
     if (!frame) return [];
-    return [...(showStrategy ? seeded.indicators : []), ...custom].flatMap(indicator => {
+    return [...(showStrategy ? seeded.indicators : []), ...custom].filter(i=>showVolume||i.kind!=='volumeSma').flatMap(indicator => {
       const sourceFrame = indicator.timeframe === 'chart' ? view.timeframe : indicator.timeframe;
       // Filter EVERY source, including custom indicators, before calculation.
       const source = (view.frames[sourceFrame] ?? []).filter(b => barEnd(b.time, sourceFrame) <= frame.step.at);
       return plotIndicator(indicator, source, frame.bars, view.timeframe, frame.step.at);
     });
-  }, [frame, view, seeded, showStrategy, custom]);
+  }, [frame, view, seeded, showStrategy, custom, showVolume]);
   if (!frame || timeline.missingEvents > 0) return <Alert type="warning" showIcon title="Some candles needed for this replay are unavailable"
     description="Use the normal chart and recorded trade history. Replay will not guess the missing sequence."/>;
   const nextExit = steps.findIndex((s,i) => i > index && s.event?.kind === 'exit');
@@ -90,9 +92,9 @@ function ReplayPlayback({ view, run, entryAt, symbol }: { view: BacktestReplayVi
     </div>
     <div className="bt-replay-stage"><div className="bt-replay-visual">
     <div className="bt-replay-chart-header"><span>Price & volume · {frame.step.phase === 'open' ? 'Only the open is shown for the newest candle' : 'Completed candles'}</span>
-      <ChartIndicators custom={custom} onChange={setCustom} strategy={seeded.indicators} showStrategy={showStrategy} onShowStrategy={setShowStrategy} timeframe={view.timeframe}/></div>
+      <ChartIndicators showVolume={showVolume} volumeStyle={volumeStyle} onVolumeChange={change=>{if(change.showVolume!==undefined)setShowVolume(change.showVolume);if(change.volumeStyle)setVolumeStyle(change.volumeStyle);if(change.custom)setCustom(change.custom);}} custom={custom} onChange={setCustom} strategy={seeded.indicators} showStrategy={showStrategy} onShowStrategy={setShowStrategy} timeframe={view.timeframe}/></div>
     <div className="chart-indicator-legend" aria-label="Replay indicators">{lines.map(line => <span key={line.id} style={{color:line.color}}>{line.label} <b>{line.values.at(-1)?.value.toFixed(2) ?? 'Not enough history'}</b></span>)}</div>
-    <StockCandlestickChart bars={frame.bars} timeframe={view.timeframe} kind="candles" symbol={symbol} indicators={lines} events={frame.markers} levels={frame.levels} replayStep={`${entryAt}:${index}`}
+    <StockCandlestickChart showVolume={showVolume} volumeStyle={volumeStyle} bars={frame.bars} timeframe={view.timeframe} kind="candles" symbol={symbol} indicators={lines} events={frame.markers} levels={frame.levels} replayStep={`${entryAt}:${index}`}
       onSelectEvent={id => { const n = steps.findIndex(s => s.event && `replay-${s.event.sequence}` === id); if (n >= 0 && n <= index) jump(n); }}/>
     </div>
     <ReplayExplanation step={frame.step} strategy={run.strategy} hasPosition={frame.quantity > 0} limited={view.source === 'fills-only'}/>

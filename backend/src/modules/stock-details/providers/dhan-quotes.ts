@@ -1,5 +1,5 @@
 import { numberOrNull, object } from '../../../shared/http-client.js';
-import type { StockQuote } from '../types.js';
+import type { StockQuote, StockDepth } from '../types.js';
 
 const IST = 19_800_000;
 export const positive = (value: unknown) => { const n = numberOrNull(value); return n !== null && n > 0 ? n : null; };
@@ -26,7 +26,13 @@ export function parseSnapshot(id: string, input: unknown, at: string): StockQuot
   return withMovement({ instrumentId: id, price, previousClose, change: null, percent: null,
     open: positive(ohlc.open), high: positive(ohlc.high), low: positive(ohlc.low), volume: volume !== null && volume >= 0 ? volume : null,
     averagePrice: positive(data.average_price), lowerCircuit: positive(data.lower_circuit_limit), upperCircuit: positive(data.upper_circuit_limit),
-    lastTradeAt: indianTradeTime(data.last_trade_time, Date.parse(at)), receivedAt: at, source: 'dhan-snapshot' });
+    depth:parseDepth(data,at),lastTradeAt: indianTradeTime(data.last_trade_time, Date.parse(at)), receivedAt: at, source: 'dhan-snapshot' });
+}
+export function parseDepth(data:Record<string,unknown>,at:string):StockDepth|undefined{
+  const d=object(data.depth);if(!Array.isArray(d.buy)||!Array.isArray(d.sell))return undefined;
+  const count=(v:unknown)=>{const n=numberOrNull(v);return n!==null&&n>=0&&Number.isInteger(n)?n:null;};
+  const levels=(raw:unknown[])=>raw.flatMap(value=>{const r=object(value),price=positive(r.price),quantity=count(r.quantity);return price!==null&&quantity!==null&&quantity>0?[{price,quantity,orders:count(r.orders)}]:[];}).slice(0,5);
+  return {bids:levels(d.buy).sort((a,b)=>b.price-a.price),asks:levels(d.sell).sort((a,b)=>a.price-b.price),totalBuy:count(data.buy_quantity),totalSell:count(data.sell_quantity),receivedAt:at,source:'Dhan snapshot'};
 }
 
 // Dhan's live NSE sample encodes IST wall-clock seconds; REST supplies explicit

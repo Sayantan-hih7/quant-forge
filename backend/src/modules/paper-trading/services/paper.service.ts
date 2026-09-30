@@ -1,3 +1,4 @@
+import { strategyHistoryPlan } from '../../backtesting/services/history-plan.js';
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { invariant } from '../../../shared/errors.js';
@@ -79,7 +80,7 @@ export async function manualPaperOrder(raw:unknown) {
     invariant(!session.ids || session.ids.includes(input.instrumentId),'Choose a stock included in this paper session');
     invariant(await MonthlyUniverseModel.exists({_id:currentMonth(),'members.instrumentId':input.instrumentId}),'Buy orders must use the current qualified list');
     if(['ATR','candleLow'].includes(session.strategy.risk.stopMode)) {
-      const {data}=await engineClient.post('/decisions',{strategy:session.strategy,cutoff:new Date().toISOString(),instruments:await engineInstruments([input.instrumentId],new Date().toISOString())});
+      const {data}=await engineClient.post('/decisions',{strategy:session.strategy,cutoff:new Date().toISOString(),instruments:await engineInstruments([input.instrumentId],new Date().toISOString(),false,strategyHistoryPlan(session.strategy,new Date().toISOString().slice(0,10),new Date().toISOString().slice(0,10)))});
       atr=data.results[0]?.atr; signalLow=data.results[0]?.signalLow;
       if(session.strategy.risk.stopMode==='ATR') invariant(atr && atr>0,'Import enough completed history to calculate the ATR stop');
       else invariant(signalLow && signalLow>0,'A completed candle is required to set the candle-low stop');

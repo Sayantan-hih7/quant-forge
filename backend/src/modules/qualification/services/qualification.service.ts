@@ -10,6 +10,7 @@ import { MonthlyRuleModel, MonthlyUniverseModel, QualificationResultModel, Quali
 import { currentMonth, recordUniverseSnapshot } from './universe.service.js';
 import { qualificationReadiness } from './readiness.service.js';
 import { prepareQualification } from './preparation.service.js';
+import { reviewMonthlyRule } from './monthly-review.service.js';
 export { currentMonth } from './universe.service.js';
 function normalized(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalized);
@@ -26,6 +27,7 @@ export async function qualificationState() {
 export async function saveMonthlyRule(rule: Record<string, unknown>, expectedRevision: number) {
   invariant(rule.timeframe === '1mo', 'Qualification requires monthly rules');
   await validateSourcedRule(rule);
+  invariant(!reviewMonthlyRule(rule).blocked, 'Monthly conditions contradict one another. Review the highlighted thresholds before saving.');
   const previous = await MonthlyRuleModel.findById('monthly').lean();
   invariant((previous?.revision ?? 0) === expectedRevision, 'The rule changed in another tab; reload before saving');
   const fingerprint = ruleFingerprint(rule);

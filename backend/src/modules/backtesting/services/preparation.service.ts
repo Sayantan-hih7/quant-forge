@@ -1,40 +1,11 @@
 import { ensureRuleReports } from '../../market-data/services/daily-reports.service.js';
-import { dhanRequest } from '../../connections/services/dhan.service.js';
-import { DatasetReceiptModel } from '../../market-data/models/dataset-receipt.model.js';
-import { instruments, storedCandles } from '../../market-data/repository.js';
+import { ensureIntradayHistory } from '../../market-data/services/intraday-history.service.js';
+export { ensureIntradayHistory } from '../../market-data/services/intraday-history.service.js';
+import { instruments } from '../../market-data/repository.js';
 import { ensureMonthlyHistory } from '../../market-data/services/dhan-cache.service.js';
-import { historyWindows, parseDhanHistory } from '../../market-data/sources/dhan-history.js';
-import type { Instrument } from '../../market-data/types.js';
 import { invariant } from '../../../shared/errors.js';
 import { BacktestRunModel, type BacktestRun } from '../models/backtest.model.js';
 import { strategyHistoryPlan } from './history-plan.js';
-import { isClosedHistoryRange } from '../../market-data/services/history-coverage.js';
-import { CALENDAR_SOURCE } from '../../../shared/market-calendar.js';
-
-export async function ensureIntradayHistory(stock: Instrument, from: string, to: string, options: { maxWaitMs?: number } = {}) {
-  let downloaded = false;
-  for (const window of historyWindows(from, to, '1m')) {
-    if (await DatasetReceiptModel.exists({ instrumentId: stock._id, kind: 'intraday', from: { $lte: window.from }, to: { $gte: window.to } })) continue;
-    if (isClosedHistoryRange(window.from, window.to)) {
-      await DatasetReceiptModel.updateOne({ _id: `intraday:${stock._id}:${window.from}:${window.to}` }, { $set: {
-        instrumentId: stock._id, kind: 'intraday', ...window, checkedAt: new Date().toISOString(), records: 0, sourceUrl: CALENDAR_SOURCE,
-      } }, { upsert: true });
-      continue;
-    }
-    const payload = await dhanRequest('/charts/intraday', { securityId: stock.securityId, exchangeSegment: `${stock.exchange}_EQ`, instrument: 'EQUITY', interval: '1', oi: false,
-      fromDate: `${window.from} 09:15:00`, toDate: `${window.to} 09:15:00` }, options);
-    const at = new Date().toISOString();
-    const rows = parseDhanHistory(payload, stock, '1m', at).filter(row => row.time >= `${window.from}T03:45:00.000Z` && row.time < `${window.to}T03:45:00.000Z`);
-    for (let offset = 0; offset < rows.length; offset += 500) await storedCandles.bulkWrite(rows.slice(offset, offset + 500).map(row => ({ updateOne: {
-      filter: { instrumentId: row.instrumentId, interval: '1m', time: row.time }, update: { $set: row }, upsert: true,
-    } })));
-    await DatasetReceiptModel.updateOne({ _id: `intraday:${stock._id}:${window.from}:${window.to}` }, { $set: {
-      instrumentId: stock._id, kind: 'intraday', ...window, checkedAt: at, records: rows.length,
-    } }, { upsert: true });
-    downloaded = true;
-  }
-  return downloaded;
-}
 
 export async function prepareBacktest(run: BacktestRun) {
   const from = new Date(Date.parse(run.config.from) + 19_800_000).toISOString().slice(0, 10);

@@ -56,6 +56,7 @@ export function BackendQualifiedStocks({ state, stocks, capabilities, refresh, o
       <Button onClick={onRules}>Edit monthly rules</Button>
       <Button type="primary" disabled={!state.canRun} loading={busy} onClick={async () => { setBusy(true); try { await apiClient.post('/qualification/runs'); await refresh(); } catch (error) { message.error((error as Error).message); } finally { setBusy(false); } }}>Run saved rules</Button>
     </Space></div>
+    <div className="qualified-list-overview" aria-label="Qualified list summary"><div><span>Published universe</span><strong>{stocks.length.toLocaleString()} companies</strong></div><div><span>Passed monthly rules</span><strong>{(stocks.length-manualCount).toLocaleString()}</strong></div><div><span>Manual selections</span><strong>{manualCount}</strong><small>Separate from scan results</small></div><div><span>In this view</span><strong>{filtered.length.toLocaleString()}</strong>{(query||source!=='all'||sector||index)&&<Button type="link" size="small" onClick={()=>{setSource('all');setSector(undefined);setIndex(undefined);setQuery('');}}>Clear filters</Button>}</div></div>
     {ready && state.universe && state.universe.runId !== latest._id && <Alert className="mb-5" type="info" showIcon
       title={`${latest.qualified.toLocaleString()} stocks qualified in your latest scan`}
       description={`This table shows your published list of ${stocks.length.toLocaleString()} companies. Review the latest scan above and choose Publish qualified list to apply the new results. Your manual additions are retained.`} />}

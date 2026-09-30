@@ -200,7 +200,16 @@ test('Gemini schema avoids rejected bounded grammars while application validatio
     assert.deepEqual(adapted.required, ['message', 'assumptions', 'proposal']);
     assert.equal(JSON.stringify(raw), before);
     const serialized = JSON.stringify(adapted);
-    assert.equal(/"(?:minLength|maxLength|minItems|maxItems|minimum|maximum|exclusiveMinimum|exclusiveMaximum)":/.test(serialized), false);
+    const visitSchema = (value: unknown): void => {
+      if (Array.isArray(value)) { value.forEach(visitSchema); return; }
+      if (!value || typeof value !== 'object') return;
+      for (const [key,child] of Object.entries(value)) {
+        // A SAR setting named maximum is a property name, not a grammar bound.
+        if (key === 'properties') Object.values(child as object).forEach(visitSchema);
+        else { assert.equal(/^(minLength|maxLength|minItems|maxItems|minimum|maximum|exclusiveMinimum|exclusiveMaximum)$/.test(key),false); visitSchema(child); }
+      }
+    };
+    visitSchema(adapted);
     assert.ok(serialized.includes('Maximum items:'));
     assert.ok(serialized.includes('AND'));
     assert.equal(original.safeParse({ message: 'x'.repeat(3001), assumptions: [], proposal: null }).success, false);

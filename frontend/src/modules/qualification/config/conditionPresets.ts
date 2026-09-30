@@ -32,7 +32,7 @@ export interface ConditionPresetDef {
   matches: (condition: Condition) => boolean;
 }
 
-const maOptions = [{ value: 'ema', label: 'EMA' }, { value: 'sma', label: 'SMA' }];
+const maOptions = [{ value: 'ema', label: 'EMA' }, { value: 'sma', label: 'SMA' }, { value: 'dema', label: 'DEMA' }, { value: 'wma', label: 'WMA' }, { value: 'vwma', label: 'VWMA' }, { value: 'hma', label: 'HMA' }];
 const base = (overrides: Partial<Condition>): Condition => ({
   left: 'close', leftFrame: '1d', operator: 'gt', rightType: 'value', value: 0,
   right: 'close', rightFrame: '1d', multiplier: 1, tolerance: 2, ...overrides,
@@ -48,7 +48,7 @@ export const conditionPresets: ConditionPresetDef[] = [
       { key: 'fastPeriod', label: 'Fast period', kind: 'number', min: 2, max: 500, get: c => c.leftPeriod, set: (v, c) => ({ leftPeriod: v, right: c.right }) },
       { key: 'slowPeriod', label: 'Slow period', kind: 'number', min: 2, max: 500, get: c => c.rightPeriod, set: (v) => ({ rightPeriod: v }) },
     ],
-    defaults: tier => base({ left: 'sma', leftFrame: frame('sma', tier), leftPeriod: 50, operator: 'crossAbove', rightType: 'indicator', right: 'sma', rightFrame: frame('sma', tier), rightPeriod: 200 }),
+    defaults: tier => base({ left: 'sma', leftFrame: (tier === 'base' ? '1mo' : '1d'), leftPeriod: 50, operator: 'crossAbove', rightType: 'indicator', right: 'sma', rightFrame: (tier === 'base' ? '1mo' : '1d'), rightPeriod: 200 }),
     matches: c => c.operator === 'crossAbove' && c.left === 'sma' && c.right === 'sma' && (c.leftPeriod ?? 50) === 50 && (c.rightPeriod ?? 200) === 200,
   },
   {
@@ -58,7 +58,7 @@ export const conditionPresets: ConditionPresetDef[] = [
       { key: 'fastPeriod', label: 'Fast period', kind: 'number', min: 2, max: 500, get: c => c.leftPeriod, set: (v, c) => ({ leftPeriod: v, right: c.right }) },
       { key: 'slowPeriod', label: 'Slow period', kind: 'number', min: 2, max: 500, get: c => c.rightPeriod, set: (v) => ({ rightPeriod: v }) },
     ],
-    defaults: tier => base({ left: 'sma', leftFrame: frame('sma', tier), leftPeriod: 50, operator: 'crossBelow', rightType: 'indicator', right: 'sma', rightFrame: frame('sma', tier), rightPeriod: 200 }),
+    defaults: tier => base({ left: 'sma', leftFrame: (tier === 'base' ? '1mo' : '1d'), leftPeriod: 50, operator: 'crossBelow', rightType: 'indicator', right: 'sma', rightFrame: (tier === 'base' ? '1mo' : '1d'), rightPeriod: 200 }),
     matches: c => c.operator === 'crossBelow' && c.left === 'sma' && c.right === 'sma' && (c.leftPeriod ?? 50) === 50 && (c.rightPeriod ?? 200) === 200,
   },
   {
@@ -109,7 +109,7 @@ export const conditionPresets: ConditionPresetDef[] = [
       { key: 'period', label: 'Period', kind: 'number', min: 2, max: 500, get: c => c.rightPeriod, set: (v) => ({ rightPeriod: v }) },
     ],
     defaults: tier => base({ left: 'close', leftFrame: frame('close', tier), operator: 'crossAbove', rightType: 'indicator', right: 'ema', rightFrame: frame('ema', tier), rightPeriod: 20 }),
-    matches: c => c.operator === 'crossAbove' && c.rightType === 'indicator' && c.left === 'close' && ['ema', 'sma'].includes(c.right),
+    matches: c => c.operator === 'crossAbove' && c.rightType === 'indicator' && c.left === 'close' && ['ema', 'sma', 'dema', 'wma', 'vwma', 'hma'].includes(c.right),
   },
   {
     id: 'priceCrossBelowMa', group: 'Crossovers', label: 'Price crosses below MA', hint: 'Close price crosses below a moving average.',
@@ -119,7 +119,7 @@ export const conditionPresets: ConditionPresetDef[] = [
       { key: 'period', label: 'Period', kind: 'number', min: 2, max: 500, get: c => c.rightPeriod, set: (v) => ({ rightPeriod: v }) },
     ],
     defaults: tier => base({ left: 'close', leftFrame: frame('close', tier), operator: 'crossBelow', rightType: 'indicator', right: 'ema', rightFrame: frame('ema', tier), rightPeriod: 20 }),
-    matches: c => c.operator === 'crossBelow' && c.rightType === 'indicator' && c.left === 'close' && ['ema', 'sma'].includes(c.right),
+    matches: c => c.operator === 'crossBelow' && c.rightType === 'indicator' && c.left === 'close' && ['ema', 'sma', 'dema', 'wma', 'vwma', 'hma'].includes(c.right),
   },
   {
     id: 'priceNearMa', group: 'Crossovers', label: 'Price ≈ equal to MA', hint: 'Price stays within a percentage band of a moving average. Live prices essentially never match an indicator to the paisa, so "equal to" is expressed as a small tolerance band around it.',
@@ -130,7 +130,7 @@ export const conditionPresets: ConditionPresetDef[] = [
       { key: 'tolerance', label: 'Within (%)', kind: 'number', min: 0.1, max: 20, step: 0.1, get: c => c.tolerance, set: (v) => ({ tolerance: v }) },
     ],
     defaults: tier => base({ left: 'close', leftFrame: frame('close', tier), operator: 'within', rightType: 'indicator', right: 'ema', rightFrame: frame('ema', tier), rightPeriod: 20, tolerance: 0.5 }),
-    matches: c => c.operator === 'within' && c.rightType === 'indicator' && c.left === 'close' && ['ema', 'sma'].includes(c.right),
+    matches: c => c.operator === 'within' && c.rightType === 'indicator' && c.left === 'close' && ['ema', 'sma', 'dema', 'wma', 'vwma', 'hma'].includes(c.right),
   },
   // --- Momentum ---
   {
@@ -297,14 +297,14 @@ export const conditionPresets: ConditionPresetDef[] = [
     matches: c => c.left === 'diMinus' && c.right === 'diPlus' && c.operator === 'crossAbove',
   },
   {
-    id: 'supertrendBuy', group: 'Trend', label: 'Supertrend buy', hint: 'Close crosses above the Supertrend line (fixed 10-period ATR, 3x multiplier).',
+    id: 'supertrendBuy', group: 'Trend', label: 'Supertrend buy', hint: 'Close crosses above the Supertrend line (configurable ATR period and multiplier; defaults to 10 and 3).',
     timeframeMetric: 'supertrend',
     fields: [],
     defaults: tier => base({ left: 'close', leftFrame: frame('supertrend', tier), operator: 'crossAbove', rightType: 'indicator', right: 'supertrend', rightFrame: frame('supertrend', tier) }),
     matches: c => c.left === 'close' && c.right === 'supertrend' && c.operator === 'crossAbove',
   },
   {
-    id: 'supertrendSell', group: 'Trend', label: 'Supertrend sell', hint: 'Close crosses below the Supertrend line (fixed 10-period ATR, 3x multiplier).',
+    id: 'supertrendSell', group: 'Trend', label: 'Supertrend sell', hint: 'Close crosses below the Supertrend line (configurable ATR period and multiplier; defaults to 10 and 3).',
     timeframeMetric: 'supertrend',
     fields: [],
     defaults: tier => base({ left: 'close', leftFrame: frame('supertrend', tier), operator: 'crossBelow', rightType: 'indicator', right: 'supertrend', rightFrame: frame('supertrend', tier) }),

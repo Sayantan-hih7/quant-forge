@@ -1,3 +1,4 @@
+import { calculationSettingsSchema } from '../../../shared/calculation-settings-schema.js';
 import { z } from 'zod';
 import { monthlyCatalog, tradingCatalog } from '../config/rule-catalog.js';
 import { riskSchema } from '../../strategies/validations/strategy.validation.js';
@@ -8,6 +9,7 @@ const monthlyField = z.enum(Object.keys(monthlyCatalog) as [string, ...string[]]
 const tradingField = z.enum(Object.keys(tradingCatalog) as [string, ...string[]]);
 export const monthlyConditionSchema = z.object({
   field: monthlyField,
+  settings: calculationSettingsSchema.optional(), compareSettings: calculationSettingsSchema.optional(),
   period: number.int().min(2).max(500).optional(), offset: number.int().min(0).max(120).optional(),
   comparePeriod: number.int().min(2).max(500).optional(), compareOffset: number.int().min(0).max(120).optional(),
   operator: z.enum(['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'between', 'notBetween', 'crossAbove', 'crossBelow', 'increasing', 'decreasing', 'within', 'aboveBy', 'belowBy', 'is', 'isNot', 'in', 'notIn']),
@@ -17,6 +19,7 @@ export const monthlyConditionSchema = z.object({
 }).strict();
 export const monthlyProposalSchema = z.object({ logic, conditions: z.array(monthlyConditionSchema).min(1).max(12) }).strict();
 const tradingConditionSchema = z.object({
+  leftSettings: calculationSettingsSchema.optional(), rightSettings: calculationSettingsSchema.optional(),
   leftPeriod: number.int().min(2).max(500).optional(), leftOffset: number.int().min(0).max(120).optional(),
   rightPeriod: number.int().min(2).max(500).optional(), rightOffset: number.int().min(0).max(120).optional(),
   left: tradingField, leftFrame: z.enum(['latest', '1m', '5m', '15m', '4h', '1d', '1w', '1mo', '1q']),

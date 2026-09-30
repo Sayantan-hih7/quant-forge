@@ -8,13 +8,13 @@ import { isScanActive } from './scanJobs';
 // and values belonging to hidden/inactive inputs.
 function conditionKey(condition: MonthlyCondition) {
   const { field, timeframe, operator } = condition;
-  const base = { field, timeframe, operator, ...(ruleFields[field]?.period ? { period: condition.period ?? ruleFields[field].period!.default } : {}), offset: condition.offset ?? 0 };
+  const base = { field, timeframe, operator, settings: condition.settings, ...(ruleFields[field]?.period ? { period: condition.period ?? ruleFields[field].period!.default } : {}), offset: condition.offset ?? 0 };
   if (['is', 'isNot', 'in', 'notIn'].includes(operator)) return { ...base, choices: [...new Set(condition.choices)].sort(), ...(condition.category === 'patterns' ? { lookback: condition.lookback } : {}) };
   if (['contains', 'notContains'].includes(operator)) return { ...base, text: condition.text.trim().toLowerCase() };
   if (isTrend(operator)) return { ...base, lookback: condition.lookback };
   if (isRange(operator)) return { ...base, value: condition.value, upper: condition.upper };
   return { ...base,
-    ...(condition.operand === 'field' || isDistance(operator) ? { compareField: condition.compareField, multiplier: condition.multiplier, comparePeriod: condition.comparePeriod ?? ruleFields[condition.compareField]?.period?.default, compareOffset: condition.compareOffset ?? 0 } : { value: condition.value }),
+    ...(condition.operand === 'field' || isDistance(operator) ? { compareField: condition.compareField, compareSettings: condition.compareSettings, multiplier: condition.multiplier, comparePeriod: condition.comparePeriod ?? ruleFields[condition.compareField]?.period?.default, compareOffset: condition.compareOffset ?? 0 } : { value: condition.value }),
     ...(isDistance(operator) ? { distance: condition.distance } : {}),
     ...(operator.startsWith('cross') ? { lookback: condition.lookback } : {}),
   };

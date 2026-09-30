@@ -6,3 +6,6 @@
 
 @media (max-width: 1250px) { .monthly-condition-field { grid-column: 2; } }
 @media (max-width: 600px) { .monthly-condition-field { grid-column: 1; grid-row: auto; margin-left: 20px; min-width: 0; } }
+
+.rule-operand-parameters > .ant-collapse { grid-column: 1 / -1; min-width: 0; }
+.rule-operand-parameters .chart-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }

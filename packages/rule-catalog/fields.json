@@ -116,7 +116,8 @@
       "min": 2,
       "max": 500
     },
-    "offset": true
+    "offset": true,
+    "indicator": "ema"
   },
   "sma": {
     "label": "SMA",
@@ -140,7 +141,8 @@
       "min": 2,
       "max": 500
     },
-    "offset": true
+    "offset": true,
+    "indicator": "sma"
   },
   "rsi": {
     "label": "RSI",
@@ -164,7 +166,8 @@
       "min": 2,
       "max": 500
     },
-    "offset": true
+    "offset": true,
+    "indicator": "rsi"
   },
   "atr": {
     "label": "ATR",
@@ -188,7 +191,8 @@
       "min": 2,
       "max": 500
     },
-    "offset": true
+    "offset": true,
+    "indicator": "atr"
   },
   "avgVolume": {
     "label": "Average volume",
@@ -491,7 +495,8 @@
       "min": 2,
       "max": 500
     },
-    "offset": true
+    "offset": true,
+    "indicator": "rvol"
   },
   "volumeRatio": {
     "label": "Volume ratio",
@@ -515,7 +520,8 @@
       "min": 2,
       "max": 500
     },
-    "offset": true
+    "offset": true,
+    "indicator": "rvol"
   },
   "macd": {
     "label": "MACD (12,26)",
@@ -534,7 +540,8 @@
     "monthly": true,
     "trading": true,
     "description": "Fixed 12/26 EMA MACD; signal uses a 9-period EMA.",
-    "offset": true
+    "offset": true,
+    "indicator": "macd"
   },
   "macdSignal": {
     "label": "MACD signal (12,26,9)",
@@ -553,97 +560,198 @@
     "monthly": true,
     "trading": true,
     "description": "Fixed 12/26 EMA MACD; signal uses a 9-period EMA.",
-    "offset": true
+    "offset": true,
+    "indicator": "macd"
   },
   "bollingerUpper": {
     "label": "Bollinger upper band",
     "unit": "price",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Middle SMA(period) plus 2 standard deviations of completed-candle closes. Period counts candles of the selected timeframe.",
-    "period": { "default": 20, "min": 5, "max": 500 },
-    "offset": true
+    "period": {
+      "default": 20,
+      "min": 5,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "bollinger"
   },
   "bollingerLower": {
     "label": "Bollinger lower band",
     "unit": "price",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Middle SMA(period) minus 2 standard deviations of completed-candle closes. Period counts candles of the selected timeframe.",
-    "period": { "default": 20, "min": 5, "max": 500 },
-    "offset": true
+    "period": {
+      "default": 20,
+      "min": 5,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "bollinger"
   },
   "bollingerBandwidth": {
     "label": "Bollinger bandwidth",
     "unit": "percent",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Upper band minus lower band, as a percentage of the middle band. Falling values indicate a volatility squeeze.",
-    "period": { "default": 20, "min": 5, "max": 500 },
-    "offset": true
+    "period": {
+      "default": 20,
+      "min": 5,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "bollingerBandwidth"
   },
   "adx": {
     "label": "ADX",
     "unit": "points",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Wilder's Average Directional Index. Measures trend strength regardless of direction, from 0 to 100. Period counts candles of the selected timeframe.",
-    "period": { "default": 14, "min": 2, "max": 500 },
-    "offset": true
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "adx"
   },
   "diPlus": {
     "label": "+DI (ADX)",
     "unit": "points",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Positive directional indicator from the ADX system. Compare against -DI to judge trend direction; use with ADX for trend strength.",
-    "period": { "default": 14, "min": 2, "max": 500 },
-    "offset": true
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "diPlus"
   },
   "diMinus": {
     "label": "-DI (ADX)",
     "unit": "points",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Negative directional indicator from the ADX system. Compare against +DI to judge trend direction; use with ADX for trend strength.",
-    "period": { "default": 14, "min": 2, "max": 500 },
-    "offset": true
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "diMinus"
   },
   "supertrend": {
     "label": "Supertrend (10, 3x ATR)",
     "unit": "price",
     "category": "technical",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
-    "description": "Trend-following stop line using a fixed 10-period ATR and 3x multiplier. Price crossing this line is the classic Supertrend buy/sell signal.",
-    "offset": true
+    "description": "Trend-following stop line with configurable ATR period and multiplier. Defaults to 10-period ATR and 3? multiplier.",
+    "offset": true,
+    "indicator": "supertrend",
+    "period": {
+      "default": 10,
+      "min": 2,
+      "max": 500
+    }
   },
   "doji": {
     "label": "Doji candle",
     "unit": "flag",
     "category": "patterns",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "1 when the candle's body is 5% or less of its high-low range, 0 otherwise.",
@@ -654,7 +762,15 @@
     "unit": "flag",
     "category": "patterns",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "1 when the candle has a small body near the top of its range with a lower wick at least twice the body and little to no upper wick, 0 otherwise. Shape only; trend context is not checked.",
@@ -665,7 +781,15 @@
     "unit": "flag",
     "category": "patterns",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "1 when a bullish candle's body fully engulfs the prior bearish candle's body, 0 otherwise.",
@@ -676,7 +800,15 @@
     "unit": "flag",
     "category": "patterns",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "1 when a bearish candle's body fully engulfs the prior bullish candle's body, 0 otherwise.",
@@ -687,11 +819,20 @@
     "unit": "points",
     "category": "price-volume",
     "source": "candles",
-    "frames": ["1m", "5m", "15m", "4h", "1d", "1w", "1mo"],
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
     "monthly": true,
     "trading": true,
     "description": "Cumulative volume-weighted line combining each candle's close position within its range with volume. Rising values indicate accumulation (buying pressure); falling values indicate distribution.",
-    "offset": true
+    "offset": true,
+    "indicator": "accDist"
   },
   "vwap": {
     "label": "VWAP",
@@ -707,7 +848,8 @@
     "monthly": false,
     "trading": true,
     "description": "Session VWAP estimate from completed bars using typical price and volume. Resets each trading session.",
-    "offset": true
+    "offset": true,
+    "indicator": "vwap"
   },
   "priceChange": {
     "label": "Price change",
@@ -1020,5 +1162,926 @@
       "max": 252
     },
     "offset": true
+  },
+  "wma": {
+    "label": "WMA",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Moving average of the chosen price source. Period counts candles.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "wma"
+  },
+  "vwma": {
+    "label": "VWMA",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Moving average of the chosen price source. Period counts candles.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "vwma"
+  },
+  "hma": {
+    "label": "HMA",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Moving average of the chosen price source. Period counts candles.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "hma"
+  },
+  "sar": {
+    "label": "Parabolic SAR",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Parabolic stop and reverse with acceleration capped at Maximum.",
+    "offset": true,
+    "indicator": "sar"
+  },
+  "ichimokuConversion": {
+    "label": "Ichimoku conversion",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Cloud spans are shifted forward; lagging close is visual only and is never offered as a rule. No future candle is used in a decision.",
+    "offset": true,
+    "indicator": "ichimoku"
+  },
+  "ichimokuBase": {
+    "label": "Ichimoku base",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Cloud spans are shifted forward; lagging close is visual only and is never offered as a rule. No future candle is used in a decision.",
+    "offset": true,
+    "indicator": "ichimoku"
+  },
+  "ichimokuA": {
+    "label": "Ichimoku cloud A at decision candle",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Cloud spans are shifted forward; lagging close is visual only and is never offered as a rule. No future candle is used in a decision.",
+    "offset": true,
+    "indicator": "ichimoku"
+  },
+  "ichimokuB": {
+    "label": "Ichimoku cloud B at decision candle",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Cloud spans are shifted forward; lagging close is visual only and is never offered as a rule. No future candle is used in a decision.",
+    "offset": true,
+    "indicator": "ichimoku"
+  },
+  "donchianUpper": {
+    "label": "Donchian upper",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Highest high and lowest low over the period, including the current candle. Use candles earlier = 1 for breakout comparisons.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "donchian"
+  },
+  "donchianLower": {
+    "label": "Donchian lower",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Highest high and lowest low over the period, including the current candle. Use candles earlier = 1 for breakout comparisons.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "donchian"
+  },
+  "keltnerUpper": {
+    "label": "Keltner upper",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "EMA middle line with Wilder ATR bands.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "keltner"
+  },
+  "keltnerLower": {
+    "label": "Keltner lower",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "EMA middle line with Wilder ATR bands.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "keltner"
+  },
+  "atrBandUpper": {
+    "label": "ATR band upper",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Chosen candle price plus/minus Wilder ATR × multiplier. Middle line is the chosen price, not a moving average.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "atrBands"
+  },
+  "atrBandLower": {
+    "label": "ATR band lower",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Chosen candle price plus/minus Wilder ATR × multiplier. Middle line is the chosen price, not a moving average.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "atrBands"
+  },
+  "stochasticK": {
+    "label": "Stochastic K",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Stochastic K on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "stochastic"
+  },
+  "stochasticD": {
+    "label": "Stochastic D",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Stochastic D on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "stochastic"
+  },
+  "stochRsiK": {
+    "label": "Stochastic RSI K",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Stochastic RSI K on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "stochRsi"
+  },
+  "stochRsiD": {
+    "label": "Stochastic RSI D",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Stochastic RSI D on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "stochRsi"
+  },
+  "cci": {
+    "label": "CCI",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "CCI on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "cci"
+  },
+  "roc": {
+    "label": "ROC",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "ROC on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 12,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "roc"
+  },
+  "momentum": {
+    "label": "Momentum",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Momentum on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 10,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "momentum"
+  },
+  "mfi": {
+    "label": "MFI",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "MFI on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "mfi"
+  },
+  "williamsR": {
+    "label": "Williams %R",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Williams %R on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "williamsR"
+  },
+  "obv": {
+    "label": "OBV",
+    "unit": "shares",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "OBV on completed candles.",
+    "offset": true,
+    "indicator": "obv"
+  },
+  "cmf": {
+    "label": "Chaikin money flow",
+    "unit": "ratio",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Chaikin money flow on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "cmf"
+  },
+  "aroonUp": {
+    "label": "Aroon up",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Aroon up on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 25,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "aroon"
+  },
+  "aroonDown": {
+    "label": "Aroon down",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Aroon down on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 25,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "aroon"
+  },
+  "choppiness": {
+    "label": "Choppiness index",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Choppiness index on completed candles.",
+    "offset": true,
+    "period": {
+      "default": 14,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "choppiness"
+  },
+  "macdHistogram": {
+    "label": "MACD histogram",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "MACD histogram on completed candles.",
+    "offset": true,
+    "indicator": "macd"
+  },
+  "relativeStrength": {
+    "label": "Relative strength vs benchmark",
+    "unit": "percent",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Percentage change in the stock/benchmark price ratio over the period. Requires matching benchmark candles; missing dates never use a forward-filled price.",
+    "offset": true,
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "indicator": "relativeStrength"
+  },
+  "pivot": {
+    "label": "Pivot point",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "pivotR1": {
+    "label": "Pivot resistance 1",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "pivotS1": {
+    "label": "Pivot support 1",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "pivotR2": {
+    "label": "Pivot resistance 2",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "pivotS2": {
+    "label": "Pivot support 2",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "pivotR3": {
+    "label": "Pivot resistance 3",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "pivotS3": {
+    "label": "Pivot support 3",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Previous completed pivot period. Qualification uses monthly pivots; trading supports daily, weekly or monthly pivots at or above the candle timeframe.",
+    "offset": true,
+    "indicator": "pivots"
+  },
+  "dema": {
+    "label": "Double EMA (DEMA)",
+    "unit": "price",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "2 ? EMA(source, period) ? EMA(EMA(source, period), period). Requires two EMA warm-up periods; it is not two separate EMA lines.",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "dema"
+  },
+  "connorsRsi": {
+    "label": "Connors RSI (CRSI)",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Average of close-price RSI, RSI of the consecutive up/down closing streak, and the percentile of the current one-candle return against the previous N returns. Equal closes reset the streak to zero; ties do not count as lower returns. Default 3 / 2 / 100.",
+    "period": {
+      "default": 3,
+      "min": 2,
+      "max": 500
+    },
+    "offset": true,
+    "indicator": "connorsRsi"
+  },
+  "candleAverage": {
+    "label": "Candle average price",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Candle average: OHLC4 = (Open + High + Low + Close) / 4; HLC3 = (High + Low + Close) / 3; HL2 = (High + Low) / 2. This is not the broker session average or your average purchase price.",
+    "offset": true,
+    "indicator": "averagePrice"
   }
 }

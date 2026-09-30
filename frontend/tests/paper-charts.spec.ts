@@ -16,12 +16,16 @@ async function setup(page:Page) {
    window.EventSource=class {onmessage:((event:{data:string})=>void)|null=null;onerror=null;constructor(){feeds.push(this);}close(){this.onmessage=null;}} as unknown as typeof EventSource;
  });
  await page.route(url=>url.pathname.startsWith('/api/'),route=>route.fulfill({json:route.request().url().endsWith('/session')?{authenticated:true,mode:'local'}:{}}));
+ await page.route('**/api/watchlists',route=>route.fulfill({json:{lists:[{_id:'personal',ids:[]}],universeCount:3}}));
+ await page.route('**/api/qualification/membership',route=>route.fulfill({json:{month:'2026-09',revision:1,published:true,members:[]}}));
  await page.route('**/api/paper',route=>route.fulfill({json:paper}));
  await page.route('**/api/strategies',route=>route.fulfill({json:[strategy]}));
  await page.route('**/api/paper/orders**',route=>route.fulfill({json:{items:fills,symbols:paper.symbols,hasMore:false,next:null}}));
  await page.route('**/api/paper/sessions/*/stocks/*/chart',route=>route.fulfill({json:{session,position,fills,signals:[signal],truncated:false}}));
  await page.route('**/api/stocks/**',route=>{
-   const url=new URL(route.request().url()),id=decodeURIComponent(url.pathname).includes('NSE:2')?'NSE:2':'NSE:1';
+   const url=new URL(route.request().url()),id=decodeURIComponent(url.pathname).includes('BSE:10')?'BSE:10':decodeURIComponent(url.pathname).includes('NSE:2')?'NSE:2':'NSE:1';
+   const instrument={_id:id,symbol:id==='NSE:2'?'SECOND':'CHARTSTOCK',name:'Chart stock',exchange:id.split(':')[0],isin:id==='NSE:2'?'INE456':'INE123',active:true};
+   if(url.pathname.endsWith('/listings'))return route.fulfill({json:{instrument,listings:id==='NSE:2'?[instrument]:[{...instrument,_id:'NSE:1',exchange:'NSE'},{...instrument,_id:'BSE:10',exchange:'BSE'}]}});
    if(url.pathname.endsWith('/quotes'))return route.fulfill({json:{quotes:[{...quote,instrumentId:id}]}});
    if(url.pathname.endsWith('/chart')){
      const timeframe=url.searchParams.get('timeframe')??'1d',daily=['1d','1w','1mo'].includes(timeframe);
@@ -29,10 +33,10 @@ async function setup(page:Page) {
      if(!daily)for(let i=0;i<9;i++)bars.push({time:new Date(Date.parse('2026-09-28T03:45:00Z')+i*5*60000).toISOString(),open:100,high:110,low:98,close:102,volume:1000});
      return route.fulfill({json:{instrumentId:id,timeframe,bars,source:'fixture',latestCandleAt:bars.at(-1)?.time,refreshedAt:now}});
    }
-   return route.fulfill({json:{instrument:{_id:id,symbol:id==='NSE:1'?'CHARTSTOCK':'SECOND',name:'Chart stock',exchange:'NSE',isin:'INE123'},facts:[],qualification:null}});
+   return route.fulfill({json:{instrument,facts:[],qualification:null}});
  });
 }
-test('open position chart displays actual partial exits, moved stop and separate signals without changing orders',async({page})=>{
+test('open position chart displays actual partial exits, moved stop and separate signals without changing orders',async({page},testInfo)=>{
  const errors:string[]=[],writes:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(['POST','PATCH','DELETE'].includes(r.method())&&r.url().includes('/api/'))writes.push(r.url());});
  await page.addInitScript(()=>{const resizeErrors:string[]=[];Object.assign(window,{resizeErrors});window.addEventListener('error',e=>{if(e.message.includes('ResizeObserver'))resizeErrors.push(e.message);});});
  await setup(page);await page.goto('/paper-trading');await page.getByRole('button',{name:'View CHARTSTOCK chart'}).click();
@@ -48,19 +52,62 @@ test('open position chart displays actual partial exits, moved stop and separate
  await expect(drawer.getByText('SELL paper fill · 4 shares at ₹108.00',{exact:true})).toBeVisible();
  await drawer.getByRole('button',{name:'Indicators',exact:true}).click();
  await page.getByRole('checkbox',{name:'Show strategy indicators',exact:true}).uncheck();
- await page.getByRole('button',{name:'Add indicator',exact:true}).click();
+ await page.getByRole('button',{name:'Configure indicator',exact:true}).click();
+ await page.getByRole('dialog',{name:'EMA settings'}).getByLabel('Period (candles)').fill('21');
+ await page.getByRole('dialog',{name:'EMA settings'}).getByRole('button',{name:'Add to chart'}).click();
  await expect(drawer.getByLabel('Visible indicators')).toContainText('EMA 21 · 5m');
+ await drawer.getByRole('button',{name:'Indicators',exact:true}).click();
  await page.getByRole('button',{name:'Remove EMA 21'}).click();
  await page.getByRole('checkbox',{name:'Show strategy indicators',exact:true}).check();
  await drawer.getByRole('heading',{name:'Price & volume'}).click();
  await drawer.getByRole('button',{name:'Expand stock details'}).click();
- await page.screenshot({path:'.tools/artifacts/paper-chart-desktop.png'});
+ await page.screenshot({path:testInfo.outputPath('paper-chart-desktop.png')});
  await page.setViewportSize({width:390,height:844});
  await expect.poll(()=>drawer.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
  await drawer.getByText('Line',{exact:true}).click();await expect(drawer.getByRole('figure')).toBeVisible();
- await page.screenshot({path:'.tools/artifacts/paper-chart-mobile.png'});
+ await page.screenshot({path:testInfo.outputPath('paper-chart-mobile.png')});
  expect(await page.evaluate(()=>(window as unknown as {resizeErrors:string[]}).resizeErrors)).toEqual([]);
  expect(errors).toEqual([]);expect(writes).toEqual([]);
+});
+
+test('alternate exchange comparison hides original paper fills and restores them on return without orders',async({page})=>{
+ const writes:string[]=[];page.on('request',r=>{if(['POST','PATCH','DELETE'].includes(r.method())&&r.url().includes('/api/'))writes.push(r.url());});
+ await setup(page);await page.goto('/paper-trading');await page.getByRole('button',{name:'View CHARTSTOCK chart'}).click();
+ const drawer=page.getByRole('dialog');await expect(drawer.getByText('6 / 10',{exact:true})).toBeVisible();
+ await drawer.getByLabel('Stock exchange').getByText('BSE',{exact:true}).click();
+ await expect(drawer.getByText('Comparing BSE prices',{exact:true})).toBeVisible();
+ await expect(drawer.getByRole('figure')).toBeVisible();
+ await expect(drawer.getByText('6 / 10',{exact:true})).toHaveCount(0);
+ await expect(drawer.getByText('Current stop ₹100.00',{exact:true})).toHaveCount(0);
+ await expect(drawer.getByRole('checkbox',{name:'Trades & signals',exact:true})).toHaveCount(0);
+ await expect(drawer.getByRole('button',{name:'SELL paper fill',exact:true})).toHaveCount(0);
+ await drawer.getByRole('button',{name:'Back to NSE trade',exact:true}).click();
+ await expect(drawer.getByText('6 / 10',{exact:true})).toBeVisible();
+ await expect(drawer.getByText('Current stop ₹100.00',{exact:true})).toBeVisible();
+ await expect(drawer.getByRole('checkbox',{name:'Trades & signals',exact:true})).toBeChecked();
+ expect(writes).toEqual([]);
+});
+
+test('related-company research hides the original paper trade and restores it on return', async ({ page }) => {
+ const errors:string[]=[],writes:string[]=[];
+ page.on('pageerror',error=>errors.push(error.message));
+ page.on('request',request=>{if(['POST','PATCH','DELETE'].includes(request.method())&&request.url().includes('/api/'))writes.push(request.url());});
+ await setup(page);
+ await page.route('**/api/stocks/*/related',route=>route.fulfill({json:{sector:'Industrials',ordering:'alphabetical',items:[{_id:'NSE:2',symbol:'SECOND',name:'Second company',exchange:'NSE',isin:'INE456',active:true,marketCap:null,marketCapObservedAt:null}]}}));
+ await page.goto('/paper-trading');await page.getByRole('button',{name:'View CHARTSTOCK chart'}).click();
+ const drawer=page.locator('.stock-detail-drawer');
+ await expect(drawer.getByText('6 / 10',{exact:true})).toBeVisible();
+ await drawer.getByRole('tab',{name:'Overview',exact:true}).click();
+ await drawer.getByRole('button',{name:'View related stock SECOND on NSE',exact:true}).click();
+ await expect(drawer.locator('.stock-drawer-title')).toContainText('SECOND');
+ await expect(drawer.getByText('6 / 10',{exact:true})).toHaveCount(0);
+ await drawer.getByRole('tab',{name:'Advanced chart',exact:true}).click();
+ await expect(drawer.getByRole('checkbox',{name:'Trades & signals',exact:true})).toHaveCount(0);
+ await expect(drawer.getByText('Current stop ₹100.00',{exact:true})).toHaveCount(0);
+ await drawer.getByRole('button',{name:'Back to CHARTSTOCK',exact:true}).click();
+ await expect(drawer.getByText('6 / 10',{exact:true})).toBeVisible();
+ await expect(drawer.getByText('Current stop ₹100.00',{exact:true})).toBeVisible();
+ expect(writes).toEqual([]);expect(errors).toEqual([]);
 });
 test('a signal opens its trigger explanation and chart indicators use the saved strategy revision',async({page})=>{
  await setup(page);await page.goto('/signal-runner');await page.getByRole('button',{name:'View CHARTSTOCK chart'}).click();
@@ -77,7 +124,7 @@ test('monitoring clearly identifies older rules and a stock list with no eligibl
  await page.route('**/api/strategies',route=>route.fulfill({json:[{...strategy,revision:4}]}));
  await page.route('**/api/paper',route=>route.fulfill({json:{...paper,sessions:[{...session,scope:{selectedIds:['NSE:1','NSE:2'],eligibleIds:[],entryIds:[],heldIds:[],monitoredIds:[],excludedIds:['NSE:1','NSE:2']}}]}}));
  await page.goto('/signal-runner');
- await expect(page.getByText('Newer rules saved · revision 4',{exact:true})).toBeVisible();
+ await expect(page.getByText('Earlier rules · current 4',{exact:true}).first()).toBeVisible();
  await expect(page.getByText('No eligible buy stocks',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Update stock selection',exact:true})).toBeVisible();
 });
@@ -86,7 +133,7 @@ test('closed trades remain chartable from order history and stocks can be naviga
  await page.goto('/paper-trading');await page.getByRole('tab',{name:'Trade & order history'}).click();
  await page.getByRole('button',{name:'View CHARTSTOCK chart'}).last().click();
  const drawer=page.getByRole('dialog');await expect(drawer.getByText('No open position',{exact:true})).toBeVisible();
- await expect(drawer.getByText('This stock is not in the current published qualified list. Earlier signals and trades remain available.')).toBeVisible();
+ await expect(drawer.getByText(/^This stock is not in the current published qualified list\./)).toBeVisible();
  await expect(drawer.getByText('Current stop ₹100.00',{exact:true})).toHaveCount(0);
  await drawer.getByRole('button',{name:'Next stock'}).click();await expect(drawer.getByRole('figure',{name:'SECOND price and volume chart'})).toBeVisible();
 });

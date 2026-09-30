@@ -1,9 +1,10 @@
+import { settingDefaults, type CalculationSettings, type IndicatorKind } from '../../../shared/indicator-settings.js';
 import { createHash } from 'node:crypto';
 import { ruleFields } from '../../../shared/rule-fields.js';
 import type { StrategyDraft } from '../validations/strategy.validation.js';
 
 type Side = 'entry' | 'exit';
-type Condition = { left: string; leftFrame: string; leftPeriod?: number; leftOffset?: number; operator: string; rightType: string; right: string; rightFrame: string; rightPeriod?: number; rightOffset?: number; value: number; upper?: number; multiplier?: number; lookback?: number; tolerance?: number };
+type Condition = { leftSettings?: CalculationSettings; rightSettings?: CalculationSettings; left: string; leftFrame: string; leftPeriod?: number; leftOffset?: number; operator: string; rightType: string; right: string; rightFrame: string; rightPeriod?: number; rightOffset?: number; value: number; upper?: number; multiplier?: number; lookback?: number; tolerance?: number };
 type Rule = { enabled?: boolean; logic: string; groups: { logic: string; conditions: Condition[] }[]; cadence?: string };
 export interface ConditionLocation { side: Side; group: number; condition: number }
 export interface RuleReviewIssue { id: string; severity: 'error' | 'warning' | 'suggestion'; title: string; explanation: string; recommendation: string; section: Side | 'risk' | 'setup'; locations: ConditionLocation[]; fix?: { kind: 'remove-condition'; label: string; location: ConditionLocation; expectedCondition: Condition } }
@@ -20,16 +21,19 @@ function intersect(a: Interval[], b: Interval[]): Interval[] {
   })).filter(valid));
 }
 const subset = (a: Interval[], b: Interval[]) => a.every(x => b.some(y => (x.lo > y.lo || x.lo === y.lo && (!x.loClosed || y.loClosed)) && (x.hi < y.hi || x.hi === y.hi && (!x.hiClosed || y.hiClosed))));
-function operand(field: string, frame: string, period?: number, offset = 0) {
+function operand(field: string, frame: string, period?: number, offset = 0, settings?: CalculationSettings) {
   const alias = /^(ema|sma)(\d+)$/.exec(field);
   if (alias) { field = alias[1]; period = Number(alias[2]); }
   if (['avgVolume20', 'avgVolume6'].includes(field)) { period = field === 'avgVolume20' ? 20 : 6; field = 'avgVolume'; }
   if (field === 'volumeRatio') field = 'rvol';
-  return JSON.stringify([field, frame, period ?? ruleFields[field]?.period?.default ?? null, offset]);
+  const kind=ruleFields[field]?.indicator as IndicatorKind|undefined;
+  const effective = {...(kind?settingDefaults(kind):{}), ...settings};
+  if(kind==='adx' && settings?.adxSmoothing===undefined)effective.adxSmoothing=period??14;
+  return JSON.stringify([field, frame, period ?? ruleFields[field]?.period?.default ?? null, offset, Object.fromEntries(Object.entries(effective).sort(([a],[b])=>a.localeCompare(b)))]);
 }
 function signature(c: Condition) {
-  return JSON.stringify([operand(c.left,c.leftFrame,c.leftPeriod,c.leftOffset), c.operator,
-    c.rightType === 'indicator' ? [operand(c.right,c.rightFrame,c.rightPeriod,c.rightOffset), c.multiplier ?? 1] : c.value,
+  return JSON.stringify([operand(c.left,c.leftFrame,c.leftPeriod,c.leftOffset,c.leftSettings), c.operator,
+    c.rightType === 'indicator' ? [operand(c.right,c.rightFrame,c.rightPeriod,c.rightOffset,c.rightSettings), c.multiplier ?? 1] : c.value,
     ['between','notBetween'].includes(c.operator) ? c.upper : null,
     ['crossAbove','crossBelow','increasing','decreasing'].includes(c.operator) ? c.lookback ?? 1 : null,
     ['within','aboveBy','belowBy'].includes(c.operator) ? c.tolerance : null]);
@@ -37,12 +41,12 @@ function signature(c: Condition) {
 function constraint(c: Condition): Constraint | undefined {
   if (!c?.left || !c.leftFrame) return;
   const upper=c.upper;
-  let key=operand(c.left,c.leftFrame,c.leftPeriod,c.leftOffset), domain=[span()], value=c.value, op=c.operator, reverse=false;
+  let key=operand(c.left,c.leftFrame,c.leftPeriod,c.leftOffset,c.leftSettings), domain=[span()], value=c.value, op=c.operator, reverse=false;
   const exact=!op.startsWith('cross');
   if (!exact) { if ((c.lookback ?? 1)!==1) return; op=op==='crossAbove'?'gt':op==='crossBelow'?'lt':op; }
   if (c.rightType==='indicator') {
     if (!['gt','gte','lt','lte','eq','neq'].includes(op)) return;
-    const right=operand(c.right,c.rightFrame,c.rightPeriod,c.rightOffset), multiple=c.multiplier??1;
+    const right=operand(c.right,c.rightFrame,c.rightPeriod,c.rightOffset,c.rightSettings), multiple=c.multiplier??1;
     if (!Number.isFinite(multiple) || multiple<=0) return;
     if(multiple===1){reverse=key>right;domain=key===right?[span(0,0,true,true)]:[span()];key=JSON.stringify(['difference',...[key,right].sort()]);}
     else key=JSON.stringify(['difference',key,right,multiple]);
@@ -89,7 +93,7 @@ const sideName=(s:Side)=>s==='entry'?'Buy':'Sell';
 const location=(r:Ref)=>`${sideName(r.at.side)} group ${r.at.group+1}, condition ${r.at.condition+1}`;
 
 /** Conservative structural checks. No market data, model calls or profitability score. */
-export function reviewStrategy(draft: StrategyDraft): RuleReview {
+export function reviewStrategy(draft: Pick<StrategyDraft, 'entry' | 'exit'> & Partial<Pick<StrategyDraft, 'risk'>>): RuleReview {
   const issues:RuleReviewIssue[]=[],positives:string[]=[],limitations:string[]=[];
   const rules={entry:draft.entry as unknown as Rule,exit:draft.exit as unknown as Rule};
   const add=(issue:Omit<RuleReviewIssue,'id'>)=>issues.push({...issue,id:`${issue.section}-${issues.length}`});

@@ -1,1 +1,10 @@
-{"name":"@quantforge/rule-catalog","version":"1.0.0","private":true,"type":"module","exports":{"./fields.json":"./fields.json"}}
+{
+  "name": "@quantforge/rule-catalog",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./fields.json": "./fields.json",
+    "./indicators.json": "./indicators.json"
+  }
+}

@@ -1,4 +1,6 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import type { VolumeStyle } from '../../modules/stock-details/utils/volumeSettings';
+import { IndicatorCloud } from './IndicatorCloud';
+import { useEffect, useRef, useState } from 'react';
 import { theme } from 'antd';
 import { CandlestickSeries, ColorType, HistogramSeries, LineSeries, LineStyle, TickMarkType, createChart, createSeriesMarkers,
   type IChartApi, type IPriceLine, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp } from 'lightweight-charts';
@@ -15,16 +17,17 @@ function formatTime(time: Time) {
   return `${time.day}/${time.month}/${time.year}`;
 }
 interface ChartRefs {
-  chart: IChartApi; candles: ISeriesApi<'Candlestick'>; line: ISeriesApi<'Line'>; volume: ISeriesApi<'Histogram'>;
+  cloud: IndicatorCloud; chart: IChartApi; candles: ISeriesApi<'Candlestick'>; line: ISeriesApi<'Line'>; volume?: ISeriesApi<'Histogram'>;
   extras: Map<string, ISeriesApi<'Line'> | ISeriesApi<'Histogram'>>; layout: string; markers: ISeriesMarkersPluginApi<Time>[];
   prices: IPriceLine[]; levels: IPriceLine[][]; fitted: boolean; focused?: string; bars: Map<Time, ChartBar>;
 }
 const noLines: IndicatorLine[] = [], noEvents: ChartEvent[] = [], noLevels: ChartLevel[] = [];
-export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, indicators = noLines, events = noEvents, levels = noLevels, focusEventId, onSelectEvent, onHoverTime, visibleRange, replayStep }: {
+export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, volumeStyle, showVolume = true, fitAll = false, indicators = noLines, events = noEvents, levels = noLevels, focusEventId, onSelectEvent, onHoverTime, visibleRange, replayStep }: {
   bars: ChartBar[]; quote?: StockQuote; timeframe: StockTimeframe; kind: 'candles' | 'line'; symbol: string;
   indicators?: IndicatorLine[]; events?: ChartEvent[]; levels?: ChartLevel[]; focusEventId?: string; onSelectEvent?: (id: string) => void; onHoverTime?: (time?: string) => void;
   visibleRange?: { from: string; to: string };
   replayStep?: string;
+  showVolume?: boolean; fitAll?: boolean; volumeStyle?: VolumeStyle;
 }) {
   const container = useRef<HTMLDivElement>(null), refs = useRef<ChartRefs | null>(null), select = useRef(onSelectEvent);
   const hovered = useRef(onHoverTime);
@@ -32,7 +35,7 @@ export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, in
   const replayVersion = useRef(replayStep);
   const { token } = theme.useToken();
   const { colorBgContainer, colorTextSecondary, colorBorderSecondary, colorSuccess, colorError } = token;
-  const paneCount = new Set(indicators.filter(i => i.pane !== 'price').map(i => i.pane)).size;
+  const paneCount = new Set(indicators.filter(i => !['price', 'volume'].includes(i.pane)).map(i => i.pane)).size;
   const height = 410 + paneCount * 105;
   useEffect(() => { select.current = onSelectEvent; }, [onSelectEvent]);
   useEffect(() => { hovered.current = onHoverTime; }, [onHoverTime]);
@@ -51,17 +54,17 @@ export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, in
     const priceFormat = { type: 'custom' as const, minMove: 0.01, formatter: (value: number) => stockNumber(value) };
     const candles = chart.addSeries(CandlestickSeries, { priceFormat, upColor: colorSuccess, downColor: colorError, wickUpColor: colorSuccess, wickDownColor: colorError, borderVisible: false, priceLineVisible: false, lastValueVisible: false });
     const line = chart.addSeries(LineSeries, { priceFormat, color: '#5477e7', lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
-    const volume = chart.addSeries(HistogramSeries, { title: 'Volume', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false }, 1);
-    chart.panes()[0].setStretchFactor(4); chart.panes()[1].setStretchFactor(1);
+    chart.panes()[0].setStretchFactor(4);
     const prices = [candles, line].map(series => series.createPriceLine({ price: 0, color: colorTextSecondary, lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: false, title: 'LTP', lineVisible: false }));
     const markers = [createSeriesMarkers(candles, [], { autoScale: false }), createSeriesMarkers(line, [], { autoScale: false })];
-    refs.current = { chart, candles, line, volume, prices, extras: new Map(), layout: '', markers, levels: [[], []], fitted: false, bars: new Map() };
+    const cloud = new IndicatorCloud(); candles.attachPrimitive(cloud);
+    refs.current = { cloud, chart, candles, line, prices, extras: new Map(), layout: '', markers, levels: [[], []], fitted: false, bars: new Map() };
     chart.subscribeCrosshairMove(event => {
       const value = event.time && refs.current?.bars.get(typeof event.time === 'object' ? `${event.time.year}-${String(event.time.month).padStart(2, '0')}-${String(event.time.day).padStart(2, '0')}` : event.time);
       setHover(value ? { ...value, time: formatTime(event.time!), replayStep: replayVersion.current } : null);
       hovered.current?.(value ? value.time : undefined);
     });
-    chart.subscribeClick(event => { if (typeof event.hoveredObjectId === 'string') select.current?.(event.hoveredObjectId); });
+    chart.subscribeClick(event => { if (typeof event.hoveredObjectId === 'string' && !event.hoveredObjectId.startsWith('indicator-cross:')) select.current?.(event.hoveredObjectId); });
     // Resize outside the observer's layout pass: changing panes or drawer width
     // must not recursively deliver another resize notification in the same frame.
     let resizeFrame = 0, lastWidth = element.clientWidth, lastHeight = element.clientHeight;
@@ -82,21 +85,34 @@ export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, in
     view.bars = new Map(bars.map(bar => [chartTime(bar.time), bar]));
     view.candles.setData(bars.map(bar => ({ ...bar, time: chartTime(bar.time) })));
     view.line.setData(bars.map(bar => ({ time: chartTime(bar.time), value: bar.close })));
-    view.volume.setData(bars.map(bar => ({ time: chartTime(bar.time), value: bar.volume, color: bar.close >= bar.open ? `${colorSuccess}70` : `${colorError}70` })));
-    const layout = indicators.map(i => `${i.id}:${i.pane}:${i.histogram}`).join('|');
+    const shownIndicators = indicators.filter(i => showVolume || i.pane !== 'volume');
+    const layout = `${showVolume}:` + shownIndicators.map(i => `${i.id}:${i.pane}:${i.histogram}:${JSON.stringify(i.guides)}`).join('|');
     if (layout !== view.layout) {
       for (const series of [...view.extras.values()].reverse()) view.chart.removeSeries(series);
       view.extras.clear(); view.layout = layout;
+      if (view.volume) { view.chart.removeSeries(view.volume); view.volume = undefined; }
+      if (showVolume) {
+        view.volume = view.chart.addSeries(HistogramSeries, { title: 'Volume', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false }, 1);
+        view.chart.panes()[1].setStretchFactor(1);
+      }
+      const firstStudyPane = showVolume ? 2 : 1;
       const panes = new Map<string, number>();
-      for (const i of indicators) {
-        if (i.pane !== 'price' && !panes.has(i.pane)) panes.set(i.pane, panes.size + 2);
-        const pane = i.pane === 'price' ? 0 : panes.get(i.pane)!;
-        const options = { title: i.label.replace(' · Strategy', ''), color: i.color, priceLineVisible: false, lastValueVisible: false, priceFormat: { type: 'price' as const, precision: 2, minMove: 0.01 } };
-        view.extras.set(i.id, i.histogram ? view.chart.addSeries(HistogramSeries, options, pane) : view.chart.addSeries(LineSeries, { ...options, lineWidth: 1 }, pane));
-        if (pane > 1) view.chart.panes()[pane].setStretchFactor(1.25);
+      for (const i of shownIndicators) {
+        if (!['price', 'volume'].includes(i.pane) && !panes.has(i.pane)) panes.set(i.pane, panes.size + firstStudyPane);
+        const pane = i.pane === 'price' ? 0 : i.pane === 'volume' ? 1 : panes.get(i.pane)!;
+        const options = { title: i.label.replace(' · Strategy', ''), color: i.color, priceLineVisible: false, lastValueVisible: false, priceFormat: i.pane === 'volume' ? { type: 'volume' as const } : { type: 'price' as const, precision: 2, minMove: 0.01 } };
+        view.extras.set(i.id, i.histogram ? view.chart.addSeries(HistogramSeries, options, pane) : view.chart.addSeries(LineSeries, { ...options, lineWidth: i.lineWidth ?? 1 }, pane));
+        for(const value of i.guides??[])view.extras.get(i.id)?.createPriceLine({price:value,color:colorTextSecondary,lineStyle:LineStyle.Dashed,lineWidth:1,axisLabelVisible:false,title:''});
+        if (pane >= firstStudyPane) view.chart.panes()[pane].setStretchFactor(1.25);
       }
     }
-    for (const i of indicators) view.extras.get(i.id)?.setData(i.values.map(p => ({ time: chartTime(p.time), value: p.value, ...(i.histogram ? { color: p.value >= 0 ? `${colorSuccess}80` : `${colorError}80` } : {}) })));
+    view.volume?.setData(bars.map(bar => ({ time: chartTime(bar.time), value: bar.volume, color: bar.close >= bar.open ? `${volumeStyle?.upColor??colorSuccess}${Math.round((volumeStyle?.opacity??44)/100*255).toString(16).padStart(2,'0')}` : `${volumeStyle?.downColor??colorError}${Math.round((volumeStyle?.opacity??44)/100*255).toString(16).padStart(2,'0')}` })));
+    for (const i of shownIndicators) {
+      const series = view.extras.get(i.id);
+      series?.applyOptions({ title: i.label.replace(' · Strategy', ''), color: i.color, ...(!i.histogram ? { lineWidth: i.lineWidth ?? 1 } : {}) });
+      series?.setData(i.values.map(p => ({ time: chartTime(p.time), value: p.value, ...(i.histogram ? { color: i.histogramColor ?? (p.value >= 0 ? `${colorSuccess}80` : `${colorError}80`) } : {}) })));
+    }
+    view.cloud.update(shownIndicators.filter(i=>i.cloud==='a').map(a=>{const b=shownIndicators.find(i=>i.cloud==='b'&&i.id.slice(0,-2)===a.id.slice(0,-2));const lower=new Map(b?.values.map(p=>[p.time,p.value])??[]);return a.values.flatMap(p=>lower.has(p.time)?[{time:chartTime(p.time),upper:p.value,lower:lower.get(p.time)!}]:[]);}),[`${colorSuccess}25`,`${colorError}25`]);
     view.candles.applyOptions({ visible: kind === 'candles' }); view.line.applyOptions({ visible: kind === 'line' });
     const visible = visibleChartEvents(events, bars, timeframe);
     const markers = visible.map(e => ({ id: e.id, time: chartTime(e.time), position: e.side === 'BUY' ? 'belowBar' as const : 'aboveBar' as const,
@@ -104,7 +120,9 @@ export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, in
       shape: e.kind === 'signal' ? 'circle' as const : e.side === 'BUY' ? 'arrowUp' as const : 'arrowDown' as const,
       text: e.kind === 'signal' ? `${e.side} signal` : `${e.kind === 'backtest' ? 'BT ' : ''}${e.side} ${e.quantity} @ ${stockNumber(e.price!)}`, size: e.id === focusEventId ? 2 : 1,
     }));
-    view.markers[0].setMarkers(kind === 'candles' ? markers : []); view.markers[1].setMarkers(kind === 'line' ? markers : []);
+    const crossMarkers = shownIndicators.flatMap(i=>(i.markers??[]).map((m,index)=>({id:`indicator-cross:${i.id}:${index}`,time:chartTime(m.time),position:m.direction==='above'?'belowBar' as const:'aboveBar' as const,color:m.direction==='above'?'#8064d8':'#c58822',shape:'square' as const,text:m.label,size:1})));
+    const allMarkers=[...markers,...crossMarkers].sort((a,b)=>Number(typeof a.time==='number'?a.time:Date.parse(String(a.time))/1000)-Number(typeof b.time==='number'?b.time:Date.parse(String(b.time))/1000));
+    view.markers[0].setMarkers(kind === 'candles' ? allMarkers : []); view.markers[1].setMarkers(kind === 'line' ? allMarkers : []);
     [view.candles, view.line].forEach((series, index) => {
       for (const level of view.levels[index]) series.removePriceLine(level);
       view.levels[index] = levels.map(level => series.createPriceLine({ price: level.price, title: level.label, axisLabelVisible: true,
@@ -120,13 +138,13 @@ export function StockCandlestickChart({ bars, quote, timeframe, kind, symbol, in
     } else if (bars.length && (!view.fitted || (!focusEventId && view.focused))) {
       const first = visibleRange ? bars.findIndex(b => b.time >= bucketTime(Date.parse(visibleRange.from), timeframe)) : -1;
       const last = visibleRange ? bars.findLastIndex(b => b.time <= bucketTime(Date.parse(visibleRange.to) - 1, timeframe)) : bars.length - 1;
-      view.chart.timeScale().setVisibleLogicalRange({ from: first >= 0 ? first - 2 : Math.max(0, bars.length - 100), to: (last >= 0 ? last : bars.length - 1) + 4 });
+      view.chart.timeScale().setVisibleLogicalRange({ from: first >= 0 ? first - 2 : fitAll ? -1 : Math.max(0, bars.length - 100), to: (last >= 0 ? last : bars.length - 1) + (fitAll ? 1 : 4) });
       view.fitted = true; view.focused = undefined;
     }
-  }, [bars, indicators, kind, events, levels, quote, focusEventId, timeframe, colorBgContainer, colorTextSecondary, colorBorderSecondary, colorSuccess, colorError, visibleRange, replayStep]);
+  }, [bars, indicators, kind, events, levels, quote, focusEventId, timeframe, colorBgContainer, colorTextSecondary, colorBorderSecondary, colorSuccess, colorError, visibleRange, replayStep, showVolume, fitAll, volumeStyle]);
   const activeHover = hover?.replayStep === replayStep ? hover : null;
   const display = activeHover ?? bars.at(-1);
-  return <div className="stock-candle-chart" role="figure" aria-label={`${symbol} price and volume chart`} onMouseLeave={() => { setHover(null); onHoverTime?.(undefined); }}>
+  return <div className="stock-candle-chart" role="figure" aria-label={`${symbol} price${showVolume ? ' and volume' : ''} chart`} data-volume-visible={showVolume} data-cross-count={indicators.reduce((sum,i)=>sum+(i.markers?.length??0),0)} onMouseLeave={() => { setHover(null); onHoverTime?.(undefined); }}>
     <div className="stock-chart-ohlc">{display && <><span>{activeHover ? activeHover.time : formatTime(chartTime(display.time))}</span><span>O <b>{stockNumber(display.open)}</b></span><span>H <b>{stockNumber(display.high)}</b></span><span>L <b>{stockNumber(display.low)}</b></span><span>C <b>{stockNumber(display.close)}</b></span><span>V <b>{display.volume.toLocaleString('en-IN')}</b></span></>}</div>
     <div ref={container} className="stock-chart-canvas" style={{ height }} />
     <div className="stock-chart-footer"><span>Scroll to zoom · drag to pan · hover to inspect · IST</span><span><button type="button" onClick={() => refs.current?.chart.timeScale().scrollToRealTime()}>Latest candle</button> <button type="button" onClick={() => refs.current?.chart.timeScale().fitContent()}>Fit chart</button></span></div>

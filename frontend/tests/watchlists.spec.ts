@@ -72,6 +72,8 @@ async function fixture(page: Page) {
     if (path === '/api/market-data/instruments') return route.fulfill({ json: all.filter(stock => stock.symbol.toLowerCase().includes(params.get('q')!.toLowerCase())) });
     if (path === '/api/stocks/quotes') return route.fulfill({ json: { quotes: [] } });
     if (path.endsWith('/chart')) return route.fulfill({ json: { bars: [], source: 'Test', timeframe: '1d' } });
+    if (path.endsWith('/listings')) { const instrument = all.find(stock => decodeURIComponent(path).includes(stock._id)) ?? all[0]; return route.fulfill({ json: { instrument, listings: all.filter(stock => stock.isin === instrument.isin) } }); }
+    if (path.endsWith('/related')) { const instrument = all.find(stock => decodeURIComponent(path).includes(stock._id)) ?? all[0]; return route.fulfill({ json: { sector: 'Banking', ordering: 'similar-market-cap', items: all.filter(stock => stock.exchange === instrument.exchange && stock.isin !== instrument.isin).slice(0, 3).map(stock => ({ ...stock, marketCap: 2000, marketCapObservedAt: '2026-09-29T10:00:00Z' })) } }); }
     if (path.startsWith('/api/stocks/')) return route.fulfill({ json: { instrument: all.find(stock => path.includes(encodeURIComponent(stock._id))) ?? all[0], facts: [], qualification: null } });
     return route.fulfill({ json: {} });
   });
@@ -119,6 +121,57 @@ test('one-click watchlist persists, handles both exchanges, and manual qualifica
   expect(state.members).toHaveLength(2); // Removing a star never removes qualification.
   expect(state.mutations.every(path => path.startsWith('/api/watchlists/') || path === '/api/qualification/manual')).toBe(true);
   expect(state.errors).toEqual([]);
+});
+
+test('recently viewed companies persist, deduplicate exchanges and open related stocks without changing watchlists', async ({ page }, testInfo) => {
+  test.setTimeout(90000);
+  page.setDefaultTimeout(15000);
+  const state = await fixture(page);
+  await page.goto('/market-data/watchlists');
+  const recent = page.getByRole('region', { name: 'Recently viewed stocks', exact: true });
+  await expect(recent).toHaveCount(0);
+  await page.getByRole('button', { name: 'STOCK00', exact: true }).click();
+  const drawer = page.locator('.stock-detail-drawer');
+  await drawer.locator('.stock-exchange-switch label').filter({ hasText: 'BSE' }).click();
+  await expect(drawer.locator('.stock-drawer-title')).toContainText('STOCK01');
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(recent.getByRole('button', { name: /^Reopen / })).toHaveCount(1);
+  await recent.getByRole('button', { name: 'Reopen STOCK01 on BSE' }).click();
+  await expect(drawer.locator('.stock-drawer-title')).toContainText('STOCK01');
+  const related = drawer.getByRole('region', { name: 'Related stocks', exact: true });
+  await expect(related).toContainText('Same sector · Banking');
+  await related.getByRole('button', { name: 'View related stock STOCK03 on BSE' }).click();
+  await expect(drawer.locator('.stock-drawer-title')).toContainText('STOCK03');
+  await expect(drawer.getByRole('button', { name: 'Previous stock', exact: true })).toBeDisabled();
+  await drawer.getByRole('button', { name: 'Back to STOCK01', exact: true }).click();
+  await expect(drawer.locator('.stock-drawer-title')).toContainText('STOCK01');
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  for (const symbol of ['STOCK02', 'STOCK04', 'STOCK06', 'STOCK08']) {
+    await page.getByRole('button', { name: symbol, exact: true }).click();
+    await expect(drawer.locator('.stock-exchange-note')).not.toContainText('Checking');
+    await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  }
+  await expect(recent.getByRole('button', { name: /^Reopen / })).toHaveCount(4);
+  await recent.getByRole('button', { name: 'Show all (6)', exact: true }).click();
+  await expect(recent.getByRole('button', { name: /^Reopen / })).toHaveCount(6);
+  await page.reload();
+  await expect(recent.getByRole('button', { name: /^Reopen / }).first()).toHaveAccessibleName('Reopen STOCK08 on NSE');
+  await page.screenshot({ path: testInfo.outputPath('recent-stocks-desktop.png'), fullPage: true });
+  await recent.getByRole('button', { name: 'Reopen STOCK08 on NSE' }).click();
+  await drawer.getByRole('region', { name: 'Related stocks', exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('related-stocks-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await drawer.locator('.ant-drawer-body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('related-stocks-mobile.png') });
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  await recent.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('recent-stocks-mobile.png') });
+  await recent.getByRole('button', { name: 'Clear history', exact: true }).click();
+  await expect(recent).toHaveCount(0);
+  await page.reload(); await expect(recent).toHaveCount(0);
+  expect(state.list.ids).toHaveLength(0);
+  expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
 
 test('discovery explains its rules, ranks across pages, supports BSE, and keeps watchlist and qualification actions', async ({ page }, testInfo) => {

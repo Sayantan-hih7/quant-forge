@@ -22,7 +22,7 @@ export default function BackendQualificationPage() {
       {data.readiness && <QualificationReadiness readiness={data.readiness} run={data.runs[0]?.fingerprint === data.rule?.fingerprint ? data.runs[0] : undefined} />}
       <BackendScanActivity state={data} refresh={refresh} />
       <div className="q-workspace"><Tabs activeKey={tab} onChange={tab => setParams({ tab })} destroyOnHidden={false} items={[
-        { key: 'rules', label: 'Monthly rules', forceRender: true, children: <SavedMonthlyRuleBuilder state={data} capabilities={capabilities} refresh={refresh} /> },
+        { key: 'rules', label: 'Monthly rules', forceRender: true, children: <SavedMonthlyRuleBuilder visible={tab === 'rules'} state={data} capabilities={capabilities} refresh={refresh} /> },
         { key: 'universe', label: data.universe ? `Qualified stocks (${stocks.length})` : 'Qualified stocks', children: <BackendQualifiedStocks visible={tab === 'universe'} state={data} stocks={stocks} capabilities={capabilities} refresh={refresh} onRules={() => setParams({ tab: 'rules' })} /> },
         { key: 'not-qualified', label: 'Not qualified', children: <div className="monthly-rule-builder"><h2>Not qualified in the latest completed scan</h2>{completed ? <>{completed.fingerprint !== data.rule?.fingerprint && <Alert className="mb-5" type="warning" showIcon title="These results use earlier saved rules. Complete a new scan to evaluate your current rules." />}<ScanResults key={completed._id} run={completed} outsideUniverse onChanged={refresh} visible={tab === 'not-qualified'} /></> : <Empty description="Complete a monthly scan to review stocks that failed rules or need more data." />}</div> },
       ]} /></div>

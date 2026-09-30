@@ -27,6 +27,7 @@
     "test": "npm run test --workspace @quantforge/backend && npm run test:engine && npm run test:startup",
     "test:engine": "node --import tsx scripts/test-engine.ts",
     "test:startup": "node --import tsx --test scripts/tests/*.test.ts",
+    "test:indicators": "node --import tsx --test frontend/tests/chart-indicators.unit.ts frontend/tests/chart-overview.unit.ts frontend/tests/indicator-parity.unit.ts",
     "test:ui": "npm run test:ui --workspace @quantforge/frontend --"
   },
   "devDependencies": {

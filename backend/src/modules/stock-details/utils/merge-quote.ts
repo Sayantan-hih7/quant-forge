@@ -10,8 +10,10 @@ export function mergeQuote(previous: StockQuote | undefined, incoming: StockQuot
   const streaming = previous.source.endsWith('-stream') && now - Date.parse(previous.receivedAt) < 20000;
   const keep = older || streaming && !incoming.source.endsWith('-stream');
   const winner = keep ? previous : incoming, other = keep ? incoming : previous;
-  if (!winner.lastTradeAt || !other.lastTradeAt || indianDate(winner.lastTradeAt) !== indianDate(other.lastTradeAt)) return winner;
-  const result = { ...winner };
+  const depth=[previous.depth,incoming.depth].filter(x=>!!x).sort((a,b)=>b.receivedAt.localeCompare(a.receivedAt))[0];
+  // Depth has its own receipt clock; a thinly traded stock can have new orders with an old last-trade time.
+  const result = { ...winner, ...(depth?{depth}:{}) };
+  if (!winner.lastTradeAt || !other.lastTradeAt || indianDate(winner.lastTradeAt) !== indianDate(other.lastTradeAt)) return result;
   for (const field of ['previousClose', 'open', 'high', 'low', 'averagePrice', 'lowerCircuit', 'upperCircuit'] as const) result[field] ??= other[field];
   // Never borrow cumulative volume across providers; chart deltas depend on its source.
   return withMovement(result);

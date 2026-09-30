@@ -1,3 +1,4 @@
+import { calculationSettingsSchema } from '../../stock-details/utils/calculationSettingsSchema';
 import { fieldParameterError, ruleFields } from '../config/ruleFields';
 import { z } from 'zod';
 import { allowedFrames, metrics } from '../config/metrics';
@@ -12,6 +13,7 @@ export const ruleSchema = z.object({
   tier: z.enum(['base', 'tactical']), horizon: z.enum(['intraday', 'swing', 'long-term']),
   logic: z.enum(['AND', 'OR']), side: z.enum(['BUY', 'SELL']), cadence: z.enum(['1m', '5m', '15m', 'daily']),
   groups: z.array(z.object({ logic: z.enum(['AND', 'OR']), conditions: z.array(z.object({
+    leftSettings: calculationSettingsSchema.optional(), rightSettings: calculationSettingsSchema.optional(),
     leftPeriod: numeric.int().min(2).max(500).optional(), leftOffset: numeric.int().min(0).max(120).optional(),
     rightPeriod: numeric.int().min(2).max(500).optional(), rightOffset: numeric.int().min(0).max(120).optional(),
     left: metric, leftFrame: frame, operator: z.enum(['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'between', 'notBetween', 'crossAbove', 'crossBelow', 'increasing', 'decreasing', 'within', 'aboveBy', 'belowBy']),
@@ -30,11 +32,11 @@ export const ruleSchema = z.object({
     const checkFrame = (metricId: Metric, timeframe: Timeframe, field: string) => {
       if (!allowedFrames(metricId, rule.tier).includes(timeframe) || (rule.tier === 'base' && !metrics[metricId].base)) error(field, 'Choose a supported timeframe for this tier and indicator');
     };
-    const leftError = fieldParameterError(condition.left, condition.leftPeriod, condition.leftOffset);
+    const leftError = fieldParameterError(condition.left, condition.leftPeriod, condition.leftOffset, condition.leftSettings);
     if (leftError) error('leftPeriod', leftError);
     checkFrame(condition.left, condition.leftFrame, 'leftFrame');
     if (condition.rightType === 'indicator') {
-      const rightError = fieldParameterError(condition.right, condition.rightPeriod, condition.rightOffset);
+      const rightError = fieldParameterError(condition.right, condition.rightPeriod, condition.rightOffset, condition.rightSettings);
       if (rightError) error('rightPeriod', rightError);
       checkFrame(condition.right, condition.rightFrame, 'rightFrame');
       if (metrics[condition.left].unit !== metrics[condition.right].unit) error('right', 'Compare indicators with matching units');

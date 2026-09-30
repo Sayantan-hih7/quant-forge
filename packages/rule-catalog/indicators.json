@@ -1,0 +1,1091 @@
+{
+  "sma": {
+    "label": "Price SMA",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "Price SMA"
+    ],
+    "description": "Moving average of the chosen price source. Period counts candles."
+  },
+  "ema": {
+    "label": "EMA",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "EMA"
+    ],
+    "description": "Moving average of the chosen price source. Period counts candles."
+  },
+  "wma": {
+    "label": "WMA",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "WMA"
+    ],
+    "description": "Moving average of the chosen price source. Period counts candles."
+  },
+  "vwma": {
+    "label": "VWMA",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "VWMA"
+    ],
+    "description": "Moving average of the chosen price source. Period counts candles."
+  },
+  "hma": {
+    "label": "HMA",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "HMA"
+    ],
+    "description": "Moving average of the chosen price source. Period counts candles."
+  },
+  "bollinger": {
+    "label": "Bollinger bands",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "maType": {
+        "label": "Middle line MA",
+        "type": "select",
+        "default": "sma",
+        "options": [
+          "sma",
+          "ema",
+          "wma",
+          "vwma",
+          "hma",
+          "dema"
+        ]
+      },
+      "multiplier": {
+        "label": "Standard deviations",
+        "type": "number",
+        "default": 2,
+        "min": 0.1,
+        "max": 20,
+        "integer": false
+      },
+      "deviation": {
+        "label": "Deviation basis",
+        "type": "select",
+        "default": "sample",
+        "options": [
+          "sample",
+          "population"
+        ]
+      }
+    },
+    "lines": [
+      "Upper",
+      "Middle",
+      "Lower"
+    ],
+    "description": "Deviation is measured around the arithmetic mean; the middle-line MA is selectable. Sample preserves existing rules; population matches platforms that divide variance by the full period."
+  },
+  "bollingerBandwidth": {
+    "label": "Bollinger width",
+    "pane": "study",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "maType": {
+        "label": "Middle line MA",
+        "type": "select",
+        "default": "sma",
+        "options": [
+          "sma",
+          "ema",
+          "wma",
+          "vwma",
+          "hma",
+          "dema"
+        ]
+      },
+      "multiplier": {
+        "label": "Standard deviations",
+        "type": "number",
+        "default": 2,
+        "min": 0.1,
+        "max": 20,
+        "integer": false
+      },
+      "deviation": {
+        "label": "Deviation basis",
+        "type": "select",
+        "default": "sample",
+        "options": [
+          "sample",
+          "population"
+        ]
+      }
+    },
+    "lines": [
+      "Bollinger width"
+    ],
+    "description": "Deviation is measured around the arithmetic mean; the middle-line MA is selectable. Sample preserves existing rules; population matches platforms that divide variance by the full period."
+  },
+  "supertrend": {
+    "label": "Supertrend",
+    "pane": "price",
+    "period": 10,
+    "settings": {
+      "multiplier": {
+        "label": "ATR multiplier",
+        "type": "number",
+        "default": 3,
+        "min": 0.1,
+        "max": 20,
+        "integer": false
+      }
+    },
+    "lines": [
+      "Supertrend"
+    ],
+    "description": "ATR period and multiplier. Uses Wilder ATR."
+  },
+  "vwap": {
+    "label": "VWAP",
+    "pane": "price",
+    "period": null,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "hlc3",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "anchor": {
+        "label": "Reset VWAP",
+        "type": "select",
+        "default": "session",
+        "options": [
+          "session",
+          "week",
+          "month",
+          "custom"
+        ]
+      },
+      "anchorDate": {
+        "label": "Anchor date (IST)",
+        "type": "date"
+      },
+      "anchorTime": {
+        "label": "Anchor time (IST, optional)",
+        "type": "time"
+      }
+    },
+    "lines": [
+      "VWAP"
+    ],
+    "description": "Volume-weighted candle prices. Session resets on each Indian trading date. Custom anchor may start within a session. Daily session VWAP using HLC3 equals that daily candle’s typical price; it is not tick VWAP."
+  },
+  "sar": {
+    "label": "Parabolic SAR",
+    "pane": "price",
+    "period": null,
+    "settings": {
+      "start": {
+        "label": "Start",
+        "type": "number",
+        "default": 0.02,
+        "min": 0.001,
+        "max": 1,
+        "integer": false
+      },
+      "increment": {
+        "label": "Increment",
+        "type": "number",
+        "default": 0.02,
+        "min": 0.001,
+        "max": 1,
+        "integer": false
+      },
+      "maximum": {
+        "label": "Maximum",
+        "type": "number",
+        "default": 0.2,
+        "min": 0.001,
+        "max": 1,
+        "integer": false
+      }
+    },
+    "lines": [
+      "Parabolic SAR"
+    ],
+    "description": "Parabolic stop and reverse with acceleration capped at Maximum."
+  },
+  "ichimoku": {
+    "label": "Ichimoku Cloud",
+    "pane": "price",
+    "period": null,
+    "settings": {
+      "conversionPeriod": {
+        "label": "Conversion period",
+        "type": "number",
+        "default": 9,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "basePeriod": {
+        "label": "Base period",
+        "type": "number",
+        "default": 26,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "spanPeriod": {
+        "label": "Span B period",
+        "type": "number",
+        "default": 52,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "displacement": {
+        "label": "Displacement",
+        "type": "number",
+        "default": 26,
+        "min": 0,
+        "max": 120,
+        "integer": true
+      }
+    },
+    "lines": [
+      "Conversion",
+      "Base",
+      "Leading A",
+      "Leading B",
+      "Lagging close"
+    ],
+    "description": "Cloud spans are shifted forward; lagging close is visual only and is never offered as a rule. No future candle is used in a decision."
+  },
+  "donchian": {
+    "label": "Donchian channel",
+    "pane": "price",
+    "period": 20,
+    "settings": {},
+    "lines": [
+      "Upper",
+      "Middle",
+      "Lower"
+    ],
+    "description": "Highest high and lowest low over the period, including the current candle. Use candles earlier = 1 for breakout comparisons."
+  },
+  "keltner": {
+    "label": "Keltner channel",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "atrPeriod": {
+        "label": "ATR period",
+        "type": "number",
+        "default": 10,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "multiplier": {
+        "label": "Multiplier",
+        "type": "number",
+        "default": 2,
+        "min": 0.1,
+        "max": 20,
+        "integer": false
+      }
+    },
+    "lines": [
+      "Upper",
+      "Middle",
+      "Lower"
+    ],
+    "description": "EMA middle line with Wilder ATR bands."
+  },
+  "pivots": {
+    "label": "Pivot points",
+    "pane": "price",
+    "period": null,
+    "settings": {
+      "pivotType": {
+        "label": "Method",
+        "type": "select",
+        "default": "traditional",
+        "options": [
+          "traditional",
+          "fibonacci",
+          "camarilla"
+        ]
+      },
+      "pivotFrame": {
+        "label": "Pivot timeframe",
+        "type": "select",
+        "default": "1mo",
+        "options": [
+          "1d",
+          "1w",
+          "1mo"
+        ]
+      }
+    },
+    "lines": [
+      "Pivot",
+      "R1",
+      "S1",
+      "R2",
+      "S2",
+      "R3",
+      "S3"
+    ],
+    "description": "Levels from the previous completed day, week or month. The pivot timeframe must be at least as large as the candle interval."
+  },
+  "atrBands": {
+    "label": "ATR bands",
+    "pane": "price",
+    "period": 14,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "multiplier": {
+        "label": "Multiplier",
+        "type": "number",
+        "default": 2,
+        "min": 0.1,
+        "max": 20,
+        "integer": false
+      }
+    },
+    "lines": [
+      "Upper",
+      "Middle",
+      "Lower"
+    ],
+    "description": "Chosen candle price plus/minus Wilder ATR × multiplier. Middle line is the chosen price, not a moving average."
+  },
+  "volumeSma": {
+    "label": "Volume SMA",
+    "pane": "volume",
+    "period": 9,
+    "settings": {},
+    "lines": [
+      "Volume SMA"
+    ],
+    "description": "Averages traded volume and appears over the volume bars. Price SMA averages prices. Hiding Volume also hides this line."
+  },
+  "rsi": {
+    "label": "RSI",
+    "pane": "study",
+    "period": 14,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "overbought": {
+        "label": "Overbought level",
+        "type": "number",
+        "default": 70,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      },
+      "oversold": {
+        "label": "Oversold level",
+        "type": "number",
+        "default": 30,
+        "min": 0,
+        "max": 99,
+        "integer": true
+      }
+    },
+    "lines": [
+      "RSI"
+    ],
+    "description": "Wilder RSI. Guide levels affect the chart only, not rule thresholds."
+  },
+  "macd": {
+    "label": "MACD",
+    "pane": "study",
+    "period": null,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "fastPeriod": {
+        "label": "Fast EMA",
+        "type": "number",
+        "default": 12,
+        "min": 2,
+        "max": 500,
+        "integer": true
+      },
+      "slowPeriod": {
+        "label": "Slow EMA",
+        "type": "number",
+        "default": 26,
+        "min": 3,
+        "max": 500,
+        "integer": true
+      },
+      "signalPeriod": {
+        "label": "Signal EMA",
+        "type": "number",
+        "default": 9,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      }
+    },
+    "lines": [
+      "MACD",
+      "Signal",
+      "Histogram"
+    ],
+    "description": ""
+  },
+  "stochastic": {
+    "label": "Stochastic",
+    "pane": "study",
+    "period": 14,
+    "settings": {
+      "smoothK": {
+        "label": "K smoothing",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      },
+      "dPeriod": {
+        "label": "D period",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      }
+    },
+    "lines": [
+      "K",
+      "D"
+    ],
+    "description": ""
+  },
+  "stochRsi": {
+    "label": "Stochastic RSI",
+    "pane": "study",
+    "period": 14,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "stochPeriod": {
+        "label": "Stochastic period",
+        "type": "number",
+        "default": 14,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "smoothK": {
+        "label": "K smoothing",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      },
+      "dPeriod": {
+        "label": "D period",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      }
+    },
+    "lines": [
+      "K",
+      "D"
+    ],
+    "description": ""
+  },
+  "adx": {
+    "label": "ADX / DMI",
+    "pane": "study",
+    "period": 14,
+    "settings": {
+      "adxSmoothing": {
+        "label": "ADX smoothing",
+        "type": "number",
+        "default": 14,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      }
+    },
+    "lines": [
+      "ADX",
+      "+DI",
+      "−DI"
+    ],
+    "description": "Period controls directional movement; ADX smoothing controls the strength line."
+  },
+  "diPlus": {
+    "label": "+DI",
+    "pane": "study",
+    "period": 14,
+    "settings": {
+      "adxSmoothing": {
+        "label": "ADX smoothing",
+        "type": "number",
+        "default": 14,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      }
+    },
+    "lines": [
+      "+DI"
+    ],
+    "description": "Period controls directional movement; ADX smoothing controls the strength line."
+  },
+  "diMinus": {
+    "label": "−DI",
+    "pane": "study",
+    "period": 14,
+    "settings": {
+      "adxSmoothing": {
+        "label": "ADX smoothing",
+        "type": "number",
+        "default": 14,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      }
+    },
+    "lines": [
+      "−DI"
+    ],
+    "description": "Period controls directional movement; ADX smoothing controls the strength line."
+  },
+  "atr": {
+    "label": "ATR",
+    "pane": "study",
+    "period": 14,
+    "settings": {},
+    "lines": [
+      "ATR"
+    ],
+    "description": ""
+  },
+  "cci": {
+    "label": "CCI",
+    "pane": "study",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "hlc3",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "CCI"
+    ],
+    "description": ""
+  },
+  "roc": {
+    "label": "ROC",
+    "pane": "study",
+    "period": 12,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "ROC"
+    ],
+    "description": ""
+  },
+  "momentum": {
+    "label": "Momentum",
+    "pane": "study",
+    "period": 10,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "Momentum"
+    ],
+    "description": ""
+  },
+  "mfi": {
+    "label": "MFI",
+    "pane": "study",
+    "period": 14,
+    "settings": {},
+    "lines": [
+      "MFI"
+    ],
+    "description": ""
+  },
+  "williamsR": {
+    "label": "Williams %R",
+    "pane": "study",
+    "period": 14,
+    "settings": {},
+    "lines": [
+      "Williams %R"
+    ],
+    "description": ""
+  },
+  "obv": {
+    "label": "OBV",
+    "pane": "study",
+    "period": null,
+    "settings": {
+      "maPeriod": {
+        "label": "Optional SMA (0 = off)",
+        "type": "number",
+        "default": 0,
+        "min": 0,
+        "max": 500,
+        "integer": true
+      }
+    },
+    "lines": [
+      "OBV",
+      "SMA"
+    ],
+    "description": ""
+  },
+  "cmf": {
+    "label": "Chaikin money flow",
+    "pane": "study",
+    "period": 20,
+    "settings": {},
+    "lines": [
+      "Chaikin money flow"
+    ],
+    "description": ""
+  },
+  "aroon": {
+    "label": "Aroon",
+    "pane": "study",
+    "period": 25,
+    "settings": {},
+    "lines": [
+      "Up",
+      "Down"
+    ],
+    "description": ""
+  },
+  "choppiness": {
+    "label": "Choppiness index",
+    "pane": "study",
+    "period": 14,
+    "settings": {},
+    "lines": [
+      "Choppiness index"
+    ],
+    "description": ""
+  },
+  "rvol": {
+    "label": "Relative volume",
+    "pane": "study",
+    "period": 20,
+    "settings": {},
+    "lines": [
+      "Relative volume"
+    ],
+    "description": ""
+  },
+  "accDist": {
+    "label": "Accumulation / distribution",
+    "pane": "study",
+    "period": null,
+    "settings": {},
+    "lines": [
+      "Accumulation / distribution"
+    ],
+    "description": ""
+  },
+  "relativeStrength": {
+    "label": "Relative strength",
+    "pane": "study",
+    "period": 20,
+    "settings": {
+      "benchmark": {
+        "label": "Benchmark",
+        "type": "select",
+        "default": "NIFTY 50",
+        "options": [
+          "NIFTY 50",
+          "NIFTY BANK",
+          "SENSEX"
+        ]
+      }
+    },
+    "lines": [
+      "Relative strength"
+    ],
+    "description": "Stock return relative to benchmark return over N matching daily/weekly/monthly candles, in %. 0 means equal performance. Missing dates are not forward-filled."
+  },
+  "dema": {
+    "label": "Double EMA (DEMA)",
+    "pane": "price",
+    "period": 20,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "DEMA"
+    ],
+    "description": "2 ? EMA(source, period) ? EMA(EMA(source, period), period). Requires two EMA warm-up periods; it is not two separate EMA lines."
+  },
+  "connorsRsi": {
+    "label": "Connors RSI (CRSI)",
+    "pane": "study",
+    "period": 3,
+    "settings": {
+      "streakPeriod": {
+        "label": "Streak RSI period",
+        "type": "number",
+        "default": 2,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "rankPeriod": {
+        "label": "Return rank lookback",
+        "type": "number",
+        "default": 100,
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      "overbought": {
+        "label": "Overbought level",
+        "type": "number",
+        "default": 90,
+        "min": 1,
+        "max": 100,
+        "integer": true
+      },
+      "oversold": {
+        "label": "Oversold level",
+        "type": "number",
+        "default": 10,
+        "min": 0,
+        "max": 99,
+        "integer": true
+      }
+    },
+    "lines": [
+      "Connors RSI"
+    ],
+    "description": "Average of close-price RSI, RSI of the consecutive up/down closing streak, and the percentile of the current one-candle return against the previous N returns. Equal closes reset the streak to zero; ties do not count as lower returns. Default 3 / 2 / 100."
+  },
+  "averagePrice": {
+    "label": "Average Price",
+    "pane": "price",
+    "period": null,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "ohlc4",
+        "options": [
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      }
+    },
+    "lines": [
+      "Candle average"
+    ],
+    "description": "Candle average: OHLC4 = (Open + High + Low + Close) / 4; HLC3 = (High + Low + Close) / 3; HL2 = (High + Low) / 2. This is not the broker session average or your average purchase price."
+  },
+  "maCross": {
+    "label": "Moving Average Cross",
+    "pane": "price",
+    "period": null,
+    "settings": {
+      "source": {
+        "label": "Price source",
+        "type": "select",
+        "default": "close",
+        "options": [
+          "close",
+          "open",
+          "high",
+          "low",
+          "hl2",
+          "hlc3",
+          "ohlc4"
+        ]
+      },
+      "maType": {
+        "label": "Moving average type",
+        "type": "select",
+        "default": "ema",
+        "options": [
+          "sma",
+          "ema",
+          "wma",
+          "vwma",
+          "hma",
+          "dema"
+        ]
+      },
+      "fastPeriod": {
+        "label": "Fast period",
+        "type": "number",
+        "default": 9,
+        "min": 2,
+        "max": 500,
+        "integer": true
+      },
+      "slowPeriod": {
+        "label": "Slow period",
+        "type": "number",
+        "default": 21,
+        "min": 3,
+        "max": 500,
+        "integer": true
+      }
+    },
+    "lines": [
+      "Fast MA",
+      "Slow MA"
+    ],
+    "description": "Two moving averages with optional crossover markers on completed candles. Above means fast crossed above slow; below means fast crossed below slow. Chart markers are observations, not orders. Use the rule builder to trade these conditions."
+  }
+}
