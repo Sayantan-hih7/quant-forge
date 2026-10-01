@@ -1,8 +1,8 @@
 import type { AxiosInstance } from 'axios';
 import { accepted, configureBroadcastLimit, classifyLogin, totp, type BroadcastLimitClient } from './motilal-auth.js';
-import { parseTick } from './motilal-packets.js';
+import { parseCircuits, parseDepthLevel, parseTick } from './motilal-packets.js';
 import { AppError, invariant } from '../../../shared/errors.js';
-import type { ChildCommand, ChildEvent, FeedInstrument } from '../types/feed.types.js';
+import type { BookLevel, ChildCommand, ChildEvent, FeedInstrument } from '../types/feed.types.js';
 
 interface BroadcastSdk extends BroadcastLimitClient {
   requestInstance: AxiosInstance;
@@ -90,10 +90,30 @@ async function start(instruments: FeedInstrument[]) {
   const lookup = new Map<string, FeedInstrument>();
   const details = new Map<string, { day: string; values: { open: number | null; high: number | null; low: number | null; previousClose: number | null } }>();
   const last = new Map<string, string>();
+  // Depth arrives one level per packet; coalesce a burst into one book update per stock.
+  const books = new Map<string, { bids: (BookLevel | null)[]; asks: (BookLevel | null)[]; seen: Set<number>; circuits?: { upperCircuit: number; lowerCircuit: number } }>();
+  const bookTimers = new Map<string, NodeJS.Timeout>();
+  const flushBook = (id: string) => {
+    if (bookTimers.has(id)) return;
+    bookTimers.set(id, setTimeout(() => {
+      bookTimers.delete(id);
+      const book = books.get(id); if (!book || !lookup.size) return;
+      send({ type: 'book', book: { instrumentId: id, source: 'motilal', receivedAt: new Date().toISOString(),
+        bids: book.bids.filter((x): x is BookLevel => !!x), asks: book.asks.filter((x): x is BookLevel => !!x), levels: book.seen.size, ...book.circuits } });
+    }, 200));
+  };
   sdk.onBroadcast('tick', packet => {
     const exchange = ['N', 'NSE', 'NSECASH'].includes(String(packet.Exchange)) ? 'NSE' : 'BSE';
     const stock = lookup.get(`${exchange}:${packet['Scrip Code'] ?? packet.ScripCode ?? packet.scripcode}`);
     if (!stock) return;
+    const level = parseDepthLevel(packet), circuits = parseCircuits(packet);
+    if (level || circuits) {
+      const book = books.get(stock.id) ?? { bids: Array<BookLevel | null>(5).fill(null), asks: Array<BookLevel | null>(5).fill(null), seen: new Set<number>() };
+      if (level) { book.bids[level.index] = level.bid; book.asks[level.index] = level.ask; book.seen.add(level.index); }
+      if (circuits) book.circuits = circuits;
+      books.set(stock.id, book); flushBook(stock.id);
+      return;
+    }
     const day = new Date(Date.now() + 19800000).toISOString().slice(0, 10);
     if (packet.Type === 'DayOHLC') {
       const price = (value: unknown) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : null; };
@@ -114,7 +134,7 @@ async function start(instruments: FeedInstrument[]) {
   replace = stocks => {
     const selected = stocks.slice(0, limit);
     const next = new Map(selected.map(s => [`${s.exchange}:${s.code}`, s]));
-    for (const [key, stock] of lookup) if (!next.has(key)) { sdk.UnRegister(stock.exchange, 'CASH', stock.code!); lookup.delete(key); last.delete(stock.id); details.delete(stock.id); }
+    for (const [key, stock] of lookup) if (!next.has(key)) { sdk.UnRegister(stock.exchange, 'CASH', stock.code!); lookup.delete(key); last.delete(stock.id); details.delete(stock.id); books.delete(stock.id); }
     for (const [key, stock] of next) if (!lookup.has(key)) {
       invariant(stock.code !== undefined, 'Motilal stock mapping missing'); lookup.set(key, stock); sdk.Register(stock.exchange, 'CASH', stock.code);
     }

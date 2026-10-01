@@ -55,6 +55,31 @@ def test_disabled_sell_is_explicit_and_cannot_disable_buy():
         validate_rule({**request['strategy']['entry'],'enabled':False})
 
 
+@pytest.mark.parametrize('signal_low,slippage,filled', [(98,0,True),(97,0,True),(96.99,0,False),(97,0.1,False)])
+def test_stop_distance_cap_uses_actual_entry_and_does_not_move_the_candle_low(signal_low, slippage, filled):
+    request = protected()
+    request['strategy']['risk'].update(maxStopPercent=3, slippagePercent=slippage)
+    request['instruments'][0]['daily'][0]['low'] = signal_low
+    request['instruments'][0]['daily'][1].update(open=100,high=100.5,low=99,close=100)
+    request['config']['to'] = '2026-09-16T00:00:00+05:30'
+    result = run_backtest(request)
+    assert result['stopLimitEntries'] == (0 if filled else 1)
+    assert bool(result['openPositions']) == filled
+    if filled:
+        assert result['openPositions'][0]['stop'] == signal_low
+    else:
+        assert not result['trades']
+        assert result['cash'] == request['strategy']['risk']['initialCapital']
+
+
+@pytest.mark.parametrize('value', [0, -1, 26, float('nan'), float('inf'), True])
+def test_invalid_initial_stop_limit_is_rejected(value):
+    request = protected()
+    request['strategy']['risk']['maxStopPercent'] = value
+    with pytest.raises(ValueError, match='Maximum initial stop distance'):
+        run_backtest(request)
+
+
 def weekly_fixture():
     request = body()
     request['strategy']['entry']['groups'][0]['conditions'] = [{

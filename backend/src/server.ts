@@ -1,7 +1,7 @@
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { connectDatabase, disconnectDatabase } from './shared/database.js';
-import { redis, jobs } from './shared/redis.js';
+import { redis, jobs, maintenance } from './shared/redis.js';
 import { stockQuoteStream } from './modules/stock-details/services/stream.service.js';
 import { startDhanRenewalMonitor } from './modules/connections/services/dhan-renewal.service.js';
 import { assertHostedLoginConfigured } from './middleware/workspace.js';
@@ -20,6 +20,6 @@ async function shutdown() {
     deadline.unref();
     server.close(() => { clearTimeout(deadline); resolve(); });
   });
-  await stopDhanRenewal(); await jobs.close(); await redis.quit(); await disconnectDatabase();
+  await stopDhanRenewal(); await jobs.close(); await maintenance.close(); await redis.quit(); await disconnectDatabase();
 }
 onShutdown(shutdown);

@@ -84,7 +84,7 @@ export function draftContext(scope: 'monthly' | 'strategy', draft?: Record<strin
     }; }) : [];
   if (scope === 'monthly') return { timeframe: '1mo', logic: draft.logic, groups: groups(draft.groups, true) };
   const side = (value: unknown) => { const base = pick(value, ['enabled', 'horizon', 'cadence', 'logic', 'side', 'groups']); return { ...base, groups: groups(base.groups, false) }; };
-  const risk = pick(draft.risk, ['initialCapital', 'riskPercent', 'maxPositions', 'timeframe', 'stopMode', 'stopPercent', 'atrPeriod', 'atrMultiplier', 'stopValue', 'stopManagement', 'entryOrderType', 'entryLimitPrice', 'targetR', 'exitTargets', 'breakevenAfterTarget1', 'overnight', 'slippagePercent', 'feePercent']);
+  const risk = pick(draft.risk, ['initialCapital', 'riskPercent', 'maxPositions', 'timeframe', 'stopMode', 'stopPercent', 'maxStopPercent', 'atrPeriod', 'atrMultiplier', 'stopValue', 'stopManagement', 'entryOrderType', 'entryLimitPrice', 'targetR', 'exitTargets', 'breakevenAfterTarget1', 'overnight', 'slippagePercent', 'feePercent']);
   if (risk.stopManagement && typeof risk.stopManagement === 'object') {
     const settings = risk.stopManagement as Record<string, unknown>;
     risk.stopManagement = { ...(settings.breakeven ? { breakeven: pick(settings.breakeven, ['trigger', 'at']) } : {}), ...(settings.trailing ? { trailing: pick(settings.trailing, ['trigger', 'at', 'distanceR']) } : {}) };

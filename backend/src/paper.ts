@@ -4,6 +4,7 @@ import { connectDatabase, disconnectDatabase } from './shared/database.js';
 import { redis,jobs } from './shared/redis.js';
 import { PAPER_HEARTBEAT } from './modules/paper-trading/services/paper.service.js';
 import { processPaperOrders,evaluatePaperStrategies } from './modules/paper-trading/services/runner.service.js';
+import { evaluateManualTriggers } from './modules/paper-trading/services/manual.service.js';
 import { refreshPaperHistory, PAPER_HISTORY_STATUS } from './modules/paper-trading/services/history-refresh.service.js';
 import { claimWorkerLease } from './shared/worker-lease.js';
 await connectDatabase();
@@ -37,7 +38,7 @@ const timer=setInterval(requestCycle,1000);
 async function cycle(){
   if(!canContinue())return;
   await processPaperOrders(canContinue);if(!canContinue())return;await redis.set(PAPER_HEARTBEAT,new Date().toISOString(),'EX',10);
-  if(!evaluating && Date.now()-lastEvaluation>10000){evaluating=true;lastEvaluation=Date.now();void evaluatePaperStrategies(Date.now(),canContinue).catch(()=>{}).finally(()=>{evaluating=false;});}
+  if(!evaluating && Date.now()-lastEvaluation>10000){evaluating=true;lastEvaluation=Date.now();void evaluatePaperStrategies(Date.now(),canContinue).catch(()=>{}).then(()=>evaluateManualTriggers(Date.now(),canContinue)).catch(()=>{}).finally(()=>{evaluating=false;});}
   if(!refreshing && Date.now()-lastRefresh>30000){refreshing=true;lastRefresh=Date.now();void refreshPaperHistory(()=>stopping).catch(async()=>{await redis.set(PAPER_HISTORY_STATUS,JSON.stringify({state:'error',message:'History refresh unavailable. Existing data is retained; missing candles will be retried.',updatedAt:new Date().toISOString()})).catch(()=>{});}).finally(()=>{refreshing=false;});}
 }
 function stop(){return closing??=(async()=>{stopping=true;clearInterval(timer);clearInterval(leaseTimer);subscriber.disconnect();while(busy||evaluating||refreshing||renewing)await new Promise(r=>setTimeout(r,100));await redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1],KEYS[2]) else return 0 end",2,lease,PAPER_HEARTBEAT,owner);await jobs.close();await redis.quit();await disconnectDatabase();})();}

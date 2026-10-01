@@ -22,7 +22,7 @@ export default function BackendSignalsPage(){
  const selected=params.get('session')??undefined;
  const setSelected=(value?:string)=>setParams(previous=>{const next=new URLSearchParams(previous);if(value)next.set('session',value);else next.delete('session');return next;});
  const [chart,setChart]=useState<PaperChartSelection>();
- const active=data?.sessions.filter(s=>s.active)??[],filtered=active.filter(s=>!selected||s._id===selected),settings=data?.sessions.find(s=>s._id===editing);
+ const active=data?.sessions.filter(s=>s.active&&s.mode!=='manual')??[],filtered=active.filter(s=>!selected||s._id===selected),settings=data?.sessions.find(s=>s._id===editing);
  const ids=[...new Set(filtered.flatMap(s=>s.scope?.monitoredIds??s.ids??[]))];
  async function action(path:string){try{await apiClient.post(path);await refresh();}catch(e){message.error((e as Error).message);}}
  const closeSetup=()=>{setSetup(false);if(params.has('backtest')||params.has('setup'))setParams(previous=>{const next=new URLSearchParams(previous);next.delete('backtest');next.delete('setup');return next;},{replace:true});};
@@ -30,7 +30,7 @@ export default function BackendSignalsPage(){
   <Space orientation="vertical" size={20} style={{width:'100%'}}>
    {error&&<Alert showIcon type="error" title={error}/>}
    <ExecutionReadiness data={data} ids={ids} monitoring={!!active.length} error={error}/>
-   <Card title="Buy / sell signals" extra={<Select aria-label="Filter signals by strategy" style={{width:230,maxWidth:'100%'}} value={selected??'all'} onChange={v=>setSelected(v==='all'?undefined:v)} options={[{value:'all',label:'All strategies'},...(data?.sessions??[]).map(s=>({value:s._id,label:`${s.strategy.name} · r${s.strategy.revision}`+(s.active?'':' · Stopped')}))]}/> }>
+   <Card title="Buy / sell signals" extra={<Select aria-label="Filter signals by strategy" style={{width:230,maxWidth:'100%'}} value={selected??'all'} onChange={v=>setSelected(v==='all'?undefined:v)} options={[{value:'all',label:'All strategies'},...(data?.sessions??[]).filter(s=>s.mode!=='manual').map(s=>({value:s._id,label:`${s.strategy.name} · r${s.strategy.revision}`+(s.active?'':' · Stopped')}))]}/> }>
     <p className="muted">Signals are listed across strategies by default. An expired signal remains in history and cannot be confirmed. Sell rules are for held shares; the app does not short stocks.</p>
     {data?<SignalTable data={data} sessionId={selected} onConfirm={id=>void action(`/paper/orders/${id}/confirm`)} onSettings={setEditing} onChart={s=>setChart({sessionId:s.sessionId,instrumentId:s.instrumentId,eventId:`signal:${s._id}`})}/>:<Empty description="Loading signals"/>}
    </Card>

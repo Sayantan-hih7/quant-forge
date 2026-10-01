@@ -39,3 +39,10 @@ export function advanceStop(position: PaperPosition, risk: Risk, pricePaise: num
   }
   return { stopPaise, highWaterPaise, breakevenActivated, trailingActivated };
 }
+export function exceedsStopLimit(risk: Pick<Risk, 'maxStopPercent'>, entryPaise: number, distancePaise: number) {
+  return risk.maxStopPercent !== undefined && distancePaise * 100 - entryPaise * risk.maxStopPercent > 1e-7;
+}
+
+export function stopLimitMessage(risk: Pick<Risk, 'maxStopPercent'>, entryPaise: number, distancePaise: number) {
+  return `Buy skipped: signal/initial stop is ${(distancePaise / entryPaise * 100).toFixed(2)}% below the entry, exceeding the ${risk.maxStopPercent}% maximum. The stop was not moved.`;
+}

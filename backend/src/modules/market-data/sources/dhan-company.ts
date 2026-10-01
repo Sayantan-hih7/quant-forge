@@ -4,7 +4,8 @@ import type { Fact, Instrument } from '../types.js';
 
 export const DHAN_COMPANY_URL = 'https://api.dhan.co/v2/data/companyinfo';
 const fields: Record<string, Record<string, string>> = {
-  CO: { MARKET_CAP: 'marketCap', SECTOR: 'sector', INDUSTRY: 'industry', EPS: 'eps', BOOK_VALUE: 'bookValue' },
+  CO: { MARKET_CAP: 'marketCap', SECTOR: 'sector', INDUSTRY: 'industry', EPS: 'eps', BOOK_VALUE: 'bookValue',
+    DIVIDEND_YIELD: 'dividendYield', EBITDA: 'ebitda', FIFTY_TWO_WEEK_HIGH: 'high52w', FIFTY_TWO_WEEK_LOW: 'low52w' },
   RATIOS: { DEBT_TO_EQUITY: 'debtEquity', ROE: 'roe', ROCE: 'roce', PE_RATIO: 'pe', PB_RATIO: 'pb' },
   SHP: { PROMOTER_HOLDING: 'promoterHolding', FII_HOLDING: 'fiiHolding', DII_HOLDING: 'diiHolding',
     CHANGE_IN_FII_HOLDING: 'fiiChange', CHANGE_IN_DII_HOLDING: 'diiChange' },
@@ -26,15 +27,18 @@ export function parseDhanCompany(payload: unknown, instrument: Instrument, obser
   for (const [section, keys] of Object.entries(fields)) {
     const values = object(data[section]);
     const period = section === 'SHP' ? reportingDate(values.REPORTING_PERIOD) : undefined;
-    if (section === 'SHP' && (!period || Date.parse(period) > Date.parse(observedAt))) continue;
+    // Dhan currently omits REPORTING_PERIOD. Without it the holding is still a valid
+    // snapshot as of download (never backdated), kept for the normal snapshot window.
+    if (section === 'SHP' && period && Date.parse(period) > Date.parse(observedAt)) continue;
     for (const [key, field] of Object.entries(keys)) {
       const value = ['sector', 'industry'].includes(field) ? (typeof values[key] === 'string' && String(values[key]).trim() || null) : numberOrNull(values[key]);
       if (value === null) continue;
-      if (['marketCap', 'promoterHolding', 'fiiHolding', 'diiHolding'].includes(field) && (Number(value) < 0 || field !== 'marketCap' && Number(value) > 100)) continue;
+      if (['marketCap', 'promoterHolding', 'fiiHolding', 'diiHolding', 'dividendYield'].includes(field) && (Number(value) < 0 || field !== 'marketCap' && Number(value) > 100)) continue;
+      if (['high52w', 'low52w'].includes(field) && Number(value) <= 0) continue;
       facts.push({ _id: `dhan:${instrument._id}:${field}:${observedAt}`, instrumentId: instrument._id,
         field, value, source: 'dhan-company', sourceUrl: DHAN_COMPANY_URL, observedAt, knownAt: observedAt,
         period,
-        validUntil: new Date(section === 'SHP' ? Date.parse(period!) + 150 * 86400000 : Date.parse(observedAt) + 35 * 86400000).toISOString(),
+        validUntil: new Date(period ? Date.parse(period) + 150 * 86400000 : Date.parse(observedAt) + 35 * 86400000).toISOString(),
         basis: 'observed-snapshot' });
     }
   }

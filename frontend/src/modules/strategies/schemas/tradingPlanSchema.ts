@@ -7,6 +7,7 @@ import { validateStopSettings } from './stopSettingsSchema';
 export const strategyRiskSchema = backtestSchema.innerType().pick({
   initialCapital: true, riskPercent: true, maxPositions: true, timeframe: true,
   stopMode: true, stopPercent: true, atrPeriod: true, atrMultiplier: true,
+  maxStopPercent: true,
   targetR: true, overnight: true, slippagePercent: true, feePercent: true,
   exitTargets: true, breakevenAfterTarget1: true,
   stopValue: true, stopManagement: true, entryOrderType: true, entryLimitPrice: true,
@@ -14,6 +15,7 @@ export const strategyRiskSchema = backtestSchema.innerType().pick({
   // Hidden RHF controls can retain saved defaults during mode changes. Send only
   // values belonging to the selected mode; never submit an inactive price.
   const active = { ...risk };
+  if (active.maxStopPercent == null) delete active.maxStopPercent;
   if (active.exitTargets) active.exitTargets = active.exitTargets.map(target => {
     const next = { ...target };
     if (next.moveStopTo === null) delete next.moveStopTo;

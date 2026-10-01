@@ -18,6 +18,9 @@ import { useRecentStocks } from '../store/recentStocks';
 import { WatchlistButton } from '../../watchlists/components/WatchlistButton';
 import { QualificationButton } from '../../qualification/components/QualificationButton';
 import { useStockActionData } from '../../watchlists/hooks/useStockActions';
+import { TradeActions } from '../../manual-trading/components/TradeActions';
+import { StockTradePanel } from '../../manual-trading/components/StockTradePanel';
+import type { ManualOverview } from '../../manual-trading/types';
 import type { ChartEvent, ChartLevel, StockDetail, StockFact, StockListing, StockListings, StockSelection } from '../types';
 import '../../../styles/stock-details.css';
 
@@ -40,6 +43,10 @@ function StockDetails({ stock, listing, exchangeControl, comparisonNotice, onRel
   const { quotes, status, error, now, liveBars } = useStockQuotes([stock.instrumentId], true, true);
   const quote = quotes[stock.instrumentId], data = detail.data, facts = new Map(data?.facts.map(fact => [fact.field, fact]) ?? []);
   const membership = data?.qualification, indices = facts.get('index')?.value ?? stock.metrics?.index;
+  // Manual paper trading for this stock: account, position, open orders and conditions (refreshed every 3 s).
+  const manual = useStockResource<ManualOverview>(`/paper/manual?instrumentId=${encodeURIComponent(stock.instrumentId)}`, 3000);
+  const [sellRequest, setSellRequest] = useState(0);
+  const symbol = stock.instrument?.symbol ?? data?.instrument.symbol ?? stock.instrumentId;
   const source = membership?.source ?? stock.source;
   useEffect(() => { if (listing) useRecentStocks.getState().record(listing); }, [listing]);
   const qualificationContent=(
@@ -59,13 +66,15 @@ function StockDetails({ stock, listing, exchangeControl, comparisonNotice, onRel
     </div>
     {comparisonNotice}
     <section className="stock-quote-overview" aria-label="Stock quote">
-      <div className="stock-quote-main"><StockPrice quote={quote} connected={isQuoteConnected(quote, status)} now={now} large /><div><StockChange quote={quote} /><span className="stock-change-context">vs previous close</span></div></div>
+      <div className="stock-quote-main"><StockPrice quote={quote} connected={isQuoteConnected(quote, status)} now={now} large /><div><StockChange quote={quote} /><span className="stock-change-context">vs previous close</span></div>
+        <TradeActions symbol={symbol} instrumentId={stock.instrumentId} quote={quote} data={manual.data} refresh={manual.retry} sellRequest={sellRequest} /></div>
       <p className="stock-quote-timestamp">{quote ? `Last trade · ${stockTime(quote.lastTradeAt)}` : 'Waiting for a stock quote…'} <span>INR · {stock.instrument?.exchange}{quote ? ` · ${stockSource(quote)}` : ''}</span></p>
       <StockFeedStatus status={status} />
       {status.state !== 'streaming' && !status.marketClosed && (error || status.message) && <Alert type="warning" showIcon title={error || status.message} />}
     </section>
     <StockMonitoringChart instrumentId={stock.instrumentId} symbol={stock.instrument?.symbol ?? data?.instrument.symbol ?? stock.instrumentId} quote={quote} liveBars={liveBars[stock.instrumentId]} now={now} strategy={strategy} events={events} levels={levels} focusEventId={focusEventId} onSelectEvent={onSelectEvent} tradeContent={tradeContent} qualificationContent={qualificationContent} overviewContent={<>
-    <StockMarketDepth instrumentId={stock.instrumentId} now={now}/>
+    {manual.data?.account && <StockTradePanel data={manual.data} quote={quote} onChanged={manual.retry} onSell={() => setSellRequest(Date.now())} />}
+    <StockMarketDepth instrumentId={stock.instrumentId} now={now} quote={quote}/>
     <StockPerformance instrumentId={stock.instrumentId} quote={quote} now={now}/>
     <section className="stock-company-section" aria-label="Company details">
       <div className="stock-section-heading"><h3>Company snapshot</h3><span className="muted">Dated fundamentals</span></div>

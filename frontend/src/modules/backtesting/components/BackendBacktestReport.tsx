@@ -43,6 +43,7 @@ export function BackendBacktestReport({ run }: { run: BackendBacktest }) {
       <details><summary>View missing report dates</summary><ul>{run.reportPreparation.unavailable.map(item => <li key={`${item.exchange}:${item.date}`}>{item.exchange} · {item.date}: {item.message}</li>)}</ul></details>
     </>} />}
     {!!result.invalidStopEntries && <Alert type="warning" showIcon title={`${result.invalidStopEntries} entries skipped: initial SL was invalid at the fill price`} className="mb-5" />}
+    {!!result.stopLimitEntries && <Alert type="info" showIcon title={`${result.stopLimitEntries} entries skipped: initial stop exceeded the maximum distance from the buy price`} description="The limit is checked against the simulated entry after slippage. The chosen stop stays unchanged; entries outside the limit are skipped." className="mb-5" />}
     {!!result.unfilledLimitEntries && <Alert type="info" showIcon title={`${result.unfilledLimitEntries} limit buys expired without a fill`} className="mb-5" />}
     {!!result.invalidTargetEntries && <Alert type="warning" showIcon title={`${result.invalidTargetEntries} entries skipped: profit targets were invalid at the entry price`} description="Every target must be above the actual entry and at least ₹0.01 apart. Review exact prices for the stocks being tested, or use percentage / rupee gains from entry." className="mb-5" />}
     <Tabs items={[

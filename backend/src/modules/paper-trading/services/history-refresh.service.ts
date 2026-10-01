@@ -8,7 +8,8 @@ import { ensureMonthlyHistory } from '../../market-data/services/dhan-cache.serv
 import { parseDhanHistory } from '../../market-data/sources/dhan-history.js';
 import { strategyHistoryPlan } from '../../backtesting/services/history-plan.js';
 import { ensureIntradayHistory } from '../../backtesting/services/preparation.service.js';
-import { PaperPositionModel, PaperSessionModel } from '../models/paper.model.js';
+import { PaperPositionModel, PaperSessionModel, PaperTriggerModel } from '../models/paper.model.js';
+import { triggerStrategy } from './manual.service.js';
 import { MonthlyUniverseModel } from '../../qualification/models/qualification.model.js';
 import { currentMonth } from '../../qualification/services/universe.service.js';
 import { monitoringIds } from './scope.service.js';
@@ -36,13 +37,20 @@ export async function refreshPaperHistory(shouldStop = () => false) {
   let processed = 0, failed = 0;
   const errors: string[] = [];
   await redis.set(PAPER_HISTORY_STATUS, JSON.stringify({ state: 'refreshing', updatedAt: new Date().toISOString() }));
-  for (const session of sessions) {
-    const ids = monitoringIds(universe?.members.map(m => m.instrumentId) ?? [], session.ids, positions.filter(p => p.sessionId === session._id).map(p => p.instrumentId), session.entriesPaused);
+  // Strategy sessions need history for their monitored stocks; each manual condition needs it for its own rule and stock.
+  const work: { key: string; strategy: Parameters<typeof strategyHistoryPlan>[0]; ids: string[] }[] = sessions.filter(session => session.mode !== 'manual').map(session => ({ key: session._id, strategy: session.strategy,
+    ids: monitoringIds(universe?.members.map(m => m.instrumentId) ?? [], session.ids, positions.filter(p => p.sessionId === session._id).map(p => p.instrumentId), session.entriesPaused) }));
+  for (const trigger of await PaperTriggerModel.find({ status: 'active', sessionId: { $in: sessions.map(s => s._id) } }).lean()) {
+    const session = sessions.find(s => s._id === trigger.sessionId)!;
+    work.push({ key: `${trigger.sessionId}:${trigger._id}`, strategy: triggerStrategy(trigger, session.strategy.risk) as unknown as Parameters<typeof strategyHistoryPlan>[0], ids: [trigger.instrumentId] });
+  }
+  for (const item of work) {
+    const ids = item.ids;
     const stocks = await instruments.find({ _id: { $in: ids } }).lean();
-    const plan = strategyHistoryPlan(session.strategy, today, today);
+    const plan = strategyHistoryPlan(item.strategy, today, today);
     for (const stock of stocks) {
       if (shouldStop()) return;
-      const warmup = `${session._id}:${stock._id}:${today}`;
+      const warmup = `${item.key}:${stock._id}:${today}`;
       try {
         if (!prepared.has(warmup)) {
           if (plan.dailyFrom) await ensureMonthlyHistory(stock, plan.dailyFrom, today, { maxWaitMs: 45000 });

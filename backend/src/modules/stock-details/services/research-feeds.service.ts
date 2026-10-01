@@ -27,6 +27,12 @@ async function cached(key:string,url:string,parse:(data:unknown)=>ResearchItem[]
 }
 const isoDay=(at:number)=>new Date(at+19800000).toISOString().slice(0,10);
 const nseDate=(s:string)=>`${s.slice(8)}-${s.slice(5,7)}-${s.slice(0,4)}`;
+/** Exchange-wide corporate actions and board meetings for the market news page (no stock selected). */
+export async function marketEvents(exchange:'NSE'|'BSE'){
+  const reference=await InstrumentModel.findOne({exchange,active:true,primary:true}).select('_id').lean();
+  if(!reference)throw new AppError(404,'STOCK_NOT_FOUND','Import the stock universe first');
+  return stockResearchFeed(reference._id,'events','market');
+}
 export async function stockResearchFeed(id:string,kind:'news'|'events',scope:'stock'|'market'='stock'){
   const stock=await InstrumentModel.findById(id).lean();if(!stock)throw new AppError(404,'STOCK_NOT_FOUND','Stock not found');
   const today=isoDay(Date.now()),from=isoDay(Date.now()-90*86400000),to=kind==='events'?isoDay(Date.now()+180*86400000):today;

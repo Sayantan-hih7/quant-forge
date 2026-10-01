@@ -7,7 +7,7 @@ import { env } from '../src/config/env.js';
 import { connectDatabase, disconnectDatabase } from '../src/shared/database.js';
 import { jobs, redis } from '../src/shared/redis.js';
 import { instruments, sourceRuns } from '../src/modules/market-data/repository.js';
-import { publishInstrumentSnapshot, validateInstrumentSnapshot } from '../src/modules/market-data/services/instrument-snapshot.service.js';
+import { isReissuedIsin, publishInstrumentSnapshot, validateInstrumentSnapshot } from '../src/modules/market-data/services/instrument-snapshot.service.js';
 import { universeCycle, UNIVERSE_SCHEDULER_ID } from '../src/modules/market-data/services/universe-calendar.js';
 import { registerUniverseSchedule } from '../src/modules/market-data/services/universe-refresh.service.js';
 import { createReadinessCache, monthlyRequiredFields } from '../src/modules/qualification/services/readiness.service.js';
@@ -64,6 +64,12 @@ test('incomplete stock masters and changed company identities are rejected', () 
   assert.throws(() => validateInstrumentSnapshot(snapshot.filter(x => x.exchange === 'NSE'), []), /incomplete/);
   assert.throws(() => validateInstrumentSnapshot([...snapshot, snapshot[0]], []), /Duplicate/);
   assert.throws(() => validateInstrumentSnapshot(snapshot, [{ ...snapshot[0], isin: 'INECHANGED00' }]), /identity/);
+  // A face-value change reissues the ISIN serial for the same issuer and symbol.
+  const split = { ...snapshot[0], isin: 'INE519N01022' };
+  assert.doesNotThrow(() => validateInstrumentSnapshot([split, ...snapshot.slice(1)], [{ ...snapshot[0], isin: 'INE519N01014' }]));
+  assert.throws(() => validateInstrumentSnapshot([split, ...snapshot.slice(1)], [{ ...snapshot[0], isin: 'INE519N01014', symbol: 'OTHER' }]), /identity/);
+  assert.throws(() => validateInstrumentSnapshot([split, ...snapshot.slice(1)], [{ ...snapshot[0], isin: 'INE999Z01014' }]), /identity/);
+  assert.equal(isReissuedIsin({ isin: 'INE519N01014', symbol: 'X' }, { isin: 'INE519N02014', symbol: 'X' }), false);
   assert.throws(() => validateInstrumentSnapshot(snapshot, [...snapshot, ...Array.from({ length: 1000 }, (_, i) => row(i + 3000, 'NSE'))]), /incomplete/);
 });
 

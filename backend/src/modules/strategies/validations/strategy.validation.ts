@@ -6,6 +6,7 @@ export const riskSchema = z.object({
   maxPositions: z.number().int().min(1).max(20), timeframe: z.enum(['1m', '5m', '15m', '1h', '1d']),
   stopMode: z.enum(['fixed', 'ATR', 'trailing', 'amount', 'price', 'candleLow']), stopPercent: z.number().min(0.1).max(25),
   stopValue: z.number().finite().min(0.01).max(10000000).optional(),
+  maxStopPercent: z.number().finite().min(0.1).max(25).optional(),
   entryOrderType: z.enum(['market', 'limit']).optional(),
   entryLimitPrice: z.number().finite().min(0.01).max(10000000).optional(),
   stopManagement: stopManagementSchema.optional(),

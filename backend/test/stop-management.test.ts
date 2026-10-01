@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { riskSchema, type Risk } from '../src/modules/strategies/validations/strategy.validation.js';
-import { advanceStop, initialRiskDistance } from '../src/modules/paper-trading/services/stop-management.js';
+import { advanceStop, initialRiskDistance, exceedsStopLimit } from '../src/modules/paper-trading/services/stop-management.js';
 import { positionTargets } from '../src/modules/paper-trading/services/exit-targets.js';
 import type { PaperPosition } from '../src/modules/paper-trading/models/paper.model.js';
 
@@ -16,6 +16,18 @@ test('signal candle low stays absolute across entry gaps and requires real data'
   assert.equal(initialRiskDistance(settings,10200,999,96),600);
   assert.equal(initialRiskDistance(settings,9500,999,96),-100);
   assert.equal(initialRiskDistance(settings,10000,999),0,'Never fall back to ATR');
+});
+
+test('maximum stop distance accepts the boundary and rejects entry gaps without changing the candle low',()=>{
+  const settings={...risk,stopMode:'candleLow' as const,maxStopPercent:3};
+  for (const [entry,low,exceeded] of [[10000,98,false],[10000,97,false],[10000,96.99,true],[10100,97,true]] as const) {
+    const distance=initialRiskDistance(settings,entry,undefined,low);
+    assert.equal(exceedsStopLimit(settings,entry,distance),exceeded);
+    assert.equal(entry-distance,Math.round(low*100));
+  }
+  assert.equal(exceedsStopLimit(risk,10000,400),false,'Absent limit preserves earlier revisions');
+  assert.equal(riskSchema.safeParse(settings).success,true);
+  for(const maxStopPercent of [0,-1,26,Infinity,NaN])assert.equal(riskSchema.safeParse({...settings,maxStopPercent}).success,false);
 });
 test('per-target stop steps require filled shares and never loosen a higher stop',()=>{
   const settings:Risk={...risk,stopManagement:undefined,exitTargets:risk.exitTargets!.map((t,i)=>({...t,...(i<2?{moveStopTo:i}:{})}))};

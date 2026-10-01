@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ChildEvent, FeedConnection, FeedInstrument, FeedProvider, FeedStatus, LiveQuote } from '../types/feed.types.js';
+import type { ChildEvent, FeedConnection, FeedInstrument, FeedProvider, FeedStatus, LiveBook, LiveQuote } from '../types/feed.types.js';
 import type { QuoteTransport, TransportFactory } from '../providers/transports.js';
 import { feedRetryDelay } from './recovery.js';
 import { subscriptionPlan, subscriptionSignature, MOTILAL_CAPACITY, type Provider } from './subscription-plan.js';
@@ -12,7 +12,7 @@ export class SharedFeed {
   private motilalLimit = MOTILAL_CAPACITY;
   private unavailable: string[] = [];
   private latest = new Map<string, string>();
-  constructor(private create: TransportFactory, private quote: (quote: LiveQuote) => void, private now = Date.now) {}
+  constructor(private create: TransportFactory, private quote: (quote: LiveQuote) => void, private now = Date.now, private book: (book: LiveBook) => void = () => {}) {}
   reconcile(stocks: FeedInstrument[], options: { preference: FeedProvider; motilal: boolean; dhan: boolean }) {
     const plan = subscriptionPlan(stocks, { ...options, motilalFailed: this.motilalFailed && options.preference === 'auto' && options.dhan, motilalLimit: this.motilalLimit });
     this.unavailable = plan.unavailable;
@@ -56,6 +56,12 @@ export class SharedFeed {
         if (event.limit !== undefined && provider === 'motilal') this.motilalLimit = Math.min(MOTILAL_CAPACITY, event.limit);
         slot.connection = { ...slot.connection, ...event };
         if (event.state === 'error') failed();
+        return;
+      }
+      if (event.type === 'book') {
+        const book = event.book;
+        // A book never marks the connection live: only timestamped trades prove the stream is current.
+        if (book.source === provider && slot.connection.ids.includes(book.instrumentId)) this.book({ ...book, session: slot.connection.session });
         return;
       }
       const value = event.quote;

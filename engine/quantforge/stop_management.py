@@ -7,6 +7,9 @@ def paise(value):
 
 
 def validate_stop_settings(risk):
+    maximum = risk.get('maxStopPercent')
+    if maximum is not None and (not isinstance(maximum, (int, float)) or isinstance(maximum, bool) or not math.isfinite(maximum) or not 0.1 <= maximum <= 25):
+        raise ValueError('Maximum initial stop distance must be between 0.1% and 25%')
     for field, needed in (("stopValue", risk["stopMode"] in ("amount", "price")), ("entryLimitPrice", risk.get("entryOrderType") == "limit")):
         value = risk.get(field)
         if needed and (not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or not 0.01 <= value <= 10000000):
@@ -37,6 +40,11 @@ def validate_stop_settings(risk):
         distance = rule.get("distanceR", 1)
         if not isinstance(distance, (int, float)) or isinstance(distance, bool) or not math.isfinite(distance) or not 0.1 <= distance <= 20:
             raise ValueError("Trailing distance must be between 0.1R and 20R")
+
+
+def exceeds_stop_limit(risk, entry, distance):
+    maximum = risk.get('maxStopPercent')
+    return maximum is not None and distance * 100 - entry * maximum > 1e-7
 
 
 def initial_risk_distance(risk, entry, atr=None, signal_low=None):

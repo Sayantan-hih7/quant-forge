@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import type { Instrument, Fact, DeliveryDay, SourceRun, Candle } from '../types.js';
+import type { Instrument, Fact, DeliveryDay, SourceRun, Candle, DailyClose } from '../types.js';
 
 const options = { versionKey: false as const, strict: 'throw' as const };
 const instrumentSchema = new Schema<Instrument>({
@@ -19,6 +19,9 @@ const factSchema = new Schema<Fact>({
   ownership: { type: new Schema({ evidence: { type: String, enum: ['reported-total', 'explicit-no-encumbrance', 'no-promoters'] }, promoterShares: Number, encumberedShares: Number }, { _id: false }), default: undefined },
 }, options);
 factSchema.index({ instrumentId: 1, field: 1, knownAt: -1 });
+// Market-wide reads by field (related stocks, coverage) and derived-fact pruning by source/period.
+factSchema.index({ field: 1, knownAt: -1 });
+factSchema.index({ source: 1, period: 1 });
 const deliverySchema = new Schema<DeliveryDay>({
   _id: String, instrumentId: { type: String, required: true }, date: String, volume: Number,
   deliverable: { type: Number, default: null }, turnoverCr: Number, source: String, sourceUrl: String, observedAt: String, knownAt: String,
@@ -30,6 +33,13 @@ const candleSchema = new Schema<Candle>({
   source: String, observedAt: String,
 }, options);
 candleSchema.index({ instrumentId: 1, interval: 1, time: 1 }, { unique: true });
+const dailyCloseSchema = new Schema<DailyClose>({
+  _id: String, isin: { type: String, required: true }, date: { type: String, required: true },
+  close: { type: Number, required: true }, prevClose: { type: Number, default: null },
+  exchange: { type: String, enum: ['NSE', 'BSE'], required: true }, source: String, sourceUrl: String, observedAt: String,
+}, options);
+dailyCloseSchema.index({ isin: 1, date: 1 });
+dailyCloseSchema.index({ date: 1 });
 const runSchema = new Schema<SourceRun>({
   _id: String, source: String, status: { type: String, enum: ['running', 'completed', 'partial', 'failed'] },
   startedAt: String, finishedAt: String, processed: Number, total: Number,
@@ -41,6 +51,7 @@ export const FactModel = model<Fact>('Fact', factSchema, 'facts');
 export const DeliveryDayModel = model<DeliveryDay>('DeliveryDay', deliverySchema, 'daily_delivery');
 export const CandleModel = model<Candle>('Candle', candleSchema, 'candles');
 export const SourceRunModel = model<SourceRun>('SourceRun', runSchema, 'source_runs');
+export const DailyCloseModel = model<DailyClose>('DailyClose', dailyCloseSchema, 'daily_closes');
 export const SourceArtifactModel = model('SourceArtifact', new Schema({
   _id: String, source: String, date: String, checksum: String, rowCount: Number, observedAt: String,
 }, options), 'source_artifacts');

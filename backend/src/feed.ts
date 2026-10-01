@@ -7,9 +7,11 @@ import { syncPaperSubscriptions } from './modules/market-feed/services/paper-sub
 import { researchDemand } from './modules/market-feed/services/research-demand.js';
 import { SharedFeed, currentQuote } from './modules/market-feed/services/shared-feed.js';
 import { createQuoteTransport } from './modules/market-feed/providers/transports.js';
+import { createDepthTransport } from './modules/market-feed/providers/dhan-feed.js';
+import { DepthFeed, type DepthBook } from './modules/market-feed/services/depth-feed.js';
 import { marketTime } from './shared/market-calendar.js';
 import { claimWorkerLease } from './shared/worker-lease.js';
-import type { FeedInstrument, FeedStatus, LiveQuote } from './modules/market-feed/types/feed.types.js';
+import type { FeedInstrument, FeedStatus, LiveBook, LiveQuote } from './modules/market-feed/types/feed.types.js';
 import { CandleBuilder } from './modules/market-feed/services/candle-builder.js';
 import { connectDatabase, disconnectDatabase } from './shared/database.js';
 import { CandleModel, InstrumentModel } from './modules/market-data/models/market-data.model.js';
@@ -28,16 +30,22 @@ let desired: FeedRequest | undefined, stocks: FeedInstrument[] = [], paperIds = 
 let canDhan = false, preference: FeedRequest['provider'] = 'auto';
 let state: FeedStatus = { state: 'disconnected', message: 'Waiting for stock subscriptions.', updatedAt: new Date().toISOString() };
 const quotes = new Map<string, LiveQuote>(), bars = new Map<string, LiveChartBar>();
+// Latest tick and order book per stock: a book change re-publishes the last tick with new depth.
+const lastTicks = new Map<string, LiveQuote>(), books = new Map<string, LiveBook>(), changedBooks = new Set<string>();
 const candleBuilder = new CandleBuilder(), chartBuilder = new LiveChartBars();
 let pendingCandles: Candle[] = [], pendingTicks: LiveQuote[] = [];
+const resetBooks = () => { lastTicks.clear(); books.clear(); changedBooks.clear(); depthBooks.clear(); };
 const feed = new SharedFeed(createQuoteTransport, quote => {
-  quotes.set(quote.instrumentId, quote);
+  quotes.set(quote.instrumentId, quote); lastTicks.set(quote.instrumentId, quote);
   if (chartIds.has(quote.instrumentId)) for (const bar of chartBuilder.tick(sharedStockQuote(quote))) bars.set(`${bar.instrumentId}:${bar.time}`, bar);
   if (paperIds.has(quote.instrumentId) && Date.now() - Date.parse(quote.at) <= 15000) {
     candleBuilder.tick(quote); pendingTicks.push(quote);
     if (pendingTicks.length > 100000) { feed.reset(); pendingTicks = []; candleBuilder.reset(); }
   }
-});
+}, Date.now, book => { books.set(book.instrumentId, book); changedBooks.add(book.instrumentId); });
+// Five-level depth for stocks open in research views, from a separate Dhan Full-mode connection.
+const depthBooks = new Map<string, DepthBook>();
+const depthFeed = new DepthFeed(createDepthTransport, book => { depthBooks.set(book.instrumentId, book); changedBooks.add(book.instrumentId); });
 const subscriber = redis.duplicate(); subscriber.on('error', () => {});
 subscriber.on('message', (_channel, raw) => {
   try { const command = JSON.parse(raw); if (command.type === 'otp' && /^\d{6}$/.test(command.value)) feed.otp(command.value); } catch { /* Ignore malformed messages. */ }
@@ -77,24 +85,36 @@ async function reconcile() {
   }
   if (Date.now() >= readSettingsAt) { await loadDemand(); readSettingsAt = Date.now() + 2000; }
   const clock = marketTime();
-  if (connectionDay !== clock.date) { feed.reset(); chartBuilder.reset(); candleBuilder.reset(); connectionDay = clock.date; }
+  if (connectionDay !== clock.date) { feed.reset(); chartBuilder.reset(); candleBuilder.reset(); resetBooks(); connectionDay = clock.date; }
   if (clock.feedWindow) feed.reconcile(stocks, { preference: preference ?? 'auto', motilal: motilalConfigured(), dhan: canDhan });
-  else { feed.reset(); chartBuilder.reset(); candleBuilder.reset(); }
-  state = { ...feed.status(), requestId: desired?.id, instruments: stocks, updatedAt: new Date().toISOString(), marketClosed: !clock.open };
+  else { feed.reset(); chartBuilder.reset(); candleBuilder.reset(); resetBooks(); }
+  depthFeed.reconcile(stocks.filter(s => chartIds.has(s.id)), clock.feedWindow && canDhan);
+  const subscribed = new Set(stocks.map(s => s.id));
+  for (const id of lastTicks.keys()) if (!subscribed.has(id)) { lastTicks.delete(id); books.delete(id); changedBooks.delete(id); }
+  for (const id of depthBooks.keys()) if (!chartIds.has(id)) depthBooks.delete(id);
+  state = { ...feed.status(), depth: depthFeed.status(), requestId: desired?.id, instruments: stocks, updatedAt: new Date().toISOString(), marketClosed: !clock.open };
   if (!clock.feedWindow) state = { ...state, state: stocks.length ? 'waiting' : 'disconnected', message: clock.knownYear ? 'Market closed. Prices retain their last trade time; streaming resumes next session.' : 'Update the trading calendar before this year can run paper sessions.' };
   await redis.set(FEED_KEYS.status, JSON.stringify(state), 'EX', 30);
   const latest = [...quotes.values()].filter(q => currentQuote(state, q)); quotes.clear();
+  // Order-book-only changes for stocks without a new trade in this cycle (research views only).
+  const bookOnly = [...changedBooks].filter(id => !latest.some(q => q.instrumentId === id)).flatMap(id => {
+    const tick = lastTicks.get(id); return tick && currentQuote(state, tick) ? [tick] : [];
+  });
+  changedBooks.clear();
+  const research = [...latest, ...bookOnly].map(q => sharedStockQuote(q, books.get(q.instrumentId), depthBooks.get(q.instrumentId)));
   const previewBars = [...bars.values()].filter(b => chartIds.has(b.instrumentId) && Object.values(state.connections ?? {}).some(c => ['live', 'waiting'].includes(c.state) && c.session === b.streamSession && c.ids.includes(b.instrumentId))); bars.clear();
   if (latest.length) {
     const pipeline = redis.pipeline();
-    for (const quote of latest) {
-      pipeline.set(`quantforge:quote:${quote.instrumentId}`, JSON.stringify(quote), 'EX', 120);
-      pipeline.set(`quantforge:research:quote:${quote.instrumentId}`, JSON.stringify(sharedStockQuote(quote)), 'EX', 172800);
-    }
+    for (const quote of latest) pipeline.set(`quantforge:quote:${quote.instrumentId}`, JSON.stringify(quote), 'EX', 120);
     const written = await pipeline.exec(); if (written?.some(([error]) => error)) throw new Error('Quote persistence unavailable');
     await announce('market.quotes', latest);
   }
-  if (latest.length || previewBars.length) await announce('stock.quotes', { quotes: latest.map(sharedStockQuote), candles: previewBars });
+  if (research.length) {
+    const pipeline = redis.pipeline();
+    for (const quote of research) pipeline.set(`quantforge:research:quote:${quote.instrumentId}`, JSON.stringify(quote), 'EX', 172800);
+    const written = await pipeline.exec(); if (written?.some(([error]) => error)) throw new Error('Quote persistence unavailable');
+  }
+  if (research.length || previewBars.length) await announce('stock.quotes', { quotes: research, candles: previewBars });
   if (pendingTicks.length) {
     const batch = pendingTicks.splice(0, 5000).filter(q => paperIds.has(q.instrumentId) && currentQuote(state, q)), pipeline = redis.pipeline();
     for (const tick of batch) pipeline.xadd('quantforge:market:ticks', 'MAXLEN', '~', 100000, '*', 'quote', JSON.stringify(tick));
@@ -112,14 +132,15 @@ const timer = setInterval(() => {
   if (reconciling) return;
   reconciling = true;
   void reconcile().catch(async () => {
-    feed.reset(); chartBuilder.reset(); candleBuilder.reset(); pendingTicks = []; quotes.clear(); bars.clear();
+    feed.reset(); depthFeed.reset(); chartBuilder.reset(); candleBuilder.reset(); resetBooks(); pendingTicks = []; quotes.clear(); bars.clear();
     state = { state: 'error', message: 'Feed coordination unavailable. Retrying automatically.', updatedAt: new Date().toISOString() };
     await redis.set(FEED_KEYS.status, JSON.stringify(state), 'EX', 30).catch(() => {});
   }).finally(() => { reconciling = false; if (stopping) void shutdown(); });
-}, 500);
+  // 250 ms keeps the research view near real time; settings, lease and demand reads are separately throttled.
+}, 250);
 console.log('QuantForge shared read-only market-feed worker started');
 async function shutdown() {
-  if (shutdownStarted) return; shutdownStarted = true; stopping = true; clearInterval(timer); feed.reset();
+  if (shutdownStarted) return; shutdownStarted = true; stopping = true; clearInterval(timer); feed.reset(); depthFeed.reset();
   while (reconciling) await new Promise(resolve => setTimeout(resolve, 50));
   state = { state: 'disconnected', message: 'Market-feed worker stopped.', updatedAt: new Date().toISOString() };
   await redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then redis.call('SET',KEYS[2],ARGV[2],'EX',30); return redis.call('DEL',KEYS[1]) else return 0 end", 2, FEED_KEYS.lease, FEED_KEYS.status, owner, JSON.stringify(state)).catch(() => {});

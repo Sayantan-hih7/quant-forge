@@ -2,18 +2,21 @@ import { Tooltip } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { StockQuote } from '../types';
 import { priceState, stockMoney, stockSigned, stockTime, stockTone, stockSource } from '../utils/format';
+import { useTickFlash } from '../hooks/useTickFlash';
 export function StockPrice({ quote, connected, now, large = false }: { quote?: StockQuote; connected: boolean; now: number; large?: boolean }) {
   const state = priceState(quote, connected, now);
+  const flash = useTickFlash(quote?.price);
   return <div className={`stock-price ${large ? 'stock-price--large' : ''}`}>
-    <strong>{stockMoney(quote?.price)}</strong>
+    <strong className={flash || undefined}>{stockMoney(quote?.price)}</strong>
     <Tooltip title={quote ? `${stockSource(quote)} · Last trade ${stockTime(quote.lastTradeAt)}${connected ? ' · Feed connected; a quiet stock keeps its last trade price.' : ''}` : 'A current quote has not been received for this stock.'}>
       <span className={`stock-price-state ${state === 'Live' ? 'stock-price-state--live' : ''}`}>{state === 'Live' && <i />}{state}</span>
     </Tooltip>
   </div>;
 }
 export function StockChange({ quote }: { quote?: StockQuote }) {
+  const flash = useTickFlash(quote?.price);
   return <div className={`stock-change ${stockTone(quote?.change)}`}>
-    <strong>{quote?.change != null && quote.change !== 0 && (quote.change > 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />)} {stockSigned(quote?.percent, '%')}</strong>
+    <strong className={flash || undefined}>{quote?.change != null && quote.change !== 0 && (quote.change > 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />)} {stockSigned(quote?.percent, '%')}</strong>
     <small>{quote?.change != null ? `${stockSigned(quote.change)} INR` : 'Change unavailable'}</small>
   </div>;
 }

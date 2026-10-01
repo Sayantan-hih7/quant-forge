@@ -22,11 +22,13 @@ stockDetailsRouter.get('/benchmarks/:name/chart',async(req,res)=>{
 });
 const selection = z.object({ ids: z.string().max(2000).transform(s => s.split(',')).pipe(z.array(instrumentIdSchema).min(1).max(100)) });
 stockDetailsRouter.get('/quotes', async (req, res) => {
-  const { ids } = selection.parse(req.query); res.json(await stockQuotes(await selectedInstruments(ids)));
+  const { ids } = selection.parse(req.query), stocks = await selectedInstruments(ids, true, true);
+  const unavailableIds = ids.filter(id => !stocks.some(s => s._id === id));
+  res.json({ ...await stockQuotes(stocks), ...(unavailableIds.length ? { unavailableIds } : {}) });
 });
 stockDetailsRouter.get('/stream', async (req, res) => {
   const candles = z.enum(['true', 'false']).optional().parse(req.query.candles) === 'true';
-  const { ids } = selection.parse(req.query), stocks = await selectedInstruments(ids);
+  const { ids } = selection.parse(req.query), stocks = await selectedInstruments(ids, true, true);
   if (res.destroyed) return;
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders(); res.write(': stock prices\n\n');

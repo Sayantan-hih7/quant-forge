@@ -118,6 +118,31 @@ test('ATR explanation and connected preview match the settings without saving ex
   await expect(page.getByRole('switch', { name: 'Move stop to entry', exact: true })).toBeChecked();
 });
 
+test('maximum stop distance saves, explains skipped candle-low entries and can be removed', async ({ page }, testInfo) => {
+  const initial=record(); initial.risk.stopMode='candleLow';
+  const state=await fixture(page,initial);
+  await page.goto('/strategies?rule='+id);await riskStep(page).click();
+  const limit=page.getByLabel('Maximum initial stop distance (%) · optional',{exact:true});
+  await limit.fill('3');
+  await page.getByLabel('Reference entry price (₹)',{exact:true}).fill('100');
+  await page.getByLabel('Example signal candle low (₹)',{exact:true}).fill('96');
+  const example=page.getByRole('region',{name:'Example calculator'});
+  await expect(example).toContainText('This entry would be skipped');
+  await expect(example).toContainText('4.00%');
+  await expect(example).toContainText('No shares would be bought');
+  await page.getByLabel('Example signal candle low (₹)',{exact:true}).fill('97');
+  await expect(example.getByTestId('initial-risk-preview')).toContainText('Initial SL ₹97.00');
+  await expect(example).not.toContainText('This entry would be skipped');
+  await page.getByRole('button',{name:'Save changes',exact:true}).click();
+  await expect.poll(state.writes).toBe(1); expect(state.saved().risk.maxStopPercent).toBe(3);
+  await page.reload(); await riskStep(page).click(); await expect(limit).toHaveValue('3.00');
+  await page.getByRole('region',{name:'Initial stop-loss',exact:true}).scrollIntoViewIfNeeded();
+  await page.screenshot({path:testInfo.outputPath('maximum-stop-distance.png')});
+  await limit.clear();await page.getByRole('button',{name:'Save changes',exact:true}).click();
+  await expect.poll(state.writes).toBe(2);expect(state.saved().risk.maxStopPercent).toBeUndefined();
+  expect(state.saved().risk.stopMode).toBe('candleLow');
+});
+
 test('saved trailing-from-entry and legacy breakeven retain behaviour and switch explicitly to delayed trailing', async ({ page }) => {
   const initial = record();
   initial.risk = { ...initial.risk, stopMode: 'trailing', stopPercent: 4, breakevenAfterTarget1: true,

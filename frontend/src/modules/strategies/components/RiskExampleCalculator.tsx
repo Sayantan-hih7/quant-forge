@@ -30,6 +30,7 @@ export function RiskExampleOutcome({ risk, entry, atr, signalLow = null }: { sig
   const targets = risk.exitTargets?.length ? risk.exitTargets : [{ basis: 'risk' as const, value: risk.targetR, closePercent: 100 }];
   const plan = stopPlan(risk);
   const when = (rule: { trigger: 'risk' | 'target'; at: number }) => rule.trigger === 'target' ? `After Target ${rule.at} fills` : `At ${entry && distance ? targetMoney(entry + distance * rule.at) : `+${rule.at}R`}`;
+  if (entry && distance && risk.maxStopPercent != null && Math.round(distance * 100) * 100 - Math.round(entry * 100) * risk.maxStopPercent > 1e-7) return <Alert type="warning" showIcon title="This entry would be skipped" description={`The initial stop at ${targetMoney(entry - distance)} is ${(distance / entry * 100).toFixed(2)}% below ${targetMoney(entry)}, exceeding your ${risk.maxStopPercent}% limit. No shares would be bought. The candle/initial stop is kept unchanged.`}/>;
   return <>{entry && distance ? <>
       <div className="risk-example-flow" data-testid="initial-risk-preview"><span>Entry <strong>{targetMoney(entry)}</strong></span><span>Initial SL <strong>{targetMoney(entry - distance)}</strong></span><span><strong>1R {targetMoney(distance)}</strong><small>Stays fixed after the stop moves</small></span></div>
       <p>Starting risk budget <strong>{targetMoney(budget)}</strong> → up to <strong>{quantity} whole shares</strong> with otherwise unused starting capital. Actual sizing uses the account balance at entry.</p>

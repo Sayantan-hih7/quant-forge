@@ -14,6 +14,8 @@ const key = (id: string) => `quantforge:research:quote:${id}`;
 export const quoteMemory = new Map<string, StockQuote>();
 const snapshotAt = new Map<string, number>();
 export function rememberQuote(quote: StockQuote) {
+  // Streamed books published as `depth` (older feed workers) belong in liveDepth: only snapshots count as full depth.
+  if (quote.depth && quote.depth.source !== 'Dhan snapshot') { const { depth, ...rest } = quote; quote = { ...rest, liveDepth: quote.liveDepth ?? depth }; }
   const previous = quoteMemory.get(quote.instrumentId);
   quote = mergeQuote(previous, quote);
   if (quoteMemory.size >= 1000 && !previous) { const id = quoteMemory.keys().next().value!; quoteMemory.delete(id); snapshotAt.delete(id); }
@@ -26,19 +28,29 @@ export async function persistQuotes(quotes: StockQuote[]) {
   for (const q of quotes) pipeline.set(key(q.instrumentId), JSON.stringify(q), 'EX', 172800);
   await pipeline.exec();
 }
-export async function selectedInstruments(ids: string[], activeOnly = true): Promise<Instrument[]> {
+export async function selectedInstruments(ids: string[], activeOnly = true, skipUnavailable = false): Promise<Instrument[]> {
   const unique = [...new Set(ids)];
   const rows = await InstrumentModel.find({ _id: { $in: unique }, ...(activeOnly ? { active: true } : {}) }).lean();
-  invariant(rows.length === unique.length, 'One or more stocks are no longer in the active stock universe');
+  // Lists of many stocks keep working when one listing leaves the universe; single-stock requests still fail clearly.
+  invariant(skipUnavailable ? rows.length > 0 || !unique.length : rows.length === unique.length, 'One or more stocks are no longer in the active stock universe');
   return rows;
 }
-export async function stockQuotes(stocks: Instrument[], options:{snapshotMaxAgeMs?:number}={}) {
+/** Waits briefly for the shared quote allowance instead of skipping when another view holds it. */
+async function quoteSlot(waitMs = 0) {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    if (await tryDhanQuoteSlot()) return true;
+    if (Date.now() + 150 > deadline) return false;
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+}
+export async function stockQuotes(stocks: Instrument[], options:{snapshotMaxAgeMs?:number;slotWaitMs?:number}={}) {
   const ids = stocks.map(x => x._id), at = new Date().toISOString();
   const cached = await redis.mget(ids.map(key));
   for (const value of cached) if (value) rememberQuote(JSON.parse(value) as StockQuote);
   let message: string | undefined;
   const missing = stocks.filter(x => { const q = quoteMemory.get(x._id); return !q || q.source === 'historical-close' || Date.now() - Date.parse(q.receivedAt) > (options.snapshotMaxAgeMs??10_000) || Date.now() - Math.max(snapshotAt.get(x._id) ?? 0,Date.parse(q.depth?.receivedAt??'')||0) > (options.snapshotMaxAgeMs??60_000); });
-  if (missing.length && await tryDhanQuoteSlot()) {
+  if (missing.length && await quoteSlot(options.slotWaitMs)) {
     try {
       // The quote endpoint has its own 1 request/second limit, separate from candle imports.
       const body: Record<string, number[]> = {};

@@ -9,6 +9,8 @@ import { QualificationRunModel, type QualificationRun } from '../models/qualific
 import { dhanCompanyFields, monthlyHistoryRequirements } from './history-requirements.js';
 import { monthlyRequiredFields } from './readiness.service.js';
 import { ensureShareholding } from '../../market-data/services/shareholding.service.js';
+import { NEWS_FIELDS, computeNewsFacts, syncNews } from '../../news/news.service.js';
+import { NewsItemModel } from '../../news/news.model.js';
 
 const preparationDependencies = { evaluate: evaluateBatch, company: ensureCompanyData, history: ensureMonthlyHistory, ownership: ensureShareholding };
 export async function prepareQualification(run: QualificationRun, dependencies = preparationDependencies) {
@@ -38,6 +40,11 @@ export async function prepareQualification(run: QualificationRun, dependencies =
   }
   if (required.includes('pledge') && !await facts.exists({ ...valid, field: 'pledge' })) await jobContext.run({ id: `${run._id}-pledge` }, syncPledge);
   if (required.includes('index') && !await facts.exists({ ...valid, field: 'index' })) await jobContext.run({ id: `${run._id}-indices` }, syncMemberships);
+  // News facts are local aggregates; collect headlines first only if none have ever been collected.
+  if (required.some(field => (NEWS_FIELDS as readonly string[]).includes(field)) && !await facts.exists({ ...valid, source: 'news-aggregate' })) {
+    if (!await NewsItemModel.exists({})) await jobContext.run({ id: `${run._id}-news` }, () => syncNews());
+    else await computeNewsFacts();
+  }
 
   async function possible(ids: string[]) {
     const remaining: string[] = [];

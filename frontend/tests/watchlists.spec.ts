@@ -73,7 +73,14 @@ async function fixture(page: Page) {
     if (path === '/api/stocks/quotes') return route.fulfill({ json: { quotes: [] } });
     if (path.endsWith('/chart')) return route.fulfill({ json: { bars: [], source: 'Test', timeframe: '1d' } });
     if (path.endsWith('/listings')) { const instrument = all.find(stock => decodeURIComponent(path).includes(stock._id)) ?? all[0]; return route.fulfill({ json: { instrument, listings: all.filter(stock => stock.isin === instrument.isin) } }); }
-    if (path.endsWith('/related')) { const instrument = all.find(stock => decodeURIComponent(path).includes(stock._id)) ?? all[0]; return route.fulfill({ json: { sector: 'Banking', ordering: 'similar-market-cap', items: all.filter(stock => stock.exchange === instrument.exchange && stock.isin !== instrument.isin).slice(0, 3).map(stock => ({ ...stock, marketCap: 2000, marketCapObservedAt: '2026-09-29T10:00:00Z' })) } }); }
+    if (path.endsWith('/related')) {
+      const instrument = all.find(stock => decodeURIComponent(path).includes(stock._id)) ?? all[0];
+      const profile = { sector: 'Banking', industry: 'Private Bank', marketCap: 2000, marketCapObservedAt: '2026-09-29T10:00:00Z', pe: 14, pb: 2, roe: 15, roce: 8, debtEquity: 0, turnover: 40, indices: [], band: { key: 'small', label: 'Small cap', rank: 300, of: 5000 } };
+      const items = all.filter(stock => stock.exchange === instrument.exchange && stock.isin !== instrument.isin).slice(0, 3)
+        .map(stock => ({ ...stock, ...profile, score: 0.8, strength: 'close', reasons: [{ key: 'industry', label: 'Same industry · Private Bank' }], correlation: null, sectorRank: 2 }));
+      return route.fulfill({ json: { sector: 'Banking', industry: 'Private Bank', rankedCompanies: 5000, checkedAt: '2026-09-29T10:00:00Z', subject: { ...profile, sectorRank: 1, sectorSize: 4 },
+        lenses: [{ key: 'peers', label: 'Closest peers', description: 'Same industry or sector.', items, message: null }, { key: 'size', label: 'Other small caps', description: 'Same size.', items: [], message: 'No other companies of this size have saved data yet.' }, { key: 'leaders', label: 'Sector leaders', description: 'Largest.', items, message: null }] } });
+    }
     if (path.startsWith('/api/stocks/')) return route.fulfill({ json: { instrument: all.find(stock => path.includes(encodeURIComponent(stock._id))) ?? all[0], facts: [], qualification: null } });
     return route.fulfill({ json: {} });
   });
@@ -139,7 +146,8 @@ test('recently viewed companies persist, deduplicate exchanges and open related 
   await recent.getByRole('button', { name: 'Reopen STOCK01 on BSE' }).click();
   await expect(drawer.locator('.stock-drawer-title')).toContainText('STOCK01');
   const related = drawer.getByRole('region', { name: 'Related stocks', exact: true });
-  await expect(related).toContainText('Same sector · Banking');
+  await expect(related).toContainText('Banking › Private Bank');
+  await expect(related).toContainText('Same industry · Private Bank');
   await related.getByRole('button', { name: 'View related stock STOCK03 on BSE' }).click();
   await expect(drawer.locator('.stock-drawer-title')).toContainText('STOCK03');
   await expect(drawer.getByRole('button', { name: 'Previous stock', exact: true })).toBeDisabled();

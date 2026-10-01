@@ -67,7 +67,7 @@ export class StockQuoteStream {
     const id = randomUUID(); this.consumers.set(id, { stocks, send, end, candles });
     send({ status: { state: 'connecting', sessions: {}, message: 'Connecting to shared live prices.' } });
     this.saveDemand();
-    if (!this.timer) { this.timer = setInterval(() => { void this.flush(); }, 500); this.timer.unref(); }
+    if (!this.timer) { this.timer = setInterval(() => { void this.flush(); }, 250); this.timer.unref(); }
     void this.flush();
     return () => { this.consumers.delete(id); if (!this.consumers.size) this.close(); else this.saveDemand(); };
   }

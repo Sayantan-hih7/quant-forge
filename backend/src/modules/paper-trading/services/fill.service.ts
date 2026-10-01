@@ -6,7 +6,7 @@ import { currentMonth } from '../../qualification/services/universe.service.js';
 import type { LiveQuote } from '../../market-feed/types/feed.types.js';
 import { sessionTime } from './paper.service.js';
 import { InvalidTargetPriceError, nextTarget, positionTargets } from './exit-targets.js';
-import { advanceStop, initialRiskDistance } from './stop-management.js';
+import { advanceStop, initialRiskDistance, exceedsStopLimit, stopLimitMessage } from './stop-management.js';
 import { exitAccounting, type ExitAccounting } from './trade-pnl.js';
 
 // Internal execution function: callers supply a verified feed-session quote;
@@ -20,26 +20,32 @@ export async function fillPaperOrder(id:string, quote:LiveQuote, now=Date.now())
     if(Date.parse(order.expiresAt)<=now){await reject('No eligible fill before expiry','expired');return;}
     const session=await PaperSessionModel.findById(order.sessionId).session(transaction).lean();
     if(!session?.active || session.mode==='signals'){await reject('Paper session is not active');return;}
-    const risk=session.strategy.risk, positionId=`${session._id}:${quote.instrumentId}`;
+    const positionId=`${session._id}:${quote.instrumentId}`, manual=session.mode==='manual';
     const positions=await PaperPositionModel.find({sessionId:session._id}).session(transaction).lean(), held=positions.find(x=>x._id===positionId);
+    // Manual trades carry their own plan; exits keep the plan the position was opened with.
+    const risk=(order.side==='BUY'?order.plan:held?.plan)??session.strategy.risk;
     const limit=order.orderType==='market'?undefined:order.limitPaise??(order.side==='BUY'&&risk.entryOrderType==='limit'?Math.round(risk.entryLimitPrice!*100):undefined);
     if(limit!==undefined && (order.side==='BUY'?Math.round(quote.price*100)>limit:Math.round(quote.price*100)<limit))return;
+    // Stop (trigger) orders wait until the price reaches the trigger: buy at or above it, sell at or below it.
+    if(order.triggerPaise!==undefined && (order.side==='BUY'?Math.round(quote.price*100)<order.triggerPaise:Math.round(quote.price*100)>order.triggerPaise))return;
     const slipped=Math.round(quote.price*100*(1+(order.side==='BUY'?1:-1)*risk.slippagePercent/100));
     const fill=order.side==='BUY'?Math.min(limit??Infinity,slipped):Math.max(limit??0,slipped);
     let quantity=order.quantity;
     let change:number,fee:number;
     let accounting:ExitAccounting|undefined;
     if(order.side==='BUY'){
-      if(session.ids && !session.ids.includes(quote.instrumentId)){await reject('Stock is outside this paper session scope');return;}
+      if(!manual && session.ids && !session.ids.includes(quote.instrumentId)){await reject('Stock is outside this paper session scope');return;}
       if(session.entriesPaused && order.source==='signal' && !order.amendments?.length){await reject('Automatic entries are paused');return;}
       if(!risk.overnight && sessionTime(now).minute>=915){await reject('No new intraday entries after 15:15 IST');return;}
-      if(!await MonthlyUniverseModel.exists({_id:currentMonth(),'members.instrumentId':quote.instrumentId}).session(transaction)){await reject('Stock is no longer in the monthly qualified list');return;}
+      if(!manual && !await MonthlyUniverseModel.exists({_id:currentMonth(),'members.instrumentId':quote.instrumentId}).session(transaction)){await reject('Stock is no longer in the monthly qualified list');return;}
       if(held || positions.length>=risk.maxPositions){await reject('An existing position or the position limit blocks this entry');return;}
       const distance=initialRiskDistance(risk,fill,order.atr,order.signalLow);
       if(!Number.isFinite(distance) || distance<=0 || distance>=fill){await reject('Initial stop must be below the filled entry price, with a positive risk distance');return;}
-      const {maxRisk,maxCash}=buySize(session,positions,fill,distance);
+      if(exceedsStopLimit(risk,fill,distance)){await reject(stopLimitMessage(risk,fill,distance));return;}
+      const {maxRisk,maxCash}=buySize(session,positions,fill,distance,risk);
       if(quantity===0)quantity=Math.min(maxRisk,maxCash);
-      if(quantity<1 || quantity>maxRisk || quantity>maxCash){await reject('Quantity exceeds available paper cash or per-trade risk');return;}
+      // A manual trader chooses the quantity; only cash limits it (the plan's stop still bounds the loss).
+      if(quantity<1 || (!manual && quantity>maxRisk) || quantity>maxCash){await reject(manual?'Not enough paper cash for this quantity at the fill price':'Quantity exceeds available paper cash or per-trade risk');return;}
       fee=Math.round(fill*quantity*risk.feePercent/100);change=-(fill*quantity+fee);
       if(session.cashPaise+change<0){await reject('Insufficient paper cash');return;}
       let targets:ReturnType<typeof positionTargets>;
@@ -48,7 +54,10 @@ export async function fillPaperOrder(id:string, quote:LiveQuote, now=Date.now())
         if(!(error instanceof InvalidTargetPriceError))throw error;
         await reject(error.message);return;
       }
-      await PaperPositionModel.create([{_id:positionId,sessionId:session._id,instrumentId:quote.instrumentId,symbol:quote.symbol,quantity,initialQuantity:quantity,entryPaise:fill,initialRiskPaise:distance,costPaise:-change,stopPaise:fill-distance,targetPaise:targets?.find(t=>!t.completed)?.pricePaise??Math.round(fill+distance*risk.targetR),targets,openedAt:new Date(now).toISOString()}],{session:transaction});
+      // "No target" positions exit only by stop, trailing stop, sell rule or a manual sell.
+      const noTarget=!!order.plan?.noTarget;
+      await PaperPositionModel.create([{_id:positionId,sessionId:session._id,instrumentId:quote.instrumentId,symbol:quote.symbol,quantity,initialQuantity:quantity,entryPaise:fill,initialRiskPaise:distance,costPaise:-change,stopPaise:fill-distance,
+        targetPaise:noTarget?Number.MAX_SAFE_INTEGER:targets?.find(t=>!t.completed)?.pricePaise??Math.round(fill+distance*risk.targetR),targets,openedAt:new Date(now).toISOString(),...(order.plan?{plan:order.plan}:{})}],{session:transaction});
     } else {
       if(!held){await reject('No held shares to sell');return;}
       if(order.positionOpenedAt && order.positionOpenedAt!==held.openedAt){await reject('This exit belongs to an earlier position');return;}

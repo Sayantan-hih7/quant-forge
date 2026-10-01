@@ -11,7 +11,7 @@ import type { PaperSession } from '../hooks/useBackendPaper';
 const schema=z.object({ids:z.array(z.string()).min(1).max(200),mode:z.enum(['signals','confirmation','automatic'])});
 export function MonitoringSettings({session,onSaved}:{session:PaperSession;onSaved:()=>Promise<void>}){
  const {message}=App.useApp(),scope=useQualifiedStockScope({universe:'current',includeManual:true});
- const form=useForm<z.infer<typeof schema>>({resolver:zodResolver(schema),defaultValues:{ids:session.scope?.eligibleIds??session.ids??[],mode:session.mode}});
+ const form=useForm<z.infer<typeof schema>>({resolver:zodResolver(schema),defaultValues:{ids:session.scope?.eligibleIds??session.ids??[],mode:session.mode==='manual'?'automatic':session.mode}});
  return <Form layout="vertical" onFinish={form.handleSubmit(async input=>{try{await apiClient.patch(`/paper/sessions/${session._id}/configuration`,input);await onSaved();message.success('Monitoring settings saved. New settings apply to upcoming signals.');}catch(e){message.error((e as Error).message);}})}>
   <p><strong>{session.strategy.name}</strong> · Saved rules, revision {session.strategy.revision}</p>
   <StrategyHistoryButton strategy={session.strategy} context="This monitoring session" /><p className="muted">These settings keep the rules used when monitoring started. To use edited strategy rules, stop this session after closing its positions and start monitoring the updated strategy.</p>

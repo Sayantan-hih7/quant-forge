@@ -5,18 +5,26 @@ import { PaperOrderModel, PaperPositionModel, PaperSessionModel } from '../model
 
 export const INTRADAY_SQUARE_OFF_MINUTE=915;
 /** Queue by the clock, even if a held stock has not just ticked. Fills still need
- * a subsequent fresh quote. Expired exits are retried by the worker. */
+ * a subsequent fresh quote. Expired exits are retried by the worker.
+ * Intraday is decided per position: a manual intraday trade closes even in an account that also holds delivery. */
 export async function queueIntradaySquareOff(now=Date.now(),canContinue=()=>true){
   const clock=marketTime(now);if(!clock.open||!canContinue())return;
-  const sessions=await PaperSessionModel.find({active:true,mode:{$ne:'signals'},'strategy.risk.overnight':false}).select('_id').lean();
+  const sessions=await PaperSessionModel.find({active:true,mode:{$ne:'signals'},$or:[{'strategy.risk.overnight':false},{mode:'manual'}]}).select('_id').lean();
   for(const session of sessions){
     if(!canContinue())return;
     await mongoose.connection.transaction(async transaction=>{
       const current=await PaperSessionModel.findById(session._id).session(transaction).lean();
-      if(!current?.active||current.mode==='signals'||current.strategy.risk.overnight)return;
-      if(clock.minute>=INTRADAY_SQUARE_OFF_MINUTE)await PaperOrderModel.updateMany({sessionId:session._id,side:'BUY',status:{$in:['pending','confirmation']}},{$set:{status:'cancelled',message:'Intraday square-off: entries close at 3:15 PM IST'}},{session:transaction});
+      if(!current?.active||current.mode==='signals')return;
+      const sessionOvernight=current.strategy.risk.overnight;
+      if(clock.minute>=INTRADAY_SQUARE_OFF_MINUTE){
+        // Intraday buys close at 15:15: strategy-wide for intraday strategies, per order for manual trades.
+        const pending=await PaperOrderModel.find({sessionId:session._id,side:'BUY',status:{$in:['pending','confirmation']}}).session(transaction).lean();
+        const intraday=pending.filter(order=>!(order.plan?.overnight??sessionOvernight)).map(order=>order._id);
+        if(intraday.length)await PaperOrderModel.updateMany({_id:{$in:intraday}},{$set:{status:'cancelled',message:'Intraday square-off: entries close at 3:15 PM IST'}},{session:transaction});
+      }
       const positions=await PaperPositionModel.find({sessionId:session._id}).session(transaction).lean();
       for(const position of positions){
+        if(position.plan?.overnight??sessionOvernight)continue;
         if(clock.minute<INTRADAY_SQUARE_OFF_MINUTE&&marketTime(Date.parse(position.openedAt)).date===clock.date)continue;
         const active=await PaperOrderModel.findOne({sessionId:session._id,instrumentId:position.instrumentId,status:{$in:['pending','confirmation']}}).session(transaction).lean();
         if(active?.source==='protection'&&active.targetIndex===undefined&&active.reason==='Session close')continue;

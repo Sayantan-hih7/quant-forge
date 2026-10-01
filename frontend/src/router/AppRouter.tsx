@@ -14,6 +14,7 @@ const DataSourcesPage = lazy(() => import('../modules/data-sources/pages/DataSou
 const DhanCallbackPage = lazy(() => import('../modules/data-sources/pages/DhanCallbackPage'));
 const IndicesPage = lazy(() => import('../modules/market-data/pages/IndicesPage'));
 const WatchlistsPage = lazy(() => import('../modules/watchlists/pages/WatchlistsPage'));
+const NewsPage = lazy(() => import('../modules/news/pages/NewsPage'));
 const ModulePreviewPage = lazy(() => import('../pages/ModulePreviewPage'));
 const AuthPage = lazy(() => import('../modules/auth/pages/AuthPage'));
 const VerifyPage = lazy(() => import('../modules/auth/pages/VerifyPage'));
@@ -31,6 +32,7 @@ export function AppRouter() {
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/market-data/indices" element={<IndicesPage />} />
       <Route path="/market-data/watchlists" element={<WatchlistsPage />} />
+      <Route path="/market-data/news" element={<NewsPage />} />
       <Route path="/market-data" element={<Navigate to="/market-data/indices" replace />} />
       <Route path="/data-sources" element={<DataSourcesPage />} /><Route path="/qualification" element={<QualificationPage />} />
       <Route path="/strategies" element={<StrategiesPage />} /><Route path="/strategy-builder" element={<Navigate to="/strategies?tab=rules" replace />} />

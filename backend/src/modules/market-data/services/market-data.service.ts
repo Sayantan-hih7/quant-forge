@@ -5,9 +5,11 @@ import { INDEX_SOURCES } from '../sources/index-membership.js';
 import { ConnectionModel } from '../../connections/models/connection.model.js';
 import type { ImportRequest } from '../validations/market-data.validation.js';
 import { universeRefreshStatus } from './universe-refresh.service.js';
+import { maintenanceStatus } from './maintenance.service.js';
+import { DailyCloseModel } from '../models/market-data.model.js';
 
 export async function dataStatus() {
-  const [listings, companies, recentRuns, coverage, candles, dhan, universeRefresh] = await Promise.all([
+  const [listings, companies, recentRuns, coverage, candles, dhan, universeRefresh, maintenance, closes] = await Promise.all([
     instruments.countDocuments({ active: true }), instruments.countDocuments({ active: true, primary: true }),
     sourceRuns.find().sort({ startedAt: -1 }).limit(20).lean(),
     facts.aggregate([{ $match: { knownAt: { $lte: new Date().toISOString() }, $or: [{ validUntil: { $gte: new Date().toISOString() } }, { validUntil: { $exists: false } }] } },
@@ -16,9 +18,14 @@ export async function dataStatus() {
     storedCandles.aggregate([{ $group: { _id: '$interval', count: { $sum: 1 }, from: { $min: '$time' }, to: { $max: '$time' } } }]),
     ConnectionModel.findById('dhan').select('+encryptedToken').lean(),
     universeRefreshStatus(),
+    maintenanceStatus().catch(() => []),
+    DailyCloseModel.aggregate<{ from: string; to: string; sessions: number }>([{ $group: { _id: '$date' } }, { $group: { _id: null, from: { $min: '$_id' }, to: { $max: '$_id' }, sessions: { $sum: 1 } } }]),
   ]);
   const connected = dhan?.status === 'connected' && !!dhan.encryptedToken && !!dhan.expiresAt && Date.parse(dhan.expiresAt) > Date.now();
-  return { listings, companies, recentRuns, coverage, candles, indices: INDEX_SOURCES, universeRefresh,
+  const latestSession = closes[0]?.to;
+  const closeCompanies = latestSession ? await DailyCloseModel.countDocuments({ date: latestSession }) : 0;
+  return { listings, companies, recentRuns, coverage, candles, indices: INDEX_SOURCES, universeRefresh, maintenance,
+    dailyCloses: closes[0] ? { from: closes[0].from, to: closes[0].to, sessions: closes[0].sessions, companiesOnLatest: closeCompanies } : null,
     dhan: { connected, expiresAt: dhan?.expiresAt, dataPlan: dhan?.dataPlan, apiConfigured: !!(process.env.DHAN_API_KEY && process.env.DHAN_API_SECRET && process.env.DHAN_CLIENT_ID),
       hasSavedToken: !!dhan?.encryptedToken || !!process.env.DHAN_ACCESS_TOKEN,
       tokenSource: dhan?.tokenSource ?? 'unknown', autoRenew: dhan?.autoRenew ?? false,

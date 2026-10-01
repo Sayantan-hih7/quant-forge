@@ -22,6 +22,7 @@ import { stockDetailsRouter } from './modules/stock-details/routes/stock-details
 import { watchlistRouter } from './modules/watchlists/routes/watchlist.routes.js';
 import { discoveryRouter } from './modules/stock-discovery/routes/discovery.routes.js';
 import { dashboardRouter } from './modules/dashboard/routes/dashboard.routes.js';
+import { newsRouter } from './modules/news/news.routes.js';
 import { deploymentReadiness } from './modules/system/services/readiness.service.js';
 export const app = express();
 app.disable('x-powered-by');
@@ -50,6 +51,7 @@ app.use('/api/stocks', stockDetailsRouter);
 app.use('/api/watchlists', watchlistRouter);
 app.use('/api/stock-discovery', discoveryRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/news', newsRouter);
 app.get('/api/system/readiness', async (_req, res) => res.json(await deploymentReadiness()));
 app.get('/api/events', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });

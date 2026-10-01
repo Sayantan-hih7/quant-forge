@@ -36,6 +36,7 @@ export const backtestSchema = z
     entryLimitPrice: z.number().finite().min(0.01).max(10000000).nullable().optional(),
     stopManagement: stopManagementSchema.optional(),
     stopPercent: z.number().min(0.1).max(25),
+    maxStopPercent: z.number().finite().min(0.1).max(25).nullable().optional(),
     atrPeriod: z.number().int().min(2).max(100),
     atrMultiplier: z.number().min(0.5).max(10),
     targetR: z.number().min(0.5).max(10),

@@ -6,6 +6,7 @@ import { previewStrategy } from '../services/preview.service.js';
 import { paperChartContext } from '../services/chart-context.service.js';
 import { instrumentIdSchema } from '../../market-data/validations/market-data.validation.js';
 import { amendPaperOrder, exitPaperPosition } from '../services/order-controls.service.js';
+import { cancelManualTrigger, closeManualAccount, createManualTrigger, manualOverview, openManualAccount, placeManualOrder } from '../services/manual.service.js';
 export const paperRouter=Router();
 paperRouter.get('/',async(_req,res)=>{res.json(await paperState());});
 paperRouter.get('/instruments',async(_req,res)=>{res.json(await sessionInstruments());});
@@ -25,3 +26,11 @@ paperRouter.post('/positions/:id/exit',async(req,res)=>{res.status(202).json(awa
 paperRouter.patch('/sessions/:id/configuration',async(req,res)=>{await configurePaperSession(z.string().uuid().parse(req.params.id),req.body);res.json({ok:true});});
 
 paperRouter.get('/orders',async(req,res)=>{const input=z.object({sessionId:z.string().uuid().optional(),beforeAt:z.string().datetime().optional(),beforeId:z.string().optional(),filledOnly:z.enum(['true','false']).optional().transform(v=>v==='true'),exitsOnly:z.enum(['true','false']).optional().transform(v=>v==='true')}).parse(req.query);res.json(await paperOrderHistory(input));});
+
+// Manual paper trading: its own account, any stock, protection set per order, optional conditions.
+paperRouter.get('/manual',async(req,res)=>{res.json(await manualOverview(instrumentIdSchema.optional().parse(req.query.instrumentId)));});
+paperRouter.post('/manual/account',async(req,res)=>{res.status(201).json(await openManualAccount(req.body));});
+paperRouter.delete('/manual/account',async(_req,res)=>{await closeManualAccount();res.json({ok:true});});
+paperRouter.post('/manual/orders',async(req,res)=>{res.status(202).json(await placeManualOrder(req.body));});
+paperRouter.post('/manual/triggers',async(req,res)=>{res.status(201).json(await createManualTrigger(req.body));});
+paperRouter.post('/manual/triggers/:id/cancel',async(req,res)=>{await cancelManualTrigger(z.string().uuid().parse(req.params.id));res.json({ok:true});});

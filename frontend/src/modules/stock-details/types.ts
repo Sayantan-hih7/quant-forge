@@ -5,7 +5,14 @@ export interface StockQuote {
   lowerCircuit: number | null; upperCircuit: number | null; lastTradeAt: string | null; receivedAt: string;
   source: 'dhan-snapshot' | 'dhan-stream' | 'motilal-stream' | 'historical-close';
   streamSession?: string;
+  /** Five-level Dhan snapshot, with totals of all pending orders. */
+  depth?: StockDepth;
+  /** Streamed book; `levels` is how many levels the stream provides (Motilal API: best bid/offer only). */
+  liveDepth?: StockDepth;
 }
+export interface DepthLevel { price: number; quantity: number; orders: number | null }
+export interface StockDepth { bids: DepthLevel[]; asks: DepthLevel[]; totalBuy: number | null; totalSell: number | null; receivedAt: string;
+  source: 'Dhan snapshot' | 'Motilal stream' | 'Dhan stream'; levels?: number }
 export interface StockFact { field: string; value: number | string | string[]; period?: string; observedAt: string; source: string; sourceUrl?: string; ownership?: { evidence: string }; statementBasis?: 'consolidated' | 'standalone'; calculation?: { method: string } }
 export interface StockDetail {
   message?: string;

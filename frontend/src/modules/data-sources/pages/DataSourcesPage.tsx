@@ -9,6 +9,7 @@ import { apiClient } from '../../../services/apiClient';
 import type { SourceRun } from '../types';
 import { UniverseRefreshStatus } from '../components/UniverseRefreshStatus';
 import { PaperReadiness } from '../components/PaperReadiness';
+import { ScheduledRefreshes } from '../components/ScheduledRefreshes';
 
 export default function DataSourcesPage() {
   const { data, error, loading, refresh } = useDataSources();
@@ -31,6 +32,7 @@ export default function DataSourcesPage() {
       <Row gutter={[16, 16]}><Col xs={24} md={8}><Card><Statistic title="Cash-equity listings · NSE + BSE" value={data.listings} /></Card></Col><Col xs={24} md={8}><Card><Statistic title="Distinct companies · ISIN" value={data.companies} /></Card></Col><Col xs={24} md={8}><Card><Statistic title="Stored historical candles" value={data.candles.reduce((s, x) => s + x.count, 0)} /></Card></Col></Row>
       <DhanConnection connection={data.dhan} refresh={refresh} />
       {data.universeRefresh && <UniverseRefreshStatus status={data.universeRefresh} />}
+      {!!data.maintenance?.length && <ScheduledRefreshes tasks={data.maintenance} closes={data.dailyCloses ?? null} workerOnline={data.universeRefresh?.workerOnline} />}
       <MotilalConnection />
       <PaperReadiness />
       <HistoricalImport data={data} refresh={refresh} />
@@ -38,7 +40,7 @@ export default function DataSourcesPage() {
         <p className="muted">Index tags and company snapshots are dated when collected. Monthly delivery is volume-weighted across the complete set of exchange reports.</p>
         <Space wrap>{[
           ['instruments', 'Instrument master'], ['motilal-mappings', 'Motilal instrument mappings'], ['memberships', 'NSE / BSE index tags'], ['pledge', 'Promoter pledge'],
-          ['delivery', 'NSE delivery', 'NSE'], ['delivery', 'BSE delivery', 'BSE'], ['fundamentals', 'Dhan company metrics'],
+          ['delivery', 'NSE delivery', 'NSE'], ['delivery', 'BSE delivery', 'BSE'], ['fundamentals', 'Dhan company metrics'], ['daily-closes', 'Recent daily closes'],
         ].map(([kind, label, exchange]) => <Button key={label} icon={<DownloadOutlined />} loading={queued.includes(`${kind}:${exchange ?? ''}`)} disabled={kind !== 'instruments' && !data.listings || kind === 'fundamentals' && !data.dhan.connected} onClick={() => { void sync(kind, exchange); }}>{label}</Button>)}</Space>
       </Card>
       <Card title="Import activity"><Table<SourceRun> size="small" rowKey="_id" dataSource={data.recentRuns} pagination={{ pageSize: 6 }} scroll={{ x: 650 }} columns={[

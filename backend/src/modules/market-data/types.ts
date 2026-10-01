@@ -18,6 +18,11 @@ export interface DeliveryDay {
   deliverable: number | null; turnoverCr: number; source: string; sourceUrl: string;
   observedAt: string; knownAt: string;
 }
+/** Exchange closing price per company (ISIN) and session. Unadjusted, research only — never backtest candles. */
+export interface DailyClose {
+  _id: string; isin: string; date: string; close: number; prevClose: number | null;
+  exchange: Exchange; source: string; sourceUrl: string; observedAt: string;
+}
 export interface Candle {
   instrumentId: string; interval: '1d' | '1m'; time: string;
   open: number; high: number; low: number; close: number; volume: number;

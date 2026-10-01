@@ -2083,5 +2083,83 @@
     "description": "Candle average: OHLC4 = (Open + High + Low + Close) / 4; HLC3 = (High + Low + Close) / 3; HL2 = (High + Low) / 2. This is not the broker session average or your average purchase price.",
     "offset": true,
     "indicator": "averagePrice"
+  },
+  "newsSentiment7d": {
+    "label": "News sentiment (7 days)",
+    "unit": "points",
+    "category": "news",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "offset": false,
+    "description": "Confidence- and recency-weighted average impact of stories about the company, from −100 (strongly negative) to +100 (strongly positive). Unavailable when there were no stories. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+  },
+  "newsSentiment30d": {
+    "label": "News sentiment (30 days)",
+    "unit": "points",
+    "category": "news",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "offset": false,
+    "description": "As 7-day sentiment, over 30 days with a slower decay. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+  },
+  "newsCount7d": {
+    "label": "News stories (7 days)",
+    "unit": "stories",
+    "category": "news",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "offset": false,
+    "description": "Distinct stories about the company in 7 days (the same story from several outlets counts once; routine exchange filings excluded). Zero when none were found. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+  },
+  "newsPositive30d": {
+    "label": "Positive stories (30 days)",
+    "unit": "stories",
+    "category": "news",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "offset": false,
+    "description": "Distinct stories judged positive for the company (impact ≥ +0.25) in 30 days. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+  },
+  "newsNegative30d": {
+    "label": "Negative stories (30 days)",
+    "unit": "stories",
+    "category": "news",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "offset": false,
+    "description": "Distinct stories judged negative for the company (impact ≤ −0.25) in 30 days, e.g. probes, defaults, downgrades, weak results. Use “at most 0” to exclude companies with recent negative news. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+  },
+  "newsMood7d": {
+    "label": "News mood (7 days)",
+    "unit": "category",
+    "category": "news",
+    "source": "facts",
+    "frames": [
+      "latest"
+    ],
+    "monthly": true,
+    "trading": true,
+    "offset": false,
+    "description": "Positive (sentiment ≥ +20), Negative (≤ −20), Neutral, or No coverage when no stories were found in 7 days. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
   }
 }

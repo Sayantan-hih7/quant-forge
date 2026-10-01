@@ -3,8 +3,14 @@ export interface SourceRun {
   processed: number; total?: number; startedAt: string; finishedAt?: string;
   failures: { item: string; message: string }[]; details?: Record<string, unknown>;
 }
+export interface MaintenanceTask {
+  task: string; schedule: string; nextRunAt: string | null; lastStatus: SourceRun['status'] | null;
+  lastStartedAt: string | null; lastFinishedAt: string | null; lastError: string | null;
+}
 export interface DataStatus {
   universeRefresh?: UniverseRefresh;
+  maintenance?: MaintenanceTask[];
+  dailyCloses?: { from: string; to: string; sessions: number; companiesOnLatest: number } | null;
   listings: number; companies: number; recentRuns: SourceRun[];
   coverage: { _id: string; instruments: number; latestObservation: string }[];
   candles: { _id: string; count: number; from: string; to: string }[];

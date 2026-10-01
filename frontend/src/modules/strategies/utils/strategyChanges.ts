@@ -14,7 +14,7 @@ function flatten(value:unknown,prefix='',out:Record<string,unknown>={}):Record<s
   else out[prefix]=value;
   return out;
 }
-function riskLabel(path:string){return path.split('.').map((part,i,all)=>/^\d+$/.test(part)?`Target ${Number(part)+1}`:part==='exitTargets'?'Profit targets':part==='stopManagement'?'Stop adjustments':part==='breakeven'?'Move stop to entry':part==='trailing'?'Trailing stop':labels[part]??all[i]).join(' · ');}
+function riskLabel(path:string){return path.split('.').map((part,i,all)=>/^\d+$/.test(part)?`Target ${Number(part)+1}`:part==='maxStopPercent'?'Maximum initial stop distance (%)':part==='exitTargets'?'Profit targets':part==='stopManagement'?'Stop adjustments':part==='breakeven'?'Move stop to entry':part==='trailing'?'Trailing stop':labels[part]??all[i]).join(' · ');}
 function riskValue(path:string,value:unknown){
   if(value===undefined||value===null)return missing;
   if(path.endsWith('.moveStopTo'))return value===0?'Entry price':`Target ${value}`;

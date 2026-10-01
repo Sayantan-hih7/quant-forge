@@ -5,6 +5,7 @@ import { deliveryDays, instruments, storedCandles } from '../repository.js';
 import { SourceArtifactModel } from '../models/market-data.model.js';
 import { deliveryUrl, parseNseDelivery } from '../sources/nse-reports.js';
 import { bseDeliveryUrl, parseBseDelivery } from '../sources/bse-reports.js';
+import { storeNseClosesFromReport } from './daily-closes.service.js';
 
 const pending = new Map<string, Promise<void>>();
 const retryAt = new Map<string, number>();
@@ -37,6 +38,7 @@ export async function ensureDailyReport(exchange: 'NSE' | 'BSE', date: string, d
       filter: { _id: row._id }, update: { $setOnInsert: row }, upsert: true,
     } })));
     await SourceArtifactModel.updateOne({ _id: key }, { $setOnInsert: { source: exchange, date, checksum: createHash('sha256').update(raw).digest('hex'), rowCount: rows.length, observedAt: at } }, { upsert: true });
+    if (exchange === 'NSE') await storeNseClosesFromReport(raw, date, stocks);
     retryAt.delete(key);
   })();
   pending.set(key, action);

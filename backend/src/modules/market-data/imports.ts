@@ -4,7 +4,7 @@ import { AppError, invariant } from '../../shared/errors.js';
 import { announce } from '../../shared/redis.js';
 import { jobContext } from '../../shared/job-context.js';
 import { download, downloadJson } from '../../shared/http-client.js';
-import { instruments, deliveryDays, sourceRuns, writeFacts } from './repository.js';
+import { instruments, deliveryDays, facts, sourceRuns, writeFacts } from './repository.js';
 import { parseDhanMaster, DHAN_MASTER_URL } from './sources/dhan-master.js';
 import { parseNseDelivery, monthlyDelivery, deliveryUrl, NSE_EQUITIES_URL, NSE_PLEDGE_URL, NSE_HOLIDAYS_URL, parseNsePledge, regularNseSessions } from './sources/nse-reports.js';
 import { bseDeliveryUrl, parseBseDelivery, BSE_PLEDGE_URL, parseBsePledge } from './sources/bse-reports.js';
@@ -14,8 +14,10 @@ import { SourceArtifactModel } from './models/market-data.model.js';
 import { motilalMasterUrl, parseMotilalMappings } from './sources/motilal-master.js';
 import { publishInstrumentSnapshot } from './services/instrument-snapshot.service.js';
 import { requestShareholding } from './providers/shareholding.client.js';
+import { storeNseClosesFromReport } from './services/daily-closes.service.js';
+import { remapInactiveListings } from './services/listing-remap.service.js';
 
-export type ImportKind = 'instruments' | 'memberships' | 'pledge' | 'delivery' | 'fundamentals' | 'history';
+export type ImportKind = 'instruments' | 'memberships' | 'pledge' | 'delivery' | 'fundamentals' | 'history' | 'daily-closes';
 export type Progress = (processed: number, total?: number, details?: Record<string, unknown>) => Promise<void>;
 export async function sourceRun(source: string, action: (progress: Progress, errors: SourceRun['failures']) => Promise<Record<string, unknown> | void>) {
   const run: SourceRun = { _id: jobContext.getStore()?.id ?? randomUUID(), source, status: 'running', startedAt: new Date().toISOString(), processed: 0, failures: [] };
@@ -41,7 +43,9 @@ export async function syncInstruments() {
     await progress(0, rows.length);
     const stats = await publishInstrumentSnapshot(rows);
     await progress(rows.length, rows.length);
-    return { ...stats, sourceUrl: DHAN_MASTER_URL };
+    // A reissued security ID must not leave the qualified list or watchlists on a dead listing.
+    const remapped = await remapInactiveListings();
+    return { ...stats, remappedListings: remapped, sourceUrl: DHAN_MASTER_URL };
   });
 }
 export async function syncMotilalMappings() {
@@ -64,33 +68,52 @@ export async function syncMotilalMappings() {
 export async function syncMemberships() {
   return sourceRun('memberships', async (progress, errors) => {
     const stocks = await instruments.find({ active: true }).lean(); invariant(stocks.length, 'Import the instrument master first');
-    const tags = new Map<string, Set<string>>(), industry = new Map<string, string>();
-    const reports: { id: string; count: number; sourceUrl: string; period?: string }[] = [];
+    const tags = new Map<string, Set<string>>();
+    const tag = (isin: string, id: string) => { const set = tags.get(isin) ?? new Set<string>(); set.add(id); tags.set(isin, set); };
+    const bseIsin = new Map(stocks.filter(x => x.exchange === 'BSE').map(x => [x.securityId, x.isin]));
+    const reports: { id: string; count: number; sourceUrl: string; period?: string; carriedFrom?: string }[] = [];
+    const failed: string[] = [];
     for (const [i, source] of INDEX_SOURCES.entries()) {
       try {
         const raw = await download(source.url);
         const members = source.exchange === 'NSE' ? parseNiftyMembers(raw.toString('utf8')) : parseBseMembers(JSON.parse(raw.toString('utf8')));
         let matched = 0;
         for (const member of members) {
-          const isin = member.isin ?? stocks.find(x => x.exchange === 'BSE' && x.securityId === member.securityId)?.isin;
+          const isin = member.isin ?? bseIsin.get(member.securityId!);
           if (!isin) continue;
-          tags.set(isin, new Set([...(tags.get(isin) ?? []), source.id]));
-          if (member.industry) industry.set(isin, member.industry);
-          matched++;
+          tag(isin, source.id); matched++;
         }
         reports.push({ id: source.id, count: matched, sourceUrl: source.url, period: members[0]?.period });
-      } catch (e) { errors.push({ item: source.id, message: e instanceof AppError ? e.message : 'Constituent format unavailable' }); }
+      } catch (e) { failed.push(source.id); errors.push({ item: source.id, message: e instanceof AppError ? e.message : 'Constituent format unavailable' }); }
       await progress(i + 1, INDEX_SOURCES.length);
       await pause(250);
     }
-    // Do not publish partial lists as authoritative negative membership (IS NOT / NOT IN).
-    invariant(!errors.length, 'Index import incomplete; previous membership snapshot is retained');
+    // Never publish a partial list as authoritative negative membership (IS NOT / NOT IN).
+    // A briefly unavailable index keeps its last verified constituents for up to three weeks.
+    const carried = new Set<string>();
+    if (failed.length) {
+      const oldest = new Date(Date.now() - 21 * 86400000).toISOString();
+      const previous = await facts.findOne({ field: 'index', source: 'exchange-indices', knownAt: { $gte: oldest } }).sort({ knownAt: -1 }).select('knownAt').lean();
+      if (previous) {
+        const isinOf = new Map(stocks.map(x => [x._id, x.isin]));
+        for (const row of await facts.find({ field: 'index', source: 'exchange-indices', knownAt: previous.knownAt }).select('instrumentId value').lean()) {
+          const isin = isinOf.get(row.instrumentId);
+          if (isin && Array.isArray(row.value)) for (const id of row.value) if (typeof id === 'string' && failed.includes(id)) { tag(isin, id); carried.add(id); }
+        }
+        for (const id of carried) reports.push({ id, count: [...tags.values()].filter(set => set.has(id)).length, sourceUrl: INDEX_SOURCES.find(x => x.id === id)!.url, carriedFrom: previous.knownAt });
+      }
+    }
+    // Indices with neither fresh nor carried constituents are left out of coverage, and
+    // rule capabilities only offer covered indices, so NOT IN never runs against a gap.
+    const coverage = INDEX_SOURCES.map(x => x.id).filter(id => !failed.includes(id) || carried.has(id));
+    invariant(coverage.length >= INDEX_SOURCES.length / 2, 'Index import incomplete; previous membership snapshot is retained');
     const observedAt = new Date().toISOString();
     const rows: Fact[] = stocks.map(x => ({ _id: `index:${x._id}:${observedAt}`, instrumentId: x._id,
       field: 'index', value: [...tags.get(x.isin) ?? []], source: 'exchange-indices', sourceUrl: 'https://www.niftyindices.com/indices',
-      observedAt, knownAt: observedAt, validUntil: new Date(Date.parse(observedAt) + 8 * 86400000).toISOString(), basis: 'observed-snapshot' }));
+      // Refreshed weekly; the extra days cover one missed or retried run.
+      observedAt, knownAt: observedAt, validUntil: new Date(Date.parse(observedAt) + 10 * 86400000).toISOString(), basis: 'observed-snapshot' }));
     await writeFacts(rows);
-    return { indexedCompanies: tags.size, reports, coverage: INDEX_SOURCES.map(x => x.id), historical: false };
+    return { indexedCompanies: tags.size, reports, coverage, carriedForward: [...carried], unavailable: failed.filter(id => !carried.has(id)), historical: false };
   });
 }
 export async function syncPledge() {
@@ -131,6 +154,7 @@ export async function syncDelivery(month: string, exchange: 'NSE' | 'BSE' = 'NSE
         const raw = (await download(url)).toString('utf8');
         const rows = exchange === 'NSE' ? parseNseDelivery(raw, date, stocks, now) : parseBseDelivery(raw, date, stocks, now);
         for (let n = 0; n < rows.length; n += 500) await deliveryDays.bulkWrite(rows.slice(n, n + 500).map(x => ({ updateOne: { filter: { _id: x._id }, update: { $setOnInsert: x }, upsert: true } })));
+        if (exchange === 'NSE') await storeNseClosesFromReport(raw, date, stocks);
         await SourceArtifactModel.updateOne({ _id: receiptId }, { $setOnInsert: { source: exchange, date,
           checksum: createHash('sha256').update(raw).digest('hex'), rowCount: rows.length, observedAt: now } }, { upsert: true });
         available.push(date);

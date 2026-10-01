@@ -9,7 +9,7 @@ from .market import stamp, IST
 from .replay import ReplayObservations
 from .rules import evaluate_observations, validate_rule, entry_event_keys
 from .exit_targets import InvalidTargetPriceError, position_targets, validate_targets
-from .stop_management import advance_stop, initial_risk_distance, validate_stop_settings
+from .stop_management import advance_stop, initial_risk_distance, validate_stop_settings, exceeds_stop_limit
 from .replay_trace import ReplayTrace, signal_candle
 
 
@@ -54,6 +54,7 @@ def run_backtest(body):
     unavailable_inputs = {}
     invalid_target_entries = 0
     invalid_stop_entries, unfilled_limits = 0, 0
+    stop_limit_entries = 0
     fee_rate, slip = risk["feePercent"] / 100, risk["slippagePercent"] / 100
     snapshots = sorted(body.get("snapshots", []), key=lambda x: x["publishedAt"])
     fixed_ids = set(config.get("ids", []))
@@ -134,6 +135,9 @@ def run_backtest(body):
             distance = initial_risk_distance(risk, fill, order["atr"], order.get('signalLow'))
             if distance <= 0 or distance >= fill:
                 invalid_stop_entries += 1
+                continue
+            if exceeds_stop_limit(risk, fill, distance):
+                stop_limit_entries += 1
                 continue
             quantity = min(math.floor(equity()*risk["riskPercent"]/100/distance), math.floor(cash/(fill*(1+fee_rate))))
             cost = fill*quantity + round(fill*quantity*fee_rate)
@@ -230,7 +234,7 @@ def run_backtest(body):
             "netPnl": (equity()-capital)/100, "maxDrawdownPercent": max_dd, "unavailableDecisions": unknown,
             "unavailableInputs": [{"field": field, "reason": reason, "checks": count} for (field, reason), count in sorted(unavailable_inputs.items())],
             "invalidTargetEntries": invalid_target_entries,
-            "invalidStopEntries": invalid_stop_entries, "unfilledLimitEntries": unfilled_limits,
+            "invalidStopEntries": invalid_stop_entries, "stopLimitEntries": stop_limit_entries, "unfilledLimitEntries": unfilled_limits,
             "decisions": decisions, "totalFees": total_fees/100, "returnPercent": (equity()-capital)/capital*100,
             "closedTrades": len(closed_pnls), "winRate": wins/len(closed_pnls)*100 if closed_pnls else None, "profitFactor": profit/loss if loss else None,
             "realizedPnl": sum(t["pnl"] for t in trades), "coverage": coverage,

@@ -46,9 +46,28 @@ export function streamTradeTime(seconds: number, receivedAt: string, reference?:
   const time = matching[0] ?? (fresh.length === 1 ? fresh[0] : undefined);
   return time === undefined ? null : new Date(time).toISOString();
 }
+export type DepthRow = { price: number; quantity: number; orders: number | null };
 export type DhanPacket = { kind: 'close'; id: string; previousClose: number }
   | { kind: 'quote'; id: string; price: number; seconds: number; open: number | null; high: number | null; low: number | null; volume: number; averagePrice: number | null }
+  | { kind: 'depth'; id: string; bids: DepthRow[]; asks: DepthRow[]; totalBuy: number; totalSell: number }
   | { kind: 'disconnect'; code: number };
+/**
+ * Full packet (response code 8, 162 bytes): the Quote fields, OI, OHLC, then five 20-byte depth levels:
+ * bid qty (int32), ask qty (int32), bid orders (int16), ask orders (int16), bid price (float32), ask price (float32).
+ */
+function fullDepth(b: Buffer, id: string): DhanPacket | null {
+  if (b.length < 162) return null;
+  const bids: DepthRow[] = [], asks: DepthRow[] = [];
+  for (let i = 0; i < 5; i++) {
+    const at = 62 + i * 20;
+    const bidQty = b.readInt32LE(at), askQty = b.readInt32LE(at + 4), bidOrders = b.readInt16LE(at + 8), askOrders = b.readInt16LE(at + 10);
+    const bidPrice = positive(b.readFloatLE(at + 12)), askPrice = positive(b.readFloatLE(at + 16));
+    if (bidPrice !== null && bidQty > 0) bids.push({ price: Math.round(bidPrice * 100) / 100, quantity: bidQty, orders: bidOrders >= 0 ? bidOrders : null });
+    if (askPrice !== null && askQty > 0) asks.push({ price: Math.round(askPrice * 100) / 100, quantity: askQty, orders: askOrders >= 0 ? askOrders : null });
+  }
+  const totalSell = b.readInt32LE(26), totalBuy = b.readInt32LE(30);
+  return { kind: 'depth', id, bids: bids.sort((x, y) => y.price - x.price), asks: asks.sort((x, y) => x.price - y.price), totalBuy: Math.max(0, totalBuy), totalSell: Math.max(0, totalSell) };
+}
 export function parseQuotePackets(buffer: Buffer): DhanPacket[] {
   const packets: DhanPacket[] = [];
   for (let offset = 0; offset + 8 <= buffer.length;) {
@@ -59,6 +78,7 @@ export function parseQuotePackets(buffer: Buffer): DhanPacket[] {
     const exchange = b[3] === 1 ? 'NSE' : b[3] === 4 ? 'BSE' : null;
     if (!exchange) continue;
     const id = `${exchange}:${b.readUInt32LE(4)}`;
+    if (code === 8) { const depth = fullDepth(b, id); if (depth) packets.push(depth); continue; }
     if (code === 6 && length >= 16) { const price = positive(b.readFloatLE(8)); if (price !== null) packets.push({ kind: 'close', id, previousClose: price }); }
     if (code === 4 && length >= 50) {
       const price = positive(b.readFloatLE(8));

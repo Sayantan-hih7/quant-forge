@@ -8,7 +8,7 @@ export interface FieldDefinition {
   period?: { default: number; min: number; max: number };
 }
 export const ruleFields: Record<string, FieldDefinition> = fields;
-export const fieldUnits: Record<string, string> = { price: '₹', crore: '₹ Cr', percent: '%', ratio: 'ratio', points: 'points', shares: 'shares', category: '', flag: '' };
+export const fieldUnits: Record<string, string> = { price: '₹', crore: '₹ Cr', percent: '%', ratio: 'ratio', points: 'points', shares: 'shares', stories: 'stories', category: '', flag: '' };
 export function fieldLabel(id: string, period?: number, offset = 0, settings?: CalculationSettings) {
   const field = ruleFields[id];
   return `${field?.label ?? id}${field?.period ? ` (${period ?? field.period.default} candles)` : ''}${settings && Object.keys(settings).length ? ` [${Object.entries(settings).filter(([,v])=>v!==undefined).map(([k,v])=>`${field?.indicator ? indicatorCatalog[field.indicator as IndicatorKind]?.settings[k]?.label ?? k : k}: ${v}`).join(', ')}]` : ''}${offset ? `, ${offset} completed candle${offset === 1 ? '' : 's'} earlier` : ''}`;

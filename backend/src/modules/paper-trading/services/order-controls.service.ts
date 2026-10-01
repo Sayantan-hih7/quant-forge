@@ -16,12 +16,14 @@ export async function amendPaperOrder(id:string,raw:unknown,now=Date.now()){
     invariant((order.amendments?.length??0)<100,'This order has reached its modification limit. Cancel it and place a new order.');
     const session=await PaperSessionModel.findById(order.sessionId).session(transaction).lean();
     invariant(session?.active&&session.mode!=='signals','This paper account is no longer active.');
-    invariant(order.side!=='BUY'||session.strategy.risk.overnight||marketTime(now).minute<915,'Intraday entries close at 3:15 PM IST.');
+    invariant(order.side!=='BUY'||(order.plan?.overnight??session.strategy.risk.overnight)||marketTime(now).minute<915,'Intraday entries close at 3:15 PM IST.');
+    invariant(order.orderType!=='stop','Cancel this stop order and place a new one to change its trigger.');
     // Keep the original expiry and confirmation requirement. A changed price may
     // only use ticks received after this edit, never a previously observed price.
     const eligibleAfter=new Date(Math.max(now,Date.parse(order.eligibleAfter)+1)).toISOString();
     const limitPaise=input.orderType==='limit'?Math.round(input.limitPrice!*100):undefined;
-    await PaperSessionModel.updateOne({_id:session._id},{$set:{entriesPaused:true},$inc:{revision:1}},{session:transaction});
+    // Manual intervention pauses a strategy's automatic buys; the manual account has none to pause.
+    if(session.mode!=='manual')await PaperSessionModel.updateOne({_id:session._id},{$set:{entriesPaused:true},$inc:{revision:1}},{session:transaction});
     return PaperOrderModel.findOneAndUpdate({_id:id,status:order.status,eligibleAfter:order.eligibleAfter},
       {$set:{orderType:input.orderType,eligibleAfter,message:'Order updated. Waiting for a new eligible quote.',...(limitPaise!==undefined?{limitPaise}:{})},
         ...(limitPaise===undefined?{$unset:{limitPaise:1}}:{}),$push:{amendments:{at,orderType:input.orderType,limitPaise}}},{session:transaction,returnDocument:'after'}).lean();
@@ -43,7 +45,7 @@ export async function exitPaperPosition(positionId:string,raw:unknown,now=Date.n
     const session=await PaperSessionModel.findById(position.sessionId).session(transaction).lean();
     invariant(session?.active&&session.mode!=='signals','This paper account is no longer active.');
     const active=await PaperOrderModel.findOne({sessionId:session._id,instrumentId:position.instrumentId,status:{$in:['pending','confirmation']}}).session(transaction).lean();
-    await PaperSessionModel.updateOne({_id:session._id},{$set:{entriesPaused:true},$inc:{revision:1}},{session:transaction});
+    if(session.mode!=='manual')await PaperSessionModel.updateOne({_id:session._id},{$set:{entriesPaused:true},$inc:{revision:1}},{session:transaction});
     // Never weaken a pending full protective exit into a smaller manual sale.
     if(active?.source==='protection'&&active.targetIndex===undefined)return active;
     if(active)await PaperOrderModel.updateOne({_id:active._id},{$set:{status:'cancelled',message:'Replaced by your manual position exit'}},{session:transaction});

@@ -7,6 +7,7 @@ const labels: Record<string, string> = {
   name: 'Strategy name', horizon: 'Trading horizon', cadence: 'Check frequency',
   initialCapital: 'Paper capital', riskPercent: 'Risk per trade', maxPositions: 'Maximum positions',
   timeframe: 'Candle interval', stopMode: 'Initial stop method', stopPercent: 'Stop percentage',
+  maxStopPercent: 'Maximum initial stop distance',
   stopValue: 'Stop price or distance', entryOrderType: 'Buy order type', entryLimitPrice: 'Buy limit',
   atrPeriod: 'ATR period', atrMultiplier: 'ATR multiplier', targetR: 'Single profit target',
   overnight: 'Overnight holding', exitTargets: 'Partial profit targets', closePercent: 'Exit allocation',

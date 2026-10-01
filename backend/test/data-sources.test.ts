@@ -28,6 +28,11 @@ test('company snapshots preserve zero, reject missing numbers, and are not backd
   assert.equal(rows.some(x => x.field === 'roe' || x.field === 'promoterHolding'), false);
   assert.ok(rows.every(x => x.knownAt === now));
   assert.throws(() => parseDhanCompany({ securityId: '500325', data: { CO: {} } }, stock, now));
+  // Dhan omits the shareholding period: keep it as a short-lived snapshot, never a dated quarter.
+  const undated = parseDhanCompany({ securityId: '2885', data: { CO: { DIVIDEND_YIELD: 2.18, FIFTY_TWO_WEEK_HIGH: 0 }, SHP: { REPORTING_PERIOD: null, PROMOTER_HOLDING: 0, FII_HOLDING: 41.83, CHANGE_IN_FII_HOLDING: -2.2 } } }, stock, now);
+  assert.deepEqual(undated.map(x => [x.field, x.value]), [['dividendYield', 2.18], ['promoterHolding', 0], ['fiiHolding', 41.83], ['fiiChange', -2.2]]);
+  assert.ok(undated.every(x => x.period === undefined && x.validUntil === new Date(Date.parse(now) + 35 * 86400000).toISOString()));
+  assert.equal(parseDhanCompany({ securityId: '2885', data: { CO: { MARKET_CAP: 1 }, SHP: { REPORTING_PERIOD: '209912', PROMOTER_HOLDING: 50 } } }, stock, now).some(x => x.field === 'promoterHolding'), false);
 });
 test('NSE delivery units, absent delivery and wrong dates are handled explicitly', () => {
   const csv = 'SYMBOL, SERIES, DATE1, TTL_TRD_QNTY, TURNOVER_LACS, DELIV_QTY\nRELIANCE, EQ, 22-Sep-2026, 1000, 200, -';

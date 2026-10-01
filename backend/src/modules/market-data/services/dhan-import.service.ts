@@ -5,6 +5,9 @@ import { ensureCompanyData } from './dhan-cache.service.js';
 import { historyWindows, parseDhanHistory } from '../sources/dhan-history.js';
 import { dhanRequest } from '../../connections/services/dhan.service.js';
 
+/** Everything research pages and rules read. Missing ROE falls back to Dhan's public company page. */
+export const FUNDAMENTAL_FIELDS = ['marketCap', 'sector', 'industry', 'pe', 'pb', 'debtEquity', 'roe', 'roce', 'dividendYield',
+  'promoterHolding', 'fiiHolding', 'diiHolding', 'fiiChange', 'diiChange'];
 export async function syncFundamentals(ids?: string[]) {
   return sourceRun('fundamentals', async (progress, errors) => {
     const stocks = await instruments.find({ active: true, ...(ids?.length ? { _id: { $in: ids } } : { primary: true }) }).lean();
@@ -13,7 +16,7 @@ export async function syncFundamentals(ids?: string[]) {
     for (const [i, stock] of stocks.entries()) {
       try {
         const startedAt = new Date().toISOString();
-        await ensureCompanyData(stock, ['marketCap', 'debtEquity', 'roe', 'roce', 'pe', 'sector', 'promoterHolding', 'fiiChange', 'diiChange'],
+        await ensureCompanyData(stock, FUNDAMENTAL_FIELDS,
           new Date(Date.now() + 19800000).toISOString().slice(0, 7));
         factsWritten += await facts.countDocuments({ instrumentId: stock._id, observedAt: { $gte: startedAt } });
       } catch (e) {

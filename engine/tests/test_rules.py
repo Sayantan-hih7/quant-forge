@@ -103,3 +103,17 @@ def test_known_failing_filter_can_reject_without_missing_indicator():
     query["groups"][0]["conditions"].append({"left": "ema20", "leftFrame": "1d", "operator": "gt", "value": 100})
     stock = {"id": "x", "facts": [{"knownAt": "2026-09-20", "values": {"marketCap": 100}}]}
     assert evaluate(query, stock, "2026-09-23")["matched"] is False
+
+
+def test_news_fields_are_dated_facts_and_mood_is_categorical():
+    mood = rule("newsMood7d", op="is", value=0, monthly=True, choices=["Positive"])
+    validate_rule(mood)
+    with pytest.raises(ValueError): validate_rule(rule("newsMood7d", op="gte", value=1, monthly=True))
+    negative = rule("newsNegative30d", op="lte", value=0, monthly=True)
+    validate_rule(negative)
+    facts = [{"knownAt": "2026-09-30T01:30:00Z", "validUntil": "2026-10-01T07:30:00Z", "values": {"newsMood7d": "Positive", "newsNegative30d": 0}}]
+    stock = {"id": "x", "facts": facts}
+    assert evaluate(mood, stock, "2026-09-30T10:00:00Z")["matched"] is True
+    assert evaluate(negative, stock, "2026-09-30T10:00:00Z")["matched"] is True
+    # Never backdated: before the facts were computed the stock is unknown, not passing.
+    assert evaluate(mood, stock, "2026-09-29T10:00:00Z")["matched"] is None

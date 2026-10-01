@@ -5,10 +5,11 @@ export function stopPlan(risk: StrategyRisk) {
   return risk.stopManagement ?? (risk.breakevenAfterTarget1 ? { breakeven: { trigger: 'target' as const, at: 1 } } : undefined);
 }
 export function initialStopLabel(risk: StrategyRisk) {
-  return risk.stopMode === 'candleLow' ? `Completed ${risk.timeframe} signal candle low`
+  const label = risk.stopMode === 'candleLow' ? `Completed ${risk.timeframe} signal candle low`
     : risk.stopMode === 'ATR' ? `ATR(${risk.atrPeriod}) × ${risk.atrMultiplier}`
     : risk.stopMode === 'price' ? `At ${targetMoney(risk.stopValue ?? 0)}`
     : risk.stopMode === 'amount' ? `${targetMoney(risk.stopValue ?? 0)} below entry` : `${risk.stopPercent}% below entry`;
+  return risk.maxStopPercent != null ? `${label} · skip entry if distance > ${risk.maxStopPercent}%` : label;
 }
 export function referenceRisk(risk: StrategyRisk, entry: number | null, atrStop: number | null, signalLow: number | null = null) {
   if (!entry || !Number.isFinite(entry)) return null;

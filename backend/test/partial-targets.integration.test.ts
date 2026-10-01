@@ -154,6 +154,20 @@ test('partial paper targets persist, fill once, protect the balance and reconcil
     }
 
     const manual=await setup('automatic',11,{...risk,feePercent:0.1});
+    for (const [source,signalLow,price,slippagePercent,allowed] of [
+      ['manual',97,100,0,true], ['signal',98,100,0,true], ['signal',96.99,100,0,false], ['manual',97,101,0,false], ['signal',97,100,0.1,false],
+    ] as const) {
+      const id=randomUUID(),settings={...candleRisk,maxStopPercent:3,slippagePercent};
+      await PaperSessionModel.create({_id:id,strategyId:id,strategy:{risk:settings},mode:'automatic',cashPaise:10000000,initialPaise:10000000,entriesPaused:false,active:true,revision:1,createdAt:new Date(base).toISOString()});
+      const buy=await order(id,'BUY',100,0,source);
+      await PaperOrderModel.updateOne({_id:buy._id},{$set:{signalLow}});
+      await fillPaperOrder(buy._id,quote(price,0),base);
+      const saved=await PaperOrderModel.findById(buy._id).lean();
+      assert.equal(saved?.status,allowed?'filled':'rejected');
+      if(allowed)assert.equal((await position(id))?.stopPaise,Math.round(signalLow*100));
+      else { assert.match(saved?.message??'',/exceeding the 3% maximum/); assert.equal(await position(id),null); assert.equal((await PaperSessionModel.findById(id))?.cashPaise,10000000); }
+      await reconcile(id);
+    }
     const sell=await order(manual,'SELL',3,1);
     await fillPaperOrder(sell._id,quote(101,1),base+1000);
     await tick(manual,102,2);await tick(manual,102.1,3);

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 export const instrumentIdSchema = z.string().regex(/^(NSE|BSE):\d+$/);
 export const importSchema = z.object({
-  kind: z.enum(['instruments', 'motilal-mappings', 'memberships', 'pledge', 'delivery', 'fundamentals', 'history']),
+  kind: z.enum(['instruments', 'motilal-mappings', 'memberships', 'pledge', 'delivery', 'fundamentals', 'history', 'daily-closes']),
+  days: z.number().int().min(1).max(1100).default(10),
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
   exchange: z.enum(['NSE', 'BSE']).default('NSE'),
   ids: z.array(instrumentIdSchema).max(10_000).optional(),

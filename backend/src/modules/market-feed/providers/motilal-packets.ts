@@ -1,4 +1,23 @@
-import type { FeedInstrument, LiveQuote } from '../types/feed.types.js';
+import type { BookLevel, FeedInstrument, LiveQuote } from '../types/feed.types.js';
+
+const positive = (value: unknown) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : null; };
+const count = (value: unknown) => { const n = Number(value); return Number.isSafeInteger(n) && n >= 0 ? n : null; };
+/** One MarketDepth packet carries one level of both sides. Levels may be numbered 1–5 or 0–4. */
+export function parseDepthLevel(message: Record<string, unknown>): { index: number; bid: BookLevel | null; ask: BookLevel | null } | null {
+  if (message.Type !== 'MarketDepth') return null;
+  const level = Number(message.Level);
+  if (!Number.isInteger(level) || level < 0 || level > 5) return null;
+  const side = (rate: unknown, qty: unknown, orders: unknown): BookLevel | null => {
+    const price = positive(rate), quantity = count(qty);
+    return price !== null && quantity !== null && quantity > 0 ? { price, quantity, orders: count(orders) } : null;
+  };
+  return { index: level >= 1 ? level - 1 : level, bid: side(message.BidRate, message.BidQty, message.BidOrder), ask: side(message.OfferRate, message.OfferQty, message.OfferOrder) };
+}
+export function parseCircuits(message: Record<string, unknown>) {
+  if (message.Type !== 'DPR') return null;
+  const upper = positive(message.UpperCktLimit), lower = positive(message.LowerCktLimit);
+  return upper !== null && lower !== null && upper >= lower ? { upperCircuit: upper, lowerCircuit: lower } : null;
+}
 
 export function exchangeTimestamp(message: Record<string, unknown>, now = Date.now()): string | null {
   let time: number;

@@ -64,7 +64,8 @@ export async function processPaperQuote(quote:LiveQuote,sessionIds:string[],now=
         if(!session?.active || !canContinue())return;
         const position=await PaperPositionModel.findOne({sessionId,instrumentId:quote.instrumentId}).session(transaction).lean();
         if(!position)return;
-        const risk=session.strategy.risk;
+        // A manual position keeps the plan it was opened with (stop, targets, intraday/delivery).
+        const risk=position.plan??session.strategy.risk;
         const trigger=protectiveTrigger(position,risk,[quote],!risk.overnight && (sessionTime(now).minute>=915 || position.openedAt.slice(0,10)<new Date(now).toISOString().slice(0,10)));
         const {highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt}=trigger.state;
         await PaperPositionModel.updateOne({_id:position._id},{$max:{stopPaise:trigger.stop},$set:{highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt}},{session:transaction});
@@ -94,7 +95,8 @@ export async function processPaperQuote(quote:LiveQuote,sessionIds:string[],now=
 }
 export async function evaluatePaperStrategies(now = Date.now(), canContinue = () => true){
   const startedAt=Date.now();
-  const sessions=await PaperSessionModel.find({active:true}).lean();if(!sessions.length)return;
+  // The manual account has no strategy rules; its conditional orders are evaluated separately.
+  const sessions=await PaperSessionModel.find({active:true,mode:{$ne:'manual'}}).lean();if(!sessions.length)return;
   const universe=await MonthlyUniverseModel.findById(currentMonth()).lean();
   for(const session of sessions){
     if(!canContinue())return;

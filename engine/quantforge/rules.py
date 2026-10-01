@@ -13,6 +13,10 @@ TECHNICAL = {"close", "open", "high", "low", "volume", "ema5", "ema20", "ema21",
 FACTS = {"marketCap", "debtEquity", "pledge", "delivery", "roe", "roce", "pe", "growth",
          "revenueGrowth", "profitGrowth", "promoterHolding", "fiiChange", "diiChange",
          "positiveQuarters", "sector", "index", "fnoEligible", "turnover", "tradedValue"}
+# Every catalogue field sourced from dated facts (e.g. the news aggregates) is evaluated the same way.
+FACTS |= {key for key, value in FIELDS.items() if value['source'] == 'facts'}
+# Categorical fields take IS/IN selections (e.g. sector, index membership, news mood).
+CATEGORICAL = {'sector', 'index', 'fnoEligible'} | {key for key, value in FIELDS.items() if value.get('unit') == 'category'}
 TECHNICAL |= {key for key, value in FIELDS.items() if value['source'] in ('candles', 'dailyReports')}
 OPERATORS = {"gt", "gte", "lt", "lte", "eq", "neq", "between", "notBetween", "crossAbove",
              "crossBelow", "increasing", "decreasing", "within", "aboveBy", "belowBy",
@@ -50,7 +54,7 @@ def validate_rule(rule):
                     raise ValueError(f'{left} is not a monthly qualification field')
                 if not monthly and left not in FACTS and frame not in definition['frames']:
                     raise ValueError(f'{left}: unsupported timeframe')
-            if left in {"sector", "index", "fnoEligible"}:
+            if left in CATEGORICAL:
                 if c.get("operator") not in {"is", "isNot", "in", "notIn"} or not c.get("choices"):
                     raise ValueError("Categorical fields need a selection and IS/IN operators")
             elif c.get("operator") in {"is", "isNot", "in", "notIn"}:
