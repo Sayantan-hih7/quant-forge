@@ -1,3 +1,5 @@
+import { queueQualifiedResearchRefresh } from './research-refresh.service.js';
+import { horizonFits } from './horizon-fit.service.js';
 import mongoose, { type ClientSession } from 'mongoose';
 import { invariant } from '../../../shared/errors.js';
 import { announce } from '../../../shared/redis.js';
@@ -45,16 +47,19 @@ export async function removeManualStocks(instrumentId?: string) {
 }
 
 export async function qualifiedStocks() {
+  void queueQualifiedResearchRefresh().catch(() => undefined);
   const universe = await MonthlyUniverseModel.findById(currentMonth()).lean();
   const members = universe?.members ?? [], ids = members.map(x => x.instrumentId), now = new Date().toISOString();
   const [stocks, observations] = await Promise.all([
     instruments.find({ _id: { $in: ids } }).lean(),
     facts.aggregate<Fact>([
       { $match: { instrumentId: { $in: ids }, knownAt: { $lte: now }, $or: [{ validUntil: { $exists: false } }, { validUntil: { $gte: now } }] } },
-      { $sort: { period: -1, knownAt: -1 } }, { $group: { _id: { stock: '$instrumentId', field: '$field' }, fact: { $first: '$$ROOT' } } }, { $replaceRoot: { newRoot: '$fact' } },
+      { $set: { sourcePriority: { $cond: [{ $eq: ['$source', 'dhan-public-company'] }, 0, 1] } } },
+      { $sort: { sourcePriority: -1, period: -1, knownAt: -1 } }, { $group: { _id: { stock: '$instrumentId', field: '$field' }, fact: { $first: '$$ROOT' } } }, { $replaceRoot: { newRoot: '$fact' } },
     ]),
   ]);
-  return members.map(member => ({ ...member, instrument: stocks.find(x => x._id === member.instrumentId),
+  const fits = await horizonFits(ids, observations);
+  return members.map(member => ({ ...member, suitability: fits.get(member.instrumentId), instrument: stocks.find(x => x._id === member.instrumentId),
     metrics: Object.fromEntries(observations.filter(x => x.instrumentId === member.instrumentId).map(x => [x.field, x.value])),
   }));
 }

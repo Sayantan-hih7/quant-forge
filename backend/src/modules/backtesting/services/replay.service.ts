@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { AppError, invariant } from '../../../shared/errors.js';
-import { engineClient, engineInstruments } from '../../engine/services/engine.service.js';
+import { engineInstruments } from '../../engine/services/engine.service.js';
+import { portfolioBacktest } from './portfolio-stream.js';
 import type { StockTimeframe } from '../../stock-details/types.js';
 import { BacktestRunModel, type BacktestRun } from '../models/backtest.model.js';
 import type { BacktestReplayView, ReplayEvent, ReplayTrace } from '../types/replay.js';
@@ -42,15 +43,13 @@ async function prepare(run: BacktestRun, instrumentId: string): Promise<Backtest
   const plan = strategyHistoryPlan(run.strategy, day(run.config.from), day(run.config.to));
   const recorded = run.result?.replay as ReplayTrace | undefined;
   const captured = recorded?.version === 1 && recorded.complete;
-  const inputs = await engineInstruments(captured ? [instrumentId] : run.config.ids, run.config.to, false, plan);
+  const inputs = await engineInstruments([instrumentId], run.config.to, false, plan, false, 500000);
   let trace = captured ? recorded : undefined;
   const warnings: string[] = [];
   let source: BacktestReplayView['source'] = captured ? 'recorded' : 'verified-reconstruction';
   if (!captured) {
     try {
-      const { data } = await engineClient.post<Record<string, unknown> & { replay?: ReplayTrace }>('/backtest', {
-        strategy: run.strategy, config: run.config, snapshots: run.snapshots, instruments: inputs, replayInstrumentId: instrumentId,
-      }, { timeout: 600000 });
+      const data = await portfolioBacktest(run, plan, instrumentId) as Record<string, unknown> & { replay?: ReplayTrace };
       if (replayMatchesReport(run.result!, data) && data.replay?.version === 1 && data.replay.complete) trace = data.replay;
     } catch { /* Recorded fills stay inspectable when reconstruction is unavailable. */ }
     if (!trace) {

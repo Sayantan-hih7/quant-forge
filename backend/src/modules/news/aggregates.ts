@@ -31,3 +31,19 @@ export function newsAggregates(items: Pick<NewsItem, 'sentiment' | 'kind' | 'pub
     newsMood7d: s7v === null ? 'No coverage' : s7v >= 20 ? 'Positive' : s7v <= -20 ? 'Negative' : 'Neutral' };
 }
 
+
+/** Compact, source-backed view of the same seven-day scoring used in company research. */
+export function newsQuickSummary(items:NewsItem[],isin:string,now:number){
+ const seen=new Set<string>();
+ const relevant=[...items].sort((a,b)=>b.publishedAt.localeCompare(a.publishedAt)).filter(item=>{
+  const age=now-Date.parse(item.publishedAt),company=item.companies.find(c=>c.isin===isin);
+  if(!company||!Number.isFinite(age)||age<0||age>7*DAY||Date.parse(item.knownAt)>now||seen.has(item.titleKey))return false;
+  if(item.kind==='filing'&&!companyImpact(item,company).directional)return false;
+  seen.add(item.titleKey);return true;
+ });
+ const aggregate=newsAggregates(relevant,isin,now);
+ return {score:aggregate.newsSentiment7d,label:aggregate.newsMood7d,count:aggregate.newsCount7d,latestAt:relevant[0]?.publishedAt,
+  aiCount:relevant.filter(i=>i.sentiment.method==='ai').length,
+  stories:relevant.slice(0,3).map(item=>({id:item._id,title:item.title,url:item.url,publisher:item.publisher,publishedAt:item.publishedAt,
+    score:Math.round(companyImpact(item,item.companies.find(c=>c.isin===isin)!).score*100),reason:item.sentiment.reason,method:item.sentiment.method}))};
+}

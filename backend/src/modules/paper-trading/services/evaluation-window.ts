@@ -1,11 +1,13 @@
+import {entryCutoffMinute} from './entry-safety.js';
 import { marketTime, nextRegularOpen } from '../../../shared/market-calendar.js';
 
 /** A valid buy signal creates a day limit order; signal discovery keeps its
  * shorter evaluation window so missed signals cannot replay all afternoon. */
-export function signalOrderExpiry(windowExpiry: string, dayLimit: boolean, overnight: boolean) {
+export function signalOrderExpiry(windowExpiry: string, dayLimit: boolean, overnight: boolean,id?:string) {
   if (!dayLimit) return windowExpiry;
   const date = marketTime(Date.parse(windowExpiry)).date;
-  return new Date(`${date}T${overnight ? '15:30' : '15:15'}:00+05:30`).toISOString();
+  const minute=entryCutoffMinute({overnight},id,Date.parse(windowExpiry));
+  return new Date(Date.parse(`${date}T00:00:00+05:30`)+minute*60000).toISOString();
 }
 
 export function evaluationWindow(cadence: string, createdAt: string, now = Date.now()) {

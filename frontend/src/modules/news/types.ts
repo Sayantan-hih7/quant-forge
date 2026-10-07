@@ -11,7 +11,7 @@ export interface NewsSummary { newsSentiment7d: number | null; newsSentiment30d:
 export interface StockNews { summary: NewsSummary; items: NewsStory[]; checkedAt: string; message?: string }
 export interface NewsMover { instrumentId: string; isin: string; symbol: string; name: string; exchange: string; stories: number; score: number; positive: number; negative: number }
 export interface NewsMovers { days: number; positive: NewsMover[]; negative: NewsMover[] }
-export interface NewsSources { sources: string[]; last24h: { _id: string; stories: number; latest: string }[]; lastRun: null | { status: string; startedAt: string; finishedAt?: string; failures: { item: string; message: string }[] } }
+export interface NewsSources { publishers?: string[]; sources: string[]; last24h: { _id: string; stories: number; latest: string }[]; lastRun: null | { status: string; startedAt: string; finishedAt?: string; failures: { item: string; message: string }[] } }
 export const eventLabels: Record<NewsEventType, string> = {
   results: 'Results', orders: 'Orders & contracts', 'corporate-action': 'Corporate action', deal: 'Deal / stake', rating: 'Rating / target', regulatory: 'Regulatory',
   management: 'Management', legal: 'Legal', guidance: 'Business update', 'market-move': 'Price move', macro: 'Market / macro', other: 'Other',

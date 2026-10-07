@@ -4,7 +4,8 @@ import { istDay } from './chartTime';
 export const overviewPeriods = ['today', '1w', '1mo', '3mo', '6mo', '1y', 'all'] as const;
 export type OverviewPeriod = typeof overviewPeriods[number];
 export const overviewOptions = overviewPeriods.map(value => ({ value, label: ({ today: 'Today', '1w': '1W', '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1Y', all: 'All' })[value] }));
-export function overviewRequest(period: OverviewPeriod): { timeframe: StockTimeframe; lookbackDays?: number; intervalLabel: string } {
+export function overviewRequest(period: OverviewPeriod, kind: 'candles' | 'line' = 'candles'): { timeframe: StockTimeframe; lookbackDays?: number; intervalLabel: string } {
+  if (period === 'today' && kind === 'line') return { timeframe: '1m', lookbackDays: 14, intervalLabel: '1-minute prices' };
   if (period === 'today') return { timeframe: '5m', lookbackDays: 14, intervalLabel: '5-minute candles' };
   if (period === '1w') return { timeframe: '15m', lookbackDays: 14, intervalLabel: '15-minute candles' };
   return { timeframe: '1d', lookbackDays: ({ '1mo': 45, '3mo': 110, '6mo': 200, '1y': 380, all: undefined })[period], intervalLabel: 'Daily candles' };

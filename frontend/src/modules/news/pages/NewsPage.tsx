@@ -1,3 +1,4 @@
+import { NewsStockPicker, type NewsStock } from '../components/NewsStockPicker';
 import { useState } from 'react';
 import { Alert, App, Button, Empty, Input, Pagination, Segmented, Select, Skeleton, Tabs, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -40,12 +41,13 @@ function Coverage({ sources }: { sources?: NewsSources }) {
   </aside>;
 }
 
-function NewsFeed({ onOpen }: { onOpen: (stock: StockSelection) => void }) {
+function NewsFeed({ onOpen, sources }: { onOpen: (stock: StockSelection) => void; sources?: NewsSources }) {
+  const [stock,setStock]=useState<NewsStock>(),[publisher,setPublisher]=useState<string>();
   const [scope, setScope] = useState<'all' | 'linked' | 'following'>('linked');
   const [sentiment, setSentiment] = useState<string>(), [kind, setKind] = useState<string | undefined>('important'), [eventType, setEventType] = useState<string>();
   const [days, setDays] = useState(3), [q, setQ] = useState(''), [search, setSearch] = useState(''), [page, setPage] = useState(1);
-  const params = new URLSearchParams({ scope: scope === 'following' ? 'following' : 'all', days: String(days), page: String(page), pageSize: String(PAGE),
-    ...(scope === 'linked' ? { linked: 'true' } : {}), ...(sentiment ? { sentiment } : {}), ...(kind ? { kind } : {}), ...(eventType ? { eventType } : {}), ...(search ? { q: search } : {}) });
+  const params = new URLSearchParams({ scope: stock ? 'stock' : scope === 'following' ? 'following' : 'all', days: String(days), page: String(page), pageSize: String(PAGE),
+    ...(stock ? {instrumentId:stock._id} : {}), ...(publisher ? {publisher} : {}), ...(!stock && scope === 'linked' ? { linked: 'true' } : {}), ...(sentiment ? { sentiment } : {}), ...(kind ? { kind } : {}), ...(eventType ? { eventType } : {}), ...(search ? { q: search } : {}) });
   const feed = useStockResource<NewsPageData>(`/news?${params}`, 120_000);
   const reset = <T,>(set: (v: T) => void) => (value: T) => { set(value); setPage(1); };
   const openCompany = async (company: NewsCompany) => {
@@ -56,14 +58,18 @@ function NewsFeed({ onOpen }: { onOpen: (stock: StockSelection) => void }) {
   const now = useNow();
   return <div className="news-feed">
     <div className="news-filters">
-      <Segmented<typeof scope> value={scope} onChange={v => reset(setScope)(v)} options={[{ label: 'About listed companies', value: 'linked' }, { label: 'My stocks', value: 'following' }, { label: 'Everything', value: 'all' }]} />
+      <Segmented<typeof scope> disabled={!!stock} value={scope} onChange={v => reset(setScope)(v)} options={[{ label: 'About listed companies', value: 'linked' }, { label: 'My stocks', value: 'following' }, { label: 'Everything', value: 'all' }]} />
+      <NewsStockPicker value={stock} onChange={reset(setStock)} />
+      <Select aria-label="News source" showSearch allowClear placeholder="All news sources" value={publisher} onChange={reset(setPublisher)} style={{width:220}} options={[...new Set([...(sources?.publishers??[]),...(sources?.last24h??[]).map(row=>row._id)])].sort((a,b)=>a.localeCompare(b)).map(value=>({value,label:value}))} />
       <Select allowClear placeholder="Any sentiment" value={sentiment} onChange={reset(setSentiment)} style={{ width: 150 }} options={[{ value: 'positive', label: 'Positive' }, { value: 'negative', label: 'Negative' }, { value: 'neutral', label: 'Neutral' }]} />
       <Select allowClear placeholder="Everything incl. routine filings" value={kind} onChange={reset(setKind)} style={{ width: 190 }} options={[{ value: 'important', label: 'Media & key filings' }, { value: 'news', label: 'Media news only' }, { value: 'filing', label: 'All NSE filings' }]} />
       <Select allowClear placeholder="Any event type" value={eventType} onChange={reset(setEventType)} style={{ width: 170 }} options={Object.entries(eventLabels).map(([value, label]) => ({ value, label }))} />
       <Select value={days} onChange={reset(setDays)} style={{ width: 120 }} options={[{ value: 1, label: 'Last 24h' }, { value: 3, label: 'Last 3 days' }, { value: 7, label: 'Last 7 days' }, { value: 30, label: 'Last 30 days' }]} />
       <Input.Search allowClear placeholder="Search headlines or symbol" value={q} onChange={e => setQ(e.target.value)} onSearch={value => { setSearch(value.trim()); setPage(1); }} style={{ width: 240 }} />
     </div>
-    {scope === 'following' && <p className="muted news-scope-note">Stories about companies in your published qualified list and watchlists.</p>}
+    {stock&&<p className="muted news-scope-note">Showing news linked to {stock.symbol}. Company coverage includes both exchange listings.</p>}
+    {(stock||publisher||search||sentiment||eventType||kind!=='important'||days!==3||scope!=='linked')&&<Button type="link" onClick={()=>{setStock(undefined);setPublisher(undefined);setSearch('');setQ('');setSentiment(undefined);setEventType(undefined);setKind('important');setDays(3);setScope('linked');setPage(1);}}>Reset filters</Button>}
+    {!stock && scope === 'following' && <p className="muted news-scope-note">Stories about companies in your published qualified list and watchlists.</p>}
     {feed.error && <Alert type="warning" showIcon title="News could not be loaded" description={feed.error} action={<Button onClick={feed.retry}>Retry</Button>} />}
     {feed.loading && !feed.data ? <Skeleton active paragraph={{ rows: 10 }} /> : !feed.data?.items.length ? <Empty description="No stories match these filters yet." />
       : <div className="news-list">{feed.data.items.map(story => <NewsStoryCard key={story._id} story={story} now={now} onOpen={company => { void openCompany(company); }} />)}</div>}
@@ -76,6 +82,7 @@ export default function NewsPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'events' ? 'events' : 'news';
   const [selected, setSelected] = useState<StockSelection>();
+  const [eventStock,setEventStock]=useState<NewsStock>();
   const [exchange, setExchange] = useState<'NSE' | 'BSE'>('NSE');
   const sources = useStockResource<NewsSources>('/news/sources', 120_000);
   const lastRun = sources.data?.lastRun;
@@ -89,10 +96,10 @@ export default function NewsPage() {
       <div className="news-heading-actions">{lastRun && <Tooltip title={`Sources: ${sources.data?.sources.join(', ')}`}><span className="muted">Collected {relativeTime(lastRun.finishedAt ?? lastRun.startedAt)} · every 30 min</span></Tooltip>}
         <Button icon={<ReloadOutlined />} onClick={() => { void refresh(); }}>Collect now</Button></div></div>
     <Tabs activeKey={tab} onChange={key => setParams(key === 'news' ? {} : { tab: key })} items={[
-      { key: 'news', label: 'News', children: <div className="news-layout"><NewsFeed onOpen={setSelected} /><div className="news-side"><Movers onOpen={setSelected} /><Coverage sources={sources.data} /></div></div> },
+      { key: 'news', label: 'News', children: <div className="news-layout"><NewsFeed onOpen={setSelected} sources={sources.data} /><div className="news-side"><Movers onOpen={setSelected} /><Coverage sources={sources.data} /></div></div> },
       { key: 'events', label: 'Events calendar', children: <div className="news-events">
-        <Segmented<'NSE' | 'BSE'> value={exchange} onChange={v => setExchange(v)} options={['NSE', 'BSE']} />
-        <Feed key={exchange} kind="events" market path={`/news/events?exchange=${exchange}`} />
+        <div className="news-filters"><Segmented<'NSE' | 'BSE'> value={exchange} onChange={v => {setExchange(v);setEventStock(undefined);}} options={['NSE', 'BSE']} /><NewsStockPicker value={eventStock} onChange={setEventStock} exchange={exchange}/></div>
+        <Feed key={eventStock?._id??exchange} kind="events" market={!eventStock} path={eventStock?`/stocks/${encodeURIComponent(eventStock._id)}/events`:`/news/events?exchange=${exchange}`} />
       </div> },
     ]} />
     <StockDetailDrawer stock={selected} onClose={() => setSelected(undefined)} />

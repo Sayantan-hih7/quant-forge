@@ -1,5 +1,5 @@
 import { parameterError } from '../../../shared/rule-fields.js';
-import { invariant } from '../../../shared/errors.js';
+import { AppError, invariant } from '../../../shared/errors.js';
 import { monthlyCatalog, tradingCatalog } from '../config/rule-catalog.js';
 import { monthlyProposalSchema, tradingProposalSchema, riskProposalSchema } from '../validations/ai.validation.js';
 import type { ruleCapabilities } from '../../market-data/services/capabilities.service.js';
@@ -40,22 +40,28 @@ export function tradingDraft(value: unknown, capabilities: Capabilities) {
   const proposal = tradingProposalSchema.parse(value);
   invariant(proposal.risk.overnight === (proposal.horizon !== 'intraday'), 'Overnight holding must match the trading horizon');
   const allowed = [...capabilities.technical, ...capabilities.snapshotFields];
-  for (const side of [proposal.entry, proposal.exit].filter(side => side.enabled !== false)) for (const group of side.groups) for (const condition of group.conditions) {
+  const ruleErrors: string[] = [];
+  for (const [sideName, side] of [['Buy',proposal.entry],['Sell',proposal.exit]] as const) for (const [groupIndex, group] of (side.enabled === false ? [] : side.groups).entries()) for (const [conditionIndex, condition] of group.conditions.entries()) {
+    const requireRule = (valid: unknown, reason: string, suggestion: string) => { if (!valid) ruleErrors.push(`${sideName} rule, group ${groupIndex+1}, condition ${conditionIndex+1}: ${reason} ${suggestion}`); };
     const field = tradingCatalog[condition.left];
     for (const [id, period, offset, settings] of [[condition.left, condition.leftPeriod, condition.leftOffset, condition.leftSettings], ...(condition.rightType === 'indicator' ? [[condition.right, condition.rightPeriod, condition.rightOffset, condition.rightSettings]] : [])] as [string, number | undefined, number | undefined, import('../../../shared/indicator-settings.js').CalculationSettings | undefined][]) {
-      const error = parameterError(id, period, offset, settings); invariant(!error, error ?? 'Invalid parameters');
+      const error = parameterError(id, period, offset, settings); requireRule(!error, error ?? 'Invalid indicator parameters.', 'Use only the parameters supported by that field; price fields have no moving-average period.');
     }
-    invariant(allowed.includes(condition.left) && field.frames.includes(condition.leftFrame), 'Unsupported trading field or timeframe');
+    requireRule(allowed.includes(condition.left), `${field.label} has no supported data source in this workspace.`, 'Choose an available field or configure its data source.');
+    requireRule(field.frames.includes(condition.leftFrame), `${field.label} cannot use ${condition.leftFrame} candles. Supported intervals: ${field.frames.join(', ')}.`, 'Choose one of those intervals; an intraday strategy can use a completed daily filter.');
     if (condition.rightType === 'indicator') {
       const right = tradingCatalog[condition.right];
-      invariant(allowed.includes(condition.right) && right.frames.includes(condition.rightFrame) && right.unit === field.unit, 'Compare supported indicators with matching units');
+      requireRule(allowed.includes(condition.right), `${right.label} has no supported data source.`, 'Choose an available comparison field.');
+      requireRule(right.frames.includes(condition.rightFrame), `${right.label} cannot use ${condition.rightFrame} candles. Supported intervals: ${right.frames.join(', ')}.`, 'Choose a supported comparison interval.');
+      requireRule(right.unit === field.unit, `${field.label} (${field.unit}) cannot be compared directly with ${right.label} (${right.unit}).`, 'Compare measurements with the same units, or give each its own numeric threshold.');
     }
-    if (condition.operator.startsWith('cross')) invariant(capabilities.technical.includes(condition.left) && (condition.rightType === 'value' ||
-      condition.leftFrame === condition.rightFrame && capabilities.technical.includes(condition.right)), 'Crossovers need a technical series and a fixed value or an indicator on the same timeframe');
+    if (condition.operator.startsWith('cross')) requireRule(capabilities.technical.includes(condition.left) && (condition.rightType === 'value' ||
+      condition.leftFrame === condition.rightFrame && capabilities.technical.includes(condition.right)), 'This crossover needs a technical series and a fixed threshold or another series on the same timeframe.', 'Use matching intervals for a crossover, or choose an above/below comparison if that matches your intended rule.');
     if (['within', 'aboveBy', 'belowBy'].includes(condition.operator)) invariant(condition.rightType === 'indicator', 'Distance conditions need a comparison indicator');
     if (['between', 'notBetween'].includes(condition.operator)) invariant(condition.rightType === 'value' && condition.upper !== undefined && condition.upper > condition.value, 'Range conditions need a fixed lower and upper value');
     if (['increasing', 'decreasing'].includes(condition.operator)) invariant((condition.lookback ?? 0) >= 2, 'Trend conditions need a candle lookback of at least 2');
   }
+  if (ruleErrors.length) throw new AppError(422, 'AI_RULE_CONSTRAINT', ruleErrors.slice(0,8).join('\n'));
   const side = (direction: 'BUY' | 'SELL') => ({ ...proposal[direction === 'BUY' ? 'entry' : 'exit'],
     name: `${proposal.name.slice(0, 48)} · ${direction === 'BUY' ? 'Buy' : 'Sell'}`, description: '',
     tier: 'tactical' as const, horizon: proposal.horizon, cadence: proposal.cadence, side: direction,
@@ -84,7 +90,7 @@ export function draftContext(scope: 'monthly' | 'strategy', draft?: Record<strin
     }; }) : [];
   if (scope === 'monthly') return { timeframe: '1mo', logic: draft.logic, groups: groups(draft.groups, true) };
   const side = (value: unknown) => { const base = pick(value, ['enabled', 'horizon', 'cadence', 'logic', 'side', 'groups']); return { ...base, groups: groups(base.groups, false) }; };
-  const risk = pick(draft.risk, ['initialCapital', 'riskPercent', 'maxPositions', 'timeframe', 'stopMode', 'stopPercent', 'maxStopPercent', 'atrPeriod', 'atrMultiplier', 'stopValue', 'stopManagement', 'entryOrderType', 'entryLimitPrice', 'targetR', 'exitTargets', 'breakevenAfterTarget1', 'overnight', 'slippagePercent', 'feePercent']);
+  const risk = pick(draft.risk, ['costModel', 'exchangeFeePercent', 'entryCutoffMinute', 'reentryCooldownMinutes', 'maxEntriesPerStockPerDay', 'dailyLossLimitPercent', 'maxEntryDeviationPercent', 'initialCapital', 'riskPercent', 'maxPositions', 'timeframe', 'stopMode', 'stopPercent', 'maxStopPercent', 'atrPeriod', 'atrMultiplier', 'stopValue', 'stopManagement', 'entryOrderType', 'entryLimitPrice', 'targetR', 'exitTargets', 'breakevenAfterTarget1', 'overnight', 'slippagePercent', 'feePercent']);
   if (risk.stopManagement && typeof risk.stopManagement === 'object') {
     const settings = risk.stopManagement as Record<string, unknown>;
     risk.stopManagement = { ...(settings.breakeven ? { breakeven: pick(settings.breakeven, ['trigger', 'at']) } : {}), ...(settings.trailing ? { trailing: pick(settings.trailing, ['trigger', 'at', 'distanceR']) } : {}) };

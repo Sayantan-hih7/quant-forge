@@ -1,0 +1,47 @@
+import { fillPaperOrder } from '../src/modules/paper-trading/services/fill.service.js';
+import {test,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import mongoose from 'mongoose';
+import {env} from '../src/config/env.js';
+import {connectDatabase,disconnectDatabase} from '../src/shared/database.js';
+import {jobs,redis,maintenance} from '../src/shared/redis.js';
+import {migrateInstrumentReferences} from '../src/modules/market-data/services/instrument-migration.service.js';
+import {MonthlyUniverseModel,UniverseSnapshotModel} from '../src/modules/qualification/models/qualification.model.js';
+import {PaperSessionModel,PaperPositionModel,PaperOrderModel} from '../src/modules/paper-trading/models/paper.model.js';
+import {setEmergencyHalt,refreshDailyLossLimits} from '../src/modules/paper-trading/services/execution-safety.js';
+import {researchPresets} from '../src/modules/strategies/config/research-presets.js';
+after(async()=>{await maintenance.close();await jobs.waitUntilReady();await jobs.close();if(redis.status!=='end')await redis.quit();});
+test('atomic ID repair preserves history and protection; emergency halt and daily loss stop only buys',{skip:process.env.RUN_DB_TESTS!=='1'},async()=>{
+ const name='quantforge_test_'+randomUUID().replaceAll('-',''),uri=new URL(env.MONGODB_URI);uri.pathname='/'+name;env.MONGODB_URI=uri.toString();
+ await connectDatabase();assert.equal(mongoose.connection.name,name);
+ try{
+ const month=new Date(Date.now()+19800000).toISOString().slice(0,7),at=new Date().toISOString();
+ const old={_id:'NSE:1805',exchange:'NSE' as const,isin:'INE900B01029',active:false,symbol:'KABRAEXTRU'},next={...old,_id:'NSE:8784',active:true};
+ const pool={_id:month,month,runId:'original',fingerprint:'original',publishedAt:at,revision:1,members:[{instrumentId:old._id,isin:old.isin,source:'scan' as const,addedAt:at}]};
+ await MonthlyUniverseModel.create(pool);await UniverseSnapshotModel.create({...pool,_id:month+':1'});
+ await PaperSessionModel.create({_id:'paper',strategyId:'s',strategy:{...researchPresets[1].draft,_id:'s',revision:1,savedAt:at},ids:[old._id],mode:'automatic',active:true,entriesPaused:false,initialPaise:10000000,cashPaise:9000000,revision:1,createdAt:at,dailyLossLimitPercent:2});
+ await PaperPositionModel.create({_id:'paper:'+old._id,sessionId:'paper',instrumentId:old._id,symbol:old.symbol,quantity:100,entryPaise:10000,costPaise:1000000,stopPaise:9000,targetPaise:12000,openedAt:at});
+ await PaperOrderModel.create({_id:'sell',sessionId:'paper',instrumentId:old._id,side:'SELL',source:'protection',status:'pending',quantity:0,createdAt:at});
+ await mongoose.connection.transaction(session=>migrateInstrumentReferences([old],[next],session));
+ assert.equal((await MonthlyUniverseModel.findById(month))?.members[0].instrumentId,next._id);
+ assert.equal((await UniverseSnapshotModel.findById(month+':1'))?.members[0].instrumentId,old._id);
+ assert.equal((await PaperPositionModel.findById('paper:'+next._id))?.stopPaise,9000);
+ assert.equal((await PaperOrderModel.findById('sell'))?.instrumentId,next._id);
+ assert.deepEqual((await PaperSessionModel.findById('paper'))?.ids,[next._id]);
+ await mongoose.connection.transaction(session=>migrateInstrumentReferences([old],[next],session));
+ assert.equal((await MonthlyUniverseModel.findById(month))?.revision,2,'Repeated reconciliation does not create another revision');
+ await MonthlyUniverseModel.updateOne({_id:month},{$set:{'members.0.instrumentId':old._id}});
+ await mongoose.connection.transaction(session=>migrateInstrumentReferences([old],[next],session));
+ assert.equal((await MonthlyUniverseModel.findById(month))?.members[0].instrumentId,next._id,'Previously recorded aliases still repair restored references');
+ await PaperOrderModel.create({_id:'buy',sessionId:'paper',instrumentId:'NSE:2',side:'BUY',source:'manual',status:'pending'});
+ await setEmergencyHalt(true);assert.equal((await PaperOrderModel.findById('buy'))?.status,'cancelled');assert.equal((await PaperOrderModel.findById('sell'))?.status,'pending');
+ const now=Date.parse('2026-10-05T05:00:00Z'),quote={instrumentId:next._id,symbol:next.symbol,exchange:'NSE' as const,price:100,cumulativeVolume:100,at:new Date(now).toISOString(),receivedAt:new Date(now).toISOString(),source:'dhan' as const,session:'test',fresh:true};
+ await refreshDailyLossLimits([quote],now);assert.equal((await PaperSessionModel.findById('paper'))?.dayStartEquityPaise,10000000);
+ await refreshDailyLossLimits([{...quote,price:70}],now+1000);assert.equal((await PaperSessionModel.findById('paper'))?.lossLimitDate,'2026-10-05');
+ await PaperOrderModel.create({_id:'halt-check',sessionId:'paper',instrumentId:'NSE:2',side:'BUY',source:'manual',status:'pending',quantity:1,eligibleAfter:new Date(now-1000).toISOString(),expiresAt:new Date(now+60000).toISOString(),referencePrice:100});
+ await fillPaperOrder('halt-check',{...quote,instrumentId:'NSE:2'},now);assert.equal((await PaperOrderModel.findById('halt-check'))?.status,'rejected');
+ await PaperOrderModel.updateOne({_id:'sell'},{$set:{eligibleAfter:new Date(now-1000).toISOString(),expiresAt:new Date(now+60000).toISOString()}});
+ await fillPaperOrder('sell',{...quote,details:{upperCircuit:100}},now);assert.equal((await PaperOrderModel.findById('sell'))?.status,'pending');assert.match((await PaperOrderModel.findById('sell'))?.message??'',/circuit limit/);
+ }finally{assert.equal(mongoose.connection.name,name);await mongoose.connection.dropDatabase();await disconnectDatabase();}
+});

@@ -1,7 +1,7 @@
 import type { StockTimeframe } from '../types.js';
 import { indianDate } from './chart-bars.js';
 
-export interface ChartHistoryOptions { at?: string; minBars?: number; from?: string; lookbackDays?: number }
+export interface ChartHistoryOptions { at?: string; minBars?: number; from?: string; lookbackDays?: number; repair?: boolean }
 export function chartHistoryPlan(frame: StockTimeframe, now: number, options: ChartHistoryOptions = {}) {
   const intraday = ['1m', '5m', '15m', '1h', '4h'].includes(frame), today = indianDate(now);
   const n = Math.max(0, Math.min(options.minBars ?? 0, 1500));

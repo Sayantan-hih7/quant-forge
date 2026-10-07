@@ -17,7 +17,7 @@ import { strategyHistory } from '../src/modules/strategies/services/strategy-his
 import { researchPresets } from '../src/modules/strategies/config/research-presets.js';
 import { createPaperSession } from '../src/modules/paper-trading/services/paper.service.js';
 import { PaperSessionModel } from '../src/modules/paper-trading/models/paper.model.js';
-import { saveStrategy } from '../src/modules/strategies/services/strategy.service.js';
+import { saveStrategy, archiveStrategy, restoreStrategy } from '../src/modules/strategies/services/strategy.service.js';
 import { riskSchema } from '../src/modules/strategies/validations/strategy.validation.js';
 
 test('stock scopes match current/manual/historical eligibility, and stale strategy handoffs cannot start work', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
@@ -45,6 +45,11 @@ test('stock scopes match current/manual/historical eligibility, and stale strate
     await assert.rejects(createPaperSession({ strategyId: id, expectedRevision: 1, ids: ['NSE:1'], mode: 'confirmation' }), /strategy changed/i);
     assert.equal(await BacktestRunModel.countDocuments(), 0);
     assert.equal(await PaperSessionModel.countDocuments(), 0);
+    const incompleteId=randomUUID();
+    await BacktestRunModel.create({_id:incompleteId,strategy:{...draft,_id:id,revision:2},status:'completed',config:{ids:['NSE:1']},result:{historyQuality:{missingMinutes:1}}});
+    await assert.rejects(createPaperSession({strategyId:id,expectedRevision:2,ids:['NSE:1'],mode:'confirmation',sourceBacktestId:incompleteId}),/unresolved data gaps/);
+    assert.equal(await PaperSessionModel.countDocuments(),0,'Incomplete report cannot start paper monitoring');
+    await BacktestRunModel.deleteOne({_id:incompleteId});
     const protectedDraft={...draft,exit:{...draft.exit,enabled:false,groups:[]},risk:riskSchema.parse({...draft.risk,stopMode:'candleLow',breakevenAfterTarget1:false,stopManagement:undefined,exitTargets:[
       {basis:'risk',value:2,closePercent:40,moveStopTo:0},
       {basis:'risk',value:5,closePercent:30,moveStopTo:1},
@@ -67,6 +72,47 @@ test('stock scopes match current/manual/historical eligibility, and stale strate
     await assert.rejects(saveStrategy(id,contradictory,3),/Buy rules cannot match/);
     assert.equal((await StrategyModel.findById(id).lean())?.revision,3,'Contradictory saves do not alter the saved revision');
     assert.equal(await PaperSessionModel.countDocuments(),0,'Saving does not start paper execution');
+    await assert.rejects(saveStrategy(randomUUID(),protectedDraft,0),/already exists for this holding period/);
+    const monitoringId=randomUUID();
+    await PaperSessionModel.create({_id:monitoringId,strategyId:id,strategy:(await StrategyModel.findById(id).lean())!,active:true,revision:1});
+    await assert.rejects(archiveStrategy(id,3),/Stop monitoring/);
+    await PaperSessionModel.updateOne({_id:monitoringId},{$set:{active:false}});
+    const archived=await archiveStrategy(id,3);assert.ok(archived.archivedAt);
+    assert.equal((await strategyHistory(id)).revisions.find(r=>r.strategy.revision===3)?.inconsistent,false,'Lifecycle metadata must not change the recorded rule definition');
+    assert.equal((await StrategyRevisionModel.findById(`${id}:3`))?.archivedAt,undefined);
+    await assert.rejects(saveStrategy(id,protectedDraft,3),/read-only/);
+    await assert.rejects(createPaperSession({strategyId:id,expectedRevision:3,ids:['NSE:1'],mode:'signals'}),/Archived strategies/);
+    const replacement=await saveStrategy(randomUUID(),protectedDraft,0);assert.equal(replacement.revision,1);
+    assert.equal(await StrategyModel.countDocuments({'entry.horizon':protectedDraft.entry.horizon,archivedAt:{$exists:false}}),1);
+    assert.ok(await StrategyModel.findById(id),'Archived plan remains available to historical reports');
+    await assert.rejects(restoreStrategy(id, 3, archived.archivedAt), /already occupies/);
+    await archiveStrategy(replacement._id, 1);
+    await assert.rejects(restoreStrategy(id, 2, archived.archivedAt), /changed or was already restored/);
+    await assert.rejects(restoreStrategy(id, 3, '2000-01-01T00:00:00.000Z'), /changed or was already restored/);
+    const revisionsBefore = await StrategyRevisionModel.countDocuments();
+    const attempts = await Promise.allSettled([
+      restoreStrategy(id, 3, archived.archivedAt),
+      saveStrategy(randomUUID(), protectedDraft, 0),
+    ]);
+    assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1, 'Concurrent restore/create can only occupy one slot');
+    if (attempts[0].status === 'rejected') {
+      const winner = await StrategyModel.findOne({ 'entry.horizon': protectedDraft.entry.horizon, archivedAt: { $exists: false } }).lean();
+      await archiveStrategy(winner!._id, winner!.revision);
+      await restoreStrategy(id, 3, archived.archivedAt);
+    }
+    const restored = await StrategyModel.findById(id).lean();
+    assert.equal(restored?.archivedAt, undefined);
+    assert.equal(restored?.revision, 3);
+    assert.equal(restored?.savedAt, saved.savedAt);
+    assert.deepEqual(restored?.entry, loaded?.entry);
+    assert.deepEqual(restored?.risk, loaded?.risk);
+    assert.equal(await StrategyRevisionModel.countDocuments(), revisionsBefore + (attempts[1].status === 'fulfilled' ? 1 : 0), 'Restore does not create rule revisions');
+    assert.equal((await PaperSessionModel.findById(monitoringId).lean())?.active, false, 'Restore never restarts monitoring');
+    assert.equal(await PaperSessionModel.countDocuments(), 1, 'Restore creates no new session');
+    assert.equal((await strategyHistory(id)).revisions.find(r => r.strategy.revision === 3)?.inconsistent, false);
+    await assert.rejects(restoreStrategy(id, 3, archived.archivedAt), /changed or was already restored/);
+
+
   } finally {
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
     await disconnectDatabase(); await jobs.waitUntilReady(); await jobs.close(); if (redis.status !== 'end') await redis.quit();

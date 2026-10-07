@@ -1,3 +1,9 @@
+import {executionOpen,executionCloseMinute} from './execution-session.js';
+import {entryCutoffMinute} from './entry-safety.js';
+import { PaperSafetyModel } from './execution-safety.js';
+import { reviewStrategy } from '../../strategies/services/rule-review.service.js';
+import { clockHealth } from '../../../shared/clock-health.js';
+import { backtestDataIssues } from '../../backtesting/services/data-quality.js';
 import { strategyHistoryPlan } from '../../backtesting/services/history-plan.js';
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
@@ -12,7 +18,7 @@ import { instruments } from '../../market-data/repository.js';
 import { engineClient, engineInstruments } from '../../engine/services/engine.service.js';
 import { PaperOrderModel, PaperPositionModel, PaperSessionModel, PaperSignalModel, PaperObservationModel, type PaperOrder } from '../models/paper.model.js';
 import { orderSchema, sessionSchema, sessionConfigurationSchema } from '../validations/paper.validation.js';
-import { marketTime } from '../../../shared/market-calendar.js';
+import { marketTime, calendarExpiryWarning } from '../../../shared/market-calendar.js';
 import { BacktestRunModel } from '../../backtesting/models/backtest.model.js';
 import { orderEstimate } from './order-estimate.js';
 import { bookedPaperPnl, markPaperPosition } from './valuation.js';
@@ -42,15 +48,32 @@ export async function paperState() {
   const estimatedOrders=orders.map(order=>{const session=sessions.find(s=>s._id===order.sessionId);return {...order,estimate:session&&['pending','confirmation'].includes(order.status)?orderEstimate(order,session,positions.filter(p=>p.sessionId===session._id),feed.quotes.find(q=>q.instrumentId===order.instrumentId&&q.fresh)):undefined};});
   const stocks = await instruments.find({ _id: { $in: scopeIds } }).select('_id symbol').lean();
   const markedPositions=positions.map(p=>({...p,mark:markPaperPosition(p,feed.quotes.find(q=>q.instrumentId===p.instrumentId))}));
-  return {sessions:scopedSessions,symbols:Object.fromEntries(stocks.map(stock=>[stock._id,stock.symbol])),positions:markedPositions,orders:estimatedOrders,signals,observations,workerRunning:!!worker,execution:'paper-only',feed:{state:feed.state,message:feed.message,provider:feed.provider,enabled:feed.enabled,automation:feed.automation,workerRunning:feed.workerRunning,subscribedIds:feed.instruments?.map(stock=>stock.id)??[],freshIds:feed.quotes.filter(q=>q.fresh).map(q=>q.instrumentId)},history:history?JSON.parse(history):null,marketOpen:sessionTime().open};
+  const clock=await clockHealth();
+  const warnings:string[]=[],notices:string[]=[];
+  if(sessionTime().date>='2026-08-03'&&sessions.some(s=>s.active&&s.ids?.some(id=>id.startsWith('NSE:'))))notices.push('NSE paper execution uses a conservative window: intraday square-off starts 15:10 IST; fills stop at 15:15. Closing-auction execution is not simulated. This also restricts non-auction NSE stocks until dated eligibility is supported.');
+  const calendarWarning=calendarExpiryWarning();if(calendarWarning)warnings.push(calendarWarning);
+  for(const position of positions)if(position.corporateActionPending)warnings.push(position.symbol+': '+position.corporateActionPending);
+  const delayed=feed.quotes.filter(q=>Date.parse(q.receivedAt)-Date.parse(q.at)>3000&&Date.now()-Date.parse(q.receivedAt)<15000);
+  if(delayed.length)warnings.push(`${delayed.length} streams have exchange-to-receive delays above 3 seconds. This can mean delayed data or clock skew; clock verification is independent.`);
+  if(clock.state!=='ok')warnings.push(clock.message);
+  if(positions.length && sessionTime().open){const missing=positions.filter(p=>!feed.quotes.some(q=>q.instrumentId===p.instrumentId&&q.fresh));if(missing.length)warnings.push('Protective exits may be delayed without fresh trade quotes for: '+missing.map(p=>p.symbol||p.instrumentId).join(', ')+'. Already-triggered market exits may use a fresh eligible bid; otherwise feed recovery is required. No stale-price fills.');}
+  if(!sessionTime().knownYear)warnings.push('Trading calendar does not cover this year. Trading remains blocked until verified holidays are configured.');
+  const emergency=await PaperSafetyModel.findById('global').lean();
+  if(emergency?.halted)warnings.push('Emergency entry halt is active. All new buys are blocked; exits remain enabled.');
+  for(const session of sessions)if(session.lossLimitDate===sessionTime().date)warnings.push(session.strategy.name+': daily loss limit reached; new buys blocked for today.');
+  return {safety:{clock,warnings,notices,halted:!!emergency?.halted},sessions:scopedSessions,symbols:Object.fromEntries(stocks.map(stock=>[stock._id,stock.symbol])),positions:markedPositions,orders:estimatedOrders,signals,observations,workerRunning:!!worker,execution:'paper-only',feed:{state:feed.state,message:feed.message,provider:feed.provider,enabled:feed.enabled,automation:feed.automation,workerRunning:feed.workerRunning,subscribedIds:feed.instruments?.map(stock=>stock.id)??[],freshIds:feed.quotes.filter(q=>q.fresh).map(q=>q.instrumentId)},history:history?JSON.parse(history):null,marketOpen:sessionTime().open};
 }
 export async function createPaperSession(raw:unknown) {
   const input=sessionSchema.parse(raw), strategy=await StrategyModel.findById(input.strategyId).lean();
   invariant(strategy,'Save a strategy before starting a paper session');
+  invariant(!strategy.archivedAt,'Archived strategies cannot start monitoring. Choose a current strategy.');
+  const review=reviewStrategy(strategy);invariant(!review.blocked,review.issues.filter(i=>i.severity==='error').map(i=>i.title+'. '+i.recommendation).join(' '));
   invariant(input.expectedRevision === undefined || strategy.revision === input.expectedRevision, 'The strategy changed. Reload its saved rules before starting monitoring.');
   if(input.sourceBacktestId){
     const run=await BacktestRunModel.findById(input.sourceBacktestId).lean();
     invariant(run?.status==='completed'&&run.strategy._id===strategy._id&&run.strategy.revision===strategy.revision,'Run a completed backtest of the current saved strategy before using this report.');
+    invariant(!run.config.dataPolicy||!!run.selectionAudit,'This report has no recorded readiness audit. Restart the worker and rerun before linking it to paper trading.');
+    invariant(!backtestDataIssues(run.result??{}).length,'This backtest has unresolved data gaps. Repair its history or use a complete stock/date scope and rerun before using this report for paper trading.');
     invariant(input.ids.every(id=>run.config.ids.includes(id)),'This report did not test all selected stocks. Backtest the new selection or start monitoring without linking this report.');
   }
   const universe=await MonthlyUniverseModel.findById(currentMonth()).lean();
@@ -58,13 +81,19 @@ export async function createPaperSession(raw:unknown) {
   const ids=[...new Set(input.ids)];
   invariant(ids.every(id=>universe.members.some(m=>m.instrumentId===id)),'Only currently qualified stocks can be selected for entries');
   invariant(!await PaperSessionModel.exists({strategyId:strategy._id,active:true}),'This strategy already has an active paper session');
-  const session = await PaperSessionModel.create({_id:randomUUID(),strategyId:strategy._id,strategy,ids,sourceBacktestId:input.sourceBacktestId,mode:input.mode,cashPaise:Math.round(strategy.risk.initialCapital*100),initialPaise:Math.round(strategy.risk.initialCapital*100),entriesPaused:false,active:true,createdAt:new Date().toISOString(),revision:1,message:'Connecting live data automatically. Waiting for fresh quotes and a completed candle after session start.'});
+  const session = await mongoose.connection.transaction(async transaction=>{
+    const locked=await StrategyModel.updateOne({_id:strategy._id,revision:strategy.revision,archivedAt:{$exists:false}},{$inc:{lifecycleSerial:1}},{session:transaction});
+    invariant(locked.modifiedCount,'The strategy changed or was archived. Refresh before monitoring.');
+    invariant(!await PaperSessionModel.exists({strategyId:strategy._id,active:true}).session(transaction),'This strategy already has an active paper session');
+    return (await PaperSessionModel.create([{_id:randomUUID(),strategyId:strategy._id,strategy,ids,sourceBacktestId:input.sourceBacktestId,mode:input.mode,dailyLossLimitPercent:strategy.risk.dailyLossLimitPercent??2,maxEntryDeviationPercent:strategy.risk.maxEntryDeviationPercent??2,cashPaise:Math.round(strategy.risk.initialCapital*100),initialPaise:Math.round(strategy.risk.initialCapital*100),entriesPaused:false,active:true,createdAt:new Date().toISOString(),revision:1,message:'Connecting live data automatically. Waiting for fresh quotes and a completed candle after session start.'}],{session:transaction}))[0];
+  });
   await updatePaperSubscriptions(true);
   return session;
 }
 export async function freshQuote(id:string) {
+  const clock=await clockHealth();invariant(clock.state==='ok',clock.message);
   const feed=await feedStatus(), quote=feed.quotes.find(x=>x.instrumentId===id && x.fresh);
-  invariant(quote && sessionTime().open,'A fresh live-feed quote during the regular cash-market session is required');
+  invariant(quote && executionOpen(id),'A fresh live-feed quote during the regular cash-market session is required');
   return quote;
 }
 export async function manualPaperOrder(raw:unknown) {
@@ -76,7 +105,7 @@ export async function manualPaperOrder(raw:unknown) {
   const quote=await freshQuote(input.instrumentId);
   let atr:number|undefined, signalLow:number|undefined;
   if(input.side==='BUY') {
-    invariant(session.strategy.risk.overnight||sessionTime().minute<915,'Intraday entries close at 3:15 PM IST.');
+    invariant(sessionTime().minute<entryCutoffMinute(session.strategy.risk,input.instrumentId),'The strategy entry cutoff or conservative NSE session cutoff has been reached.');
     invariant(!session.ids || session.ids.includes(input.instrumentId),'Choose a stock included in this paper session');
     invariant(await MonthlyUniverseModel.exists({_id:currentMonth(),'members.instrumentId':input.instrumentId}),'Buy orders must use the current qualified list');
     if(['ATR','candleLow'].includes(session.strategy.risk.stopMode)) {
@@ -89,7 +118,7 @@ export async function manualPaperOrder(raw:unknown) {
   const at=new Date().toISOString();
   const orderType=input.orderType??(input.side==='BUY'&&session.strategy.risk.entryOrderType==='limit'?'limit':'market');
   const limitPaise=orderType==='limit'?Math.round((input.limitPrice??session.strategy.risk.entryLimitPrice!)*100):undefined;
-  const expiresAt=orderType==='limit'?new Date(`${sessionTime().date}T${session.strategy.risk.overnight?'15:30':'15:15'}:00+05:30`).toISOString():new Date(Date.now()+60000).toISOString();
+  const expiresAt=orderType==='limit'?new Date(Date.parse(`${sessionTime().date}T00:00:00+05:30`)+(input.side==='BUY'?entryCutoffMinute(session.strategy.risk,input.instrumentId):executionCloseMinute(input.instrumentId))*60000).toISOString():new Date(Date.now()+60000).toISOString();
   invariant(Date.parse(expiresAt)>Date.now(),'The intraday limit-order window has ended. Use a market exit.');
   let result:PaperOrder|undefined;
   await mongoose.connection.transaction(async transaction=>{
@@ -98,7 +127,7 @@ export async function manualPaperOrder(raw:unknown) {
     const held=input.side==='SELL'?await PaperPositionModel.findOne({sessionId:session._id,instrumentId:input.instrumentId}).session(transaction).lean():null;
     if(input.side==='SELL')invariant(held&&held.quantity>=input.quantity,'The held quantity changed. Refresh your positions.');
     invariant(!await PaperOrderModel.exists({sessionId:session._id,instrumentId:input.instrumentId,status:{$in:['pending','confirmation']}}).session(transaction),'This stock already has an unfilled order. Modify or cancel it, or use Exit all.');
-    result=(await PaperOrderModel.create([{_id:input.id,sessionId:session._id,instrumentId:input.instrumentId,side:input.side,quantity:input.quantity,source:'manual',status:'pending',orderType,createdAt:at,eligibleAfter:at>quote.at?at:quote.at,expiresAt,reason:'Manual paper order',atr,signalLow,limitPaise,positionOpenedAt:held?.openedAt}],{session:transaction}))[0].toObject();
+    result=(await PaperOrderModel.create([{_id:input.id,sessionId:session._id,instrumentId:input.instrumentId,side:input.side,quantity:input.quantity,source:'manual',status:'pending',orderType,createdAt:at,eligibleAfter:at>quote.at?at:quote.at,expiresAt,referencePrice:quote.price,reason:'Manual paper order',atr,signalLow,limitPaise,positionOpenedAt:held?.openedAt}],{session:transaction}))[0].toObject();
   });
   await announce('paper.orders');
   return result;

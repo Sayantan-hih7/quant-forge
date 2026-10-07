@@ -44,10 +44,11 @@ stockDetailsRouter.get('/:id/chart', async (req, res) => {
   const id = instrumentIdSchema.parse(req.params.id);
   const timeframe = z.enum(['1m', '5m', '15m', '1h', '4h', '1d', '1w', '1mo']).default('1d').parse(req.query.timeframe);
   const at = z.string().datetime().refine(s => Date.parse(s) >= Date.UTC(2000,0) && Date.parse(s) <= Date.now() + 2 * 86400000, 'Choose a historical chart date').optional().parse(req.query.at);
+  const repair = z.enum(['true', 'false']).optional().parse(req.query.repair) === 'true';
   const minBars = z.coerce.number().int().min(1).max(1500).optional().parse(req.query.minBars);
   const lookbackDays = z.coerce.number().int().min(7).max(2196).optional().parse(req.query.lookbackDays);
   const from = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => Number.isFinite(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s && s >= '1990-01-01' && s <= new Date(Date.now() + 19_800_000).toISOString().slice(0, 10), 'Choose a valid past anchor date').optional().parse(req.query.from);
-  const [stock] = await selectedInstruments([id], false); res.json(await stockHistory(stock, timeframe, undefined, { at, minBars, from, lookbackDays }));
+  const [stock] = await selectedInstruments([id], false); res.json(await stockHistory(stock, timeframe, undefined, { at, minBars, from, lookbackDays, repair }));
 });
 stockDetailsRouter.get('/:id/listings', async (req, res) => { res.json(await stockListings(instrumentIdSchema.parse(req.params.id))); });
 stockDetailsRouter.get('/:id/related', async (req, res) => { res.json(await relatedStocks(instrumentIdSchema.parse(req.params.id))); });

@@ -63,11 +63,12 @@ test('overview opens on Today, remembers volume and separates period from candle
   const drawer = page.getByRole('dialog'), figure = drawer.getByRole('figure');
   await expect(drawer.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(drawer.getByLabel('Overview period')).toContainText('Today · 22 Sept 2026');
-  await expect(drawer.getByLabel('Overview period')).toContainText('5-minute candles');
+  await expect(drawer.getByLabel('Overview period')).toContainText('1-minute prices');
   await expect(figure).toBeVisible();
   const plotHeight = () => figure.locator('canvas').evaluateAll(nodes => Math.max(...nodes.map(n => n.getBoundingClientRect().height)));
   // Wait for the chart library to lay out its second pane after the initial paint.
-  await expect.poll(plotHeight).toBeLessThan(350);
+  await expect.poll(plotHeight).toBeGreaterThan(0);
+  await page.waitForTimeout(200);
   const withVolume = await plotHeight();
   await drawer.getByRole('checkbox', { name: 'Volume', exact: true }).uncheck();
   await expect(figure).toHaveAttribute('data-volume-visible', 'false');
@@ -265,7 +266,9 @@ test('qualified pagination and sorting subscribe to the visible sorted stocks', 
 
 test('qualified stock prices open an interactive chart and preserve manual qualification and list filters', async ({ page }, testInfo) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  await fixture(page); await page.goto('/qualification');
+  await fixture(page);
+  await page.addInitScript(() => localStorage.setItem('quantforge:qualified-exchange', 'all'));
+  await page.goto('/qualification');
   await expect(page.getByRole('columnheader', { name: 'Last price' })).toBeVisible();
   await expect(page.getByText('₹326.85', { exact: true })).toBeVisible();
   await expect(page.getByText('Historical close', { exact: true })).toBeVisible();
@@ -279,6 +282,8 @@ test('qualified stock prices open an interactive chart and preserve manual quali
   await expect(drawer.getByLabel('Stock performance')).toContainText('Session high');
   await expect(drawer.getByText('₹80,740.00 Cr', { exact: true })).toBeVisible();
   await drawer.getByRole('tab', { name: 'Advanced chart', exact: true }).click();
+  await drawer.getByRole('combobox', { name: 'Stock details section' }).click();
+  await page.getByRole('option', { name: 'Qualification', exact: true }).click();
   await drawer.getByText('View qualification rules', { exact: true }).click();
   await expect(drawer.getByText('Qualification conditions', { exact: true })).toBeVisible();
   await drawer.getByText('15m', { exact: true }).click();
@@ -291,6 +296,8 @@ test('qualified stock prices open an interactive chart and preserve manual quali
   await page.screenshot({ path: testInfo.outputPath('stock-details-light.png') });
   await drawer.getByRole('button', { name: 'Next stock' }).click();
   await expect(drawer.getByRole('figure', { name: 'SBIN price and volume chart' })).toBeVisible();
+  await drawer.getByRole('combobox', { name: 'Stock details section' }).click();
+  await page.getByRole('option', { name: 'Qualification', exact: true }).click();
   await expect(drawer.getByText('My separate long-term research.', { exact: true })).toBeVisible();
   await expect(drawer.getByText('View qualification rules', { exact: true })).toHaveCount(0);
   await expect(drawer.getByText('Historical close', { exact: true })).toBeVisible();
@@ -360,7 +367,9 @@ test('exchange switching preserves chart preferences, updates the feed and saves
     if (request.url().includes('/api/stocks/') && request.url().includes('/chart?')) charts.push(decodeURIComponent(request.url()));
     if (request.method() === 'POST' && request.url().endsWith('/watchlists/personal/stocks')) additions.push(request.postDataJSON().instrumentId);
   });
-  await fixture(page); await page.goto('/qualification');
+  await fixture(page);
+  await page.addInitScript(() => localStorage.setItem('quantforge:qualified-exchange', 'all'));
+  await page.goto('/qualification');
   await page.getByRole('button', { name: 'View FEDERALBNK details' }).click();
   await page.getByRole('tab', { name: 'Advanced chart', exact: true }).click();
   const drawer = page.getByRole('dialog');
@@ -373,6 +382,8 @@ test('exchange switching preserves chart preferences, updates the feed and saves
   await drawer.getByLabel('Stock exchange').getByText('BSE', { exact: true }).click();
   await expect(drawer.getByRole('figure', { name: 'FEDERALBANK price and volume chart' })).toBeVisible();
   await expect(drawer.getByText('₹327.10', { exact: true })).toBeVisible();
+  await drawer.getByRole('combobox', { name: 'Stock details section' }).click();
+  await page.getByRole('option', { name: 'Qualification', exact: true }).click();
   await expect(drawer.getByText('Qualification uses NSE FEDERALBNK.', { exact: true })).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'FEDERALBANK already qualified' })).toBeDisabled();
   await expect(drawer.getByLabel('Visible indicators')).not.toContainText('EMA 5');
@@ -416,4 +427,149 @@ test('a failed listing lookup leaves the original chart usable and allows retry'
   await expect(drawer.getByRole('radio', { name: 'BSE', exact: true })).toBeEnabled();
   await drawer.getByLabel('Stock exchange').getByText('BSE', { exact: true }).click();
   await expect(drawer.getByRole('figure', { name: 'FEDERALBANK price and volume chart' })).toBeVisible();
+});
+
+
+test('stock workspace keeps charts inside the viewport and separates research', async ({ page }, testInfo) => {
+  await fixture(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/qualification');
+  await page.getByRole('button', { name: 'View FEDERALBNK details' }).click();
+  const drawer = page.getByRole('dialog');
+  const pane = drawer.getByRole('tabpanel');
+  await expect(drawer.getByRole('figure')).toBeVisible();
+  await expect.poll(() => pane.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(2);
+  await expect(drawer.getByRole('complementary', { name: 'Stock research panel' })).toBeVisible();
+  await expect(drawer.getByRole('heading', { name: 'Company snapshot' })).toBeVisible();
+  await drawer.getByRole('combobox', { name: 'Stock details section' }).click();
+  await page.getByRole('option', { name: 'Qualification', exact: true }).click();
+  await expect(drawer.getByLabel('Qualification context')).toBeVisible();
+  await drawer.getByRole('tab', { name: 'Advanced chart', exact: true }).click();
+  await expect(drawer.getByRole('figure')).toBeVisible();
+  await expect.poll(() => pane.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(2);
+  await expect.poll(() => drawer.locator('.ant-drawer-body').evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: testInfo.outputPath('stock-workspace.png') });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await expect.poll(() => pane.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(drawer.getByRole('button', { name: 'Indicators', exact: true })).toBeVisible();
+  expect(await drawer.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('stock-workspace-mobile.png') });
+});
+
+
+test('chart-first workspace uses fullscreen width and independent research sidebar',async({page},testInfo)=>{
+ await page.setViewportSize({width:1920,height:1000});await fixture(page);await page.goto('/qualification');
+ await page.getByRole('button',{name:'View FEDERALBNK details'}).click();
+ await page.getByRole('button',{name:'Expand stock details'}).click();
+ const chart=page.locator('.stock-terminal-main .stock-chart-canvas');await expect(chart).toBeVisible();
+ await expect.poll(async()=> (await chart.boundingBox())?.width??0).toBeGreaterThan(1450);
+ await expect.poll(async()=> (await chart.boundingBox())?.height??0).toBeGreaterThan(500);
+ const sidebar=page.getByRole('complementary',{name:'Stock research panel'});await expect(sidebar).toBeVisible();
+ await page.getByRole('combobox',{name:'Stock details section'}).click();await page.getByRole('option',{name:'Qualification',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Qualification context'})).toBeVisible();await expect(chart).toBeVisible();
+ await page.screenshot({path:testInfo.outputPath('terminal-fullscreen.png')});
+ await page.getByRole('button',{name:'Hide details',exact:true}).click();await expect(sidebar).toHaveCount(0);
+ await expect.poll(async()=> (await chart.boundingBox())?.width??0).toBeGreaterThan(1850);
+ await page.getByRole('button',{name:'Show details',exact:true}).click();
+ await page.setViewportSize({width:390,height:844});await expect(chart).toBeVisible();
+ await page.screenshot({path:testInfo.outputPath('terminal-mobile.png')});
+});
+
+
+test('quick stock switch and personalized sidebar preserve chart and saved preferences', async ({page})=>{
+ await fixture(page);
+ await page.route('**/api/market-data/instruments?*',route=>route.fulfill({json:[listing(stocks[1])]}));
+ await page.goto('/qualification');await page.getByRole('button',{name:'View FEDERALBNK details'}).click();
+ const drawer=page.getByRole('dialog');
+ await drawer.getByRole('button',{name:'Customize stock sidebar'}).click();
+ await page.getByRole('checkbox',{name:'News',exact:true}).uncheck();
+ await page.getByRole('button',{name:'Move Qualification up',exact:true}).click();
+ await page.getByRole('switch',{name:'Stack sidebar sections'}).click();
+ await drawer.getByRole('button',{name:'Customize stock sidebar'}).click();
+ await expect(drawer.getByRole('figure')).toBeVisible();
+ await expect(drawer.getByLabel('Qualification context')).toBeVisible();
+ const search=drawer.getByRole('combobox',{name:'Switch stock'});await search.fill('sbi');
+ await page.getByRole('option',{name:'SBIN - BSE - State Bank of India',exact:true}).click();
+ await expect(drawer.getByRole('figure',{name:'SBIN price and volume chart'})).toBeVisible();
+ await expect(drawer.getByRole('button',{name:'Back to FEDERALBNK'})).toBeVisible();
+ await expect(drawer.getByText('My separate long-term research.',{exact:true})).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'View FEDERALBNK details'}).click();
+ await drawer.getByRole('button',{name:'Customize stock sidebar'}).click();
+ await expect(page.getByRole('checkbox',{name:'News',exact:true})).not.toBeChecked();
+ await expect(page.getByRole('switch',{name:'Stack sidebar sections'})).toBeChecked();
+ await page.getByRole('button',{name:'Reset panel',exact:true}).click();
+ await expect(page.getByRole('checkbox',{name:'News',exact:true})).toBeChecked();
+});
+
+test('quick bid ask buttons open reviewed paper orders for the selected listing', async ({page})=>{
+ await fixture(page);
+ const sessionId='593c7c89-a362-4f30-a334-f1d43c000001';
+ const position={_id:`${sessionId}:NSE:1023`,sessionId,instrumentId:'NSE:1023',symbol:'FEDERALBNK',quantity:10,entryPaise:32000,stopPaise:31000,targetPaise:35000,openedAt:'2026-09-21T04:00:00Z'};
+ const posts:{path:string;data:Record<string,unknown>}[]=[];
+ await page.route('**/api/paper',route=>route.fulfill({json:{sessions:[{_id:sessionId,active:true,mode:'automatic',ids:['NSE:1023'],strategy:{name:'Swing test',risk:{}},cashPaise:10000000}],positions:[position],orders:[],signals:[],workerRunning:true,marketOpen:true}}));
+ await page.route('**/api/stocks/quotes?*',route=>route.fulfill({json:{quotes:[{...quote(),liveDepth:{bids:[{price:326.8,quantity:100}],asks:[{price:326.9,quantity:100}],receivedAt:'2026-09-22T04:45:00Z',source:'Motilal stream'}}]}}));
+ await page.route('**/api/paper/orders',async route=>{posts.push({path:'orders',data:route.request().postDataJSON()});await route.fulfill({json:{status:'pending'}});});
+ await page.route('**/api/paper/positions/*/exit',async route=>{posts.push({path:'exit',data:route.request().postDataJSON()});await route.fulfill({json:{status:'pending'}});});
+ await page.goto('/qualification');await page.getByRole('button',{name:'View FEDERALBNK details'}).click();
+ await expect(page.getByRole('button',{name:'Paper buy FEDERALBNK'})).toContainText('326.90');
+ await page.getByRole('button',{name:'Paper buy FEDERALBNK'}).click();
+ const ticket=page.getByRole('dialog',{name:'Buy FEDERALBNK - paper order'});
+ await expect(ticket.getByText(/Submitting a manual order pauses/)).toBeVisible();expect(posts).toHaveLength(0);
+ await ticket.getByRole('spinbutton',{name:'Shares to buy'}).fill('2');
+ await ticket.getByRole('combobox',{name:'Order type',exact:true}).click();
+ await page.getByText('Limit', {exact:false}).filter({hasText:'maximum buy price'}).last().click();
+ await ticket.getByRole('spinbutton',{name:/Limit price/}).fill('325');
+ await ticket.getByRole('button',{name:'Submit buy order'}).click();
+ await expect.poll(()=>posts.length).toBe(1);
+ expect(posts[0].data).toMatchObject({instrumentId:'NSE:1023',sessionId,side:'BUY',quantity:2,orderType:'limit',limitPrice:325});
+ await expect(ticket).toHaveCount(0);
+ await page.getByRole('button',{name:'Paper sell FEDERALBNK'}).click();
+ const sell=page.getByRole('dialog',{name:'Sell FEDERALBNK - paper order'});
+ await sell.getByRole('button',{name:'50%',exact:true}).click();
+ await sell.getByRole('button',{name:'Submit sell order'}).click();
+ await expect.poll(()=>posts.length).toBe(2);expect(posts[1]).toMatchObject({path:'exit',data:{quantity:5,expectedOpenedAt:position.openedAt}});
+});
+
+
+test('quick paper trading explains unavailable sessions and blocks closed-market submission',async({page})=>{
+ await fixture(page);
+ let active=false;
+ await page.route('**/api/paper',route=>route.fulfill({json:{sessions:active?[{_id:'593c7c89-a362-4f30-a334-f1d43c000001',active:true,mode:'automatic',ids:['NSE:1023'],strategy:{name:'Swing test',risk:{}},cashPaise:10000000}]:[],positions:[],orders:[],signals:[],workerRunning:true,marketOpen:false}}));
+ await page.goto('/qualification');await page.getByRole('button',{name:'View FEDERALBNK details'}).click();
+ await expect(page.getByLabel('Quick paper trading')).toContainText('Bid / ask unavailable');
+ await page.getByRole('button',{name:'Paper sell FEDERALBNK'}).click();
+ const sell=page.getByRole('dialog',{name:'Sell FEDERALBNK - paper order'});
+ await expect(sell.getByText('No held paper shares for this listing')).toBeVisible();
+ await expect(sell.getByRole('button',{name:'Submit sell order'})).toHaveCount(0);
+ await sell.getByRole('button',{name:'Close',exact:true}).click();active=true;
+ await page.getByRole('button',{name:'Paper buy FEDERALBNK'}).click();
+ const buy=page.getByRole('dialog',{name:'Buy FEDERALBNK - paper order'});
+ await expect(buy.getByText('Market is closed. Submit during the regular cash-market session.')).toBeVisible();
+ await expect(buy.getByRole('button',{name:'Submit buy order'})).toHaveCount(0);
+});
+
+
+test('overview separates visible history gaps from the forming minute and keeps controls compact',async({page},testInfo)=>{
+ await fixture(page);
+ const bar=(time:string)=>({time,open:100,high:102,low:99,close:101,volume:100});
+ await page.route('**/api/stocks/*/chart?*',route=>route.fulfill({json:{instrumentId:'NSE:1023',timeframe:'1m',bars:[bar('2026-09-22T03:45:00.000Z'),bar('2026-09-22T03:46:00.000Z')],baseBars:[bar('2026-09-22T04:45:00.000Z')],incompleteBucketTimes:['2026-09-21T03:45:00.000Z','2026-09-22T03:47:00.000Z'],incompleteIntervals:[{time:'2026-09-22T03:47:00.000Z',end:'2026-09-22T03:48:00.000Z',missingMinutes:['2026-09-22T03:47:00.000Z']}],incompleteBuckets:2,message:'2 incomplete candle intervals were omitted because provider minutes are missing.'}}));
+ await page.setViewportSize({width:1920,height:1000});await page.goto('/qualification');
+ await page.getByRole('button',{name:'View FEDERALBNK details'}).click();await page.getByRole('button',{name:'Expand stock details'}).click();
+ const drawer=page.getByRole('dialog');
+ await expect(drawer.getByText('1-minute prices',{exact:true})).toBeVisible();
+ await expect(drawer.getByText('Live minute',{exact:true})).toBeVisible();
+ await expect(drawer.getByRole('button',{name:'1 history gap',exact:true})).toBeVisible();
+ await expect(drawer.locator('.stock-chart-ohlc')).toContainText('10:15');
+ await expect(drawer.locator('.stock-chart-ohlc')).toContainText('Price');
+ const chart=drawer.locator('.stock-chart-canvas');
+ await expect.poll(async()=>(await chart.boundingBox())?.y??999).toBeLessThan(255);
+ await drawer.getByRole('button',{name:'1 history gap',exact:true}).click();
+ await expect(page.getByText(/separate from the forming candle/)).toBeVisible();
+ await expect(page.getByLabel('Missing candle times')).toContainText('09:17 - 09:18 IST');
+ const retry=page.waitForRequest(request=>request.url().includes('repair=true'));
+ await page.getByRole('button',{name:'Retry history',exact:true}).click();
+ await retry;
+ await drawer.getByRole('button',{name:'1 history gap',exact:true}).click();
+ await page.screenshot({path:testInfo.outputPath('compact-chart.png'),animations:'disabled'});
 });

@@ -44,6 +44,12 @@ export const backtestSchema = z
     breakevenAfterTarget1: z.boolean().optional(),
     overnight: z.boolean(),
     slippagePercent: z.number().min(0).max(2),
+  reentryCooldownMinutes:z.number().int().min(0).max(10080).optional(),
+  maxEntriesPerStockPerDay:z.number().int().min(0).max(100).optional(),
+  dailyLossLimitPercent:z.number().min(0.1).max(10).optional(),
+  maxEntryDeviationPercent:z.number().min(0.1).max(10).optional(),
+    entryCutoffMinute:z.number().int().min(555).max(915).optional(),
+    costModel:z.enum(['flat','indian-cash']).optional(),exchangeFeePercent:z.number().min(0).max(1).optional(),
     feePercent: z.number().min(0).max(2),
   })
   .superRefine((value, ctx) => {

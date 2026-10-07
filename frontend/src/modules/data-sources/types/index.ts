@@ -17,7 +17,7 @@ export interface DataStatus {
   dhan: { connected: boolean; expiresAt?: string; dataPlan?: string; apiConfigured: boolean; hasSavedToken: boolean;
     tokenSource: 'web' | 'oauth' | 'unknown'; autoRenew: boolean;
     renewalState: 'off' | 'scheduled' | 'verifying' | 'retrying' | 'login_required';
-    nextRenewalAt?: string; lastRenewedAt?: string; renewalError?: string };
+    nextRenewalAt?: string; lastRenewedAt?: string; renewalError?: string; reconnectState?: 'checking' | 'connected' | 'retrying' | 'login_required'; reconnectError?: string; reconnectAt?: string };
   indices: { id: string; name: string; exchange: string; url: string }[];
   limitations: string[];
 }

@@ -39,7 +39,7 @@ function PresetFieldControl({ field, condition, onChange, id }: { field: PresetF
   </Form.Item>;
 }
 
-function ConditionRow({
+export function ConditionRow({
   group,
   index,
   tier,

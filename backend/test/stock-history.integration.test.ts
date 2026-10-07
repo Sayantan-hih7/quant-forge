@@ -24,7 +24,8 @@ test('intraday history uses bounded windows and downloads only uncovered ranges 
     await ensureIntradayHistory(stock,'2026-03-01','2026-06-01',{},request);
     assert.ok(calls.length >= 3 && calls.length <= 4, 'Closed weekend-only windows can be skipped');
     assert.ok(calls[0].fromDate > calls.at(-1)!.fromDate, 'Download newest history first for recent listings');
-    assert.ok(calls.every(c => Date.parse(c.toDate) - Date.parse(c.fromDate) <= 30 * 86400000));
+    assert.ok(calls.every(c => Date.parse(c.toDate) - Date.parse(c.fromDate) <= 30 * 86400000 + 60000));
+    assert.ok(calls.every(c => c.fromDate.endsWith('09:14:00')), 'Include the opening minute with an exclusive provider lower boundary');
     calls.length = 0;
     await ensureIntradayHistory(stock,'2026-02-23','2026-06-01',{},request);
     assert.equal(calls.length,1); assert.match(calls[0].toDate,/2026-03-01/);
@@ -72,10 +73,22 @@ test('chart aggregation omits incomplete provider buckets rather than displaying
   try {
     await mongoose.connect(uri.toString());
     const times = Array.from({length:10},(_,i)=>i).filter(i=>i!==2).map(i=>(start+i*60_000)/1000);
-    const result = await stockHistory(stock,'5m',{daily:async()=>{throw new Error('Unexpected daily download');},intraday:async()=>({timestamp:times,open:times.map(()=>100),high:times.map(()=>110),low:times.map(()=>99),close:times.map(()=>105),volume:times.map(()=>10)})});
+    let requests=0;
+    const dependencies={daily:async()=>{throw new Error('Unexpected daily download');},intraday:async()=>{requests++;return {timestamp:times,open:times.map(()=>100),high:times.map(()=>110),low:times.map(()=>99),close:times.map(()=>105),volume:times.map(()=>10)};}};
+    const result = await stockHistory(stock,'5m',dependencies);
     assert.equal(result.bars.length,1);assert.equal(result.bars[0].time,new Date(start+5*60000).toISOString());
-    assert.equal(result.bars[0].volume,50);assert.equal(result.incompleteBuckets,1);assert.equal(result.baseBars.length,9);
+    assert.equal(result.bars[0].volume,50);assert.equal(result.incompleteBuckets,74);assert.equal(result.baseBars.length,9);
     assert.match(result.message!,/omitted/);
+    assert.deepEqual(result.incompleteIntervals[0].missingMinutes,[new Date(start+2*60000).toISOString()]);
+    const before=requests;
+    await stockHistory(stock,'5m',dependencies);
+    assert.equal(requests,before,'Ordinary refresh reuses the chart cache');
+    await stockHistory(stock,'5m',dependencies,{repair:true});
+    assert.ok(requests>before,'Explicit retry bypasses the chart cache and rechecks history');
+    const afterRetry=requests;
+    await stockHistory(stock,'5m',dependencies,{repair:true});
+    assert.equal(requests,afterRetry,'Rapid repeated retries are rate limited');
+    await redis.del(`quantforge:research:history:${stock._id}:1m:${indianDate(Date.now())}:${result.requestedFrom}:repair`);
     await redis.del(`quantforge:research:history:${stock._id}:1m:${indianDate(Date.now())}:${result.requestedFrom}`);
   } finally {
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();

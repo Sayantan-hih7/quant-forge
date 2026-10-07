@@ -33,7 +33,7 @@ export function DhanConnection({ connection, refresh }: { connection: DataStatus
   }
   async function saveToken(values: z.infer<typeof schema>) {
     setBusy(true); setError('');
-    try { await apiClient.post('/connections/dhan/token', values, { timeout: 65_000 }); form.reset(); setTokenOpen(false); setLoginStarted(false); await refresh(); message.success('Dhan data connection verified'); }
+    try { const {data}=await apiClient.post<{researchRefresh?:string}>('/connections/dhan/token', values, { timeout: 65_000 }); form.reset(); setTokenOpen(false); setLoginStarted(false); await refresh(); if(data.researchRefresh==='queue-unavailable')message.warning('Dhan connected, but the data retry could not be queued. Check the data worker and reconnect to retry.');else message.success(data.researchRefresh==='queued'?'Dhan connected. Suitability refresh queued; follow progress in Qualified Stocks.':'Dhan data connection verified'); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <>

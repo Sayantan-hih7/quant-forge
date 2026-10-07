@@ -1,4 +1,6 @@
+import {attachmentInput,type AiAttachment} from '../validations/attachment.validation.js';
 import axios from 'axios';
+import { setTimeout as delay } from 'node:timers/promises';
 import { env } from '../../../config/env.js';
 import { AppError } from '../../../shared/errors.js';
 
@@ -9,22 +11,41 @@ export function geminiError(error: unknown): AppError {
   if ([401, 403].includes(status ?? 0) || reason === 'API_KEY_INVALID') return new AppError(424, 'AI_CREDENTIALS', 'Gemini rejected the API key. Update GEMINI_API_KEY in backend/.env and restart the API.');
   if (status === 429) return new AppError(429, 'AI_QUOTA', 'Gemini usage limit reached. Wait before retrying, or check the project quota in Google AI Studio.');
   if (status === 404) return new AppError(424, 'AI_MODEL', 'The configured Gemini model is unavailable for this project. Check GEMINI_MODEL on the backend.');
+  if (status === 503) return new AppError(503, 'AI_BUSY', 'Gemini is temporarily busy. Please retry in a moment; your draft is unchanged.');
   if (status === 400) return new AppError(502, 'AI_REQUEST', 'Gemini could not accept the rule-generation request. Your draft is unchanged. If this continues, the assistant configuration needs attention.');
   if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') return new AppError(504, 'AI_TIMEOUT', 'Gemini took too long to respond. Please retry; your draft is unchanged.');
   return new AppError(502, 'AI_PROVIDER', 'Gemini could not complete the request. Please retry; your draft is unchanged.');
 }
 const client = axios.create({ baseURL: 'https://generativelanguage.googleapis.com/v1beta', timeout: 60_000,
-  maxRedirects: 0, maxContentLength: 1_000_000, maxBodyLength: 250_000 });
+  maxRedirects: 0, maxContentLength: 1_000_000, maxBodyLength: 4_000_000 });
 client.interceptors.request.use(config => { config.headers.set('x-goog-api-key', env.GEMINI_API_KEY); return config; });
 // Never propagate Axios request/config objects: they contain the API key and conversation.
 client.interceptors.response.use(response => response, (error: unknown) => Promise.reject(geminiError(error)));
 
-export async function generateGemini(system: string, input: string, schema: unknown, signal?: AbortSignal) {
+/** Large indicator/risk schemas exceed Gemini's grammar complexity limits.
+ * JSON mode carries the same schema as instructions; the caller still performs
+ * complete Zod, supported-field and engine validation before returning a draft. */
+export function geminiRequest(system: string, input: string, schema: unknown, attachments:AiAttachment[]=[]) {
+  const serialized = JSON.stringify(schema);
+  const useGrammar = serialized.length <= 12_000;
+  return {
+    systemInstruction: { parts: [{ text: useGrammar ? system : `${system}\nReturn a JSON object conforming to this schema. Omit unused optional properties instead of emitting null unless null is explicitly allowed.\n${serialized}` }] },
+    contents: [{ role: 'user', parts: [{ text: attachmentInput(input,attachments) },...attachments.filter(f=>f.kind==='image').map(f=>({inlineData:{mimeType:f.mimeType,data:f.data}}))] }],
+    generationConfig: { responseMimeType: 'application/json', ...(useGrammar ? { responseJsonSchema: schema } : {}), temperature: 0.2, maxOutputTokens: 8192 },
+  };
+}
+
+export async function generateGemini(system: string, input: string, schema: unknown, signal?: AbortSignal,attachments:AiAttachment[]=[]) {
   if (!env.GEMINI_API_KEY) throw new AppError(503, 'AI_NOT_CONFIGURED', 'Add GEMINI_API_KEY to backend/.env and restart the API to enable the assistant.');
-  const { data } = await client.post(`/models/${env.GEMINI_MODEL}:generateContent`, {
-    systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: input }] }],
-    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.2, maxOutputTokens: 8192 },
-  }, { signal });
+  // One retry for provider overload, within the original stage deadline.
+  const deadline = AbortSignal.timeout(60_000);
+  const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+  const request = () => client.post(`/models/${encodeURIComponent(env.AI_MODEL || env.GEMINI_MODEL)}:generateContent`, geminiRequest(system, input, schema,attachments), { signal: requestSignal });
+  const { data } = await request().catch(async (error: unknown) => {
+    if (!(error instanceof AppError) || error.code !== 'AI_BUSY' || requestSignal.aborted) throw error;
+    await delay(500, undefined, { signal: requestSignal });
+    return request();
+  });
   const candidate = data.candidates?.[0];
   if (candidate?.finishReason !== 'STOP') throw new AppError(502, 'AI_INCOMPLETE', 'The AI response was incomplete or blocked. Try a shorter, specific rule request.');
   const text = candidate.content?.parts?.filter((part: { text?: string; thought?: boolean }) => !part.thought && typeof part.text === 'string').map((part: { text: string }) => part.text).join('');

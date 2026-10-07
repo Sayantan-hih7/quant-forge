@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { StrategyModel } from '../models/strategy.model.js';
-import { saveStrategy } from '../services/strategy.service.js';
+import { saveStrategy, archiveStrategy, restoreStrategy } from '../services/strategy.service.js';
 import { saveStrategySchema, strategySchema } from '../validations/strategy.validation.js';
 import { researchPresets } from '../config/research-presets.js';
 import { invariant } from '../../../shared/errors.js';
@@ -16,9 +16,18 @@ strategyRouter.get('/:id/revisions', async (req,res) => { res.json(await strateg
 strategyRouter.post('/examples/:key', async (req, res) => {
   const preset = researchPresets.find(p => p.key === req.params.key); invariant(preset, 'Unknown research example');
   const existing = await StrategyModel.findById(preset.id).lean();
+  invariant(!existing?.archivedAt,'This example was archived. Create a replacement from the empty slot.');
   res.json(existing ?? await saveStrategy(preset.id, strategySchema.parse(preset.draft), 0));
 });
 strategyRouter.put('/:id', async (req, res) => {
   const id = z.string().uuid().parse(req.params.id), body = saveStrategySchema.parse(req.body);
   res.json(await saveStrategy(id, body.draft, body.expectedRevision));
+});
+
+strategyRouter.post('/:id/archive',async(req,res)=>{const id=z.string().uuid().parse(req.params.id),body=z.object({expectedRevision:z.number().int().positive()}).strict().parse(req.body);res.json(await archiveStrategy(id,body.expectedRevision));});
+
+strategyRouter.post('/:id/restore', async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({ expectedRevision: z.number().int().positive(), expectedArchivedAt: z.string().datetime() }).strict().parse(req.body);
+  res.json(await restoreStrategy(id, body.expectedRevision, body.expectedArchivedAt));
 });

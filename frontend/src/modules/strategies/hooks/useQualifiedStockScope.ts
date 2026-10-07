@@ -1,10 +1,11 @@
+import type { QualifiedStock } from '../../qualification/types/backend';
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../../services/apiClient';
 
-export interface ScopedStock { _id: string; symbol: string; exchange: string; source: 'scan' | 'manual' }
-export function useQualifiedStockScope(input: { universe: 'current' | 'historical'; includeManual: boolean; from?: string; to?: string }) {
+export interface ScopedStock { _id: string; symbol: string; exchange: string; source: 'scan' | 'manual'; suitability?: QualifiedStock['suitability'] }
+export function useQualifiedStockScope(input: { universe: 'current' | 'historical'; includeManual: boolean; from?: string; to?: string; suitability?: boolean }) {
   const [attempt, setAttempt] = useState(0);
-  const query = new URLSearchParams({ universe: input.universe, includeManual: String(input.includeManual), ...(input.universe === 'historical' ? { from: input.from ?? '', to: input.to ?? '' } : {}) }).toString();
+  const query = new URLSearchParams({ ...(input.suitability?{suitability:'true'}:{}), universe: input.universe, includeManual: String(input.includeManual), ...(input.universe === 'historical' ? { from: input.from ?? '', to: input.to ?? '' } : {}) }).toString();
   const key = `${query}:${attempt}`;
   const [state, setState] = useState<{ key: string; stocks: ScopedStock[]; listCount: number; error?: string }>();
   useEffect(() => {

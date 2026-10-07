@@ -21,7 +21,7 @@ export async function ensureIntradayHistory(stock: Instrument, from: string, to:
       continue;
     }
     const payload = await request('/charts/intraday', { securityId: stock.securityId, exchangeSegment: `${stock.exchange}_EQ`, instrument: 'EQUITY', interval: '1', oi: false,
-      fromDate: `${window.from} 09:15:00`, toDate: `${window.to} 09:15:00` }, options);
+      fromDate: `${window.from} 09:14:00`, toDate: `${window.to} 09:15:00` }, options);
     const at = new Date().toISOString();
     const rows = parseDhanHistory(payload, stock, '1m', at).filter(row => row.time >= `${window.from}T03:45:00.000Z` && row.time < `${window.to}T03:45:00.000Z`);
     for (let offset = 0; offset < rows.length; offset += 500) await storedCandles.bulkWrite(rows.slice(offset, offset + 500).map(row => ({ updateOne: {

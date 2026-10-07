@@ -8,7 +8,7 @@ export function StrategyHistoryButton({strategy,context,label,history=false}:{st
   const [open,setOpen]=useState(false);
   const current=useBackendStrategies(s=>s.strategies.find(v=>v._id===strategy._id));
   const older=!!current&&current.revision!==strategy.revision;
-  return <><Button size="small" type={history?'default':'link'} icon={<HistoryOutlined aria-hidden/>} onClick={()=>setOpen(true)} aria-label={label??`View rules and changes for revision ${strategy.revision}`}>
+  return <><Button size={history?'middle':'small'} type={history?'default':'link'} icon={<HistoryOutlined aria-hidden/>} onClick={()=>setOpen(true)} aria-label={label??`View rules and changes for revision ${strategy.revision}`}>
     {label??`Revision ${strategy.revision}`}</Button>{!history&&older&&<Tag color="gold">Earlier rules · current {current.revision}</Tag>}
     {open&&<StrategyHistoryDrawer key={strategy._id} strategyId={strategy._id} used={history?undefined:strategy} context={context} onClose={()=>setOpen(false)}/>}
   </>;

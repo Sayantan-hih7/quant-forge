@@ -28,6 +28,8 @@ export function DhanRenewalStatus({ connection, refresh, onSetup, busy }: {
     : needsLogin && connection.autoRenew ? 'Reconnect to resume automatic renewal' : 'Avoid reconnecting every day';
   return <Alert className="mt-5" showIcon type={active && connection.renewalState === 'scheduled' ? 'success' : connection.renewalError || needsLogin && connection.autoRenew ? 'warning' : 'info'} title={title}
     description={<Space orientation="vertical" size={8} style={{ width: '100%' }}>
+      {connection.reconnectState === 'checking' && <span role="status">Checking saved Dhan token and reconnecting...</span>}
+      {connection.reconnectError && <span role="status">{connection.reconnectError}{connection.reconnectAt ? ` Next retry: ${new Date(connection.reconnectAt).toLocaleString()}` : ''}</span>}
       <span>{connection.renewalError ?? (active
         ? 'The backend renews your Dhan Web token 30 minutes before expiry and saves the replacement automatically.'
         : connection.tokenSource === 'oauth'

@@ -4,7 +4,7 @@ import { parseNseAnnouncements, parseRss, plain, headlineId, titleKey } from '..
 import { buildAliasIndex, linkCompanies, resolveNames } from '../src/modules/news/linker.js';
 import { lexiconScore } from '../src/modules/news/lexicon.js';
 import { classifyBatch } from '../src/modules/news/classifier.js';
-import { newsAggregates } from '../src/modules/news/aggregates.js';
+import { newsAggregates, newsQuickSummary } from '../src/modules/news/aggregates.js';
 
 const now = Date.parse('2026-10-01T09:00:00Z');
 const companies = [
@@ -93,4 +93,15 @@ test('aggregates count each story once, skip routine filings and give explicit "
   const roundup = { ...story('r', 1, -0.6), companies: ['A', 'B', 'C'].map(x => ({ isin: x, symbol: x, name: x, confidence: 0.95, method: 'name' as const })).concat(story('r', 1, -0.6).companies) };
   assert.equal(newsAggregates([roundup], isin, now).newsNegative30d, 0, 'a live blog naming many companies is not negative news for each');
   assert.deepEqual(newsAggregates([], isin, now), { newsSentiment7d: null, newsSentiment30d: null, newsCount7d: 0, newsPositive30d: 0, newsNegative30d: 0, newsMood7d: 'No coverage' });
+});
+
+
+test('quick news summary explains only eligible deduplicated company coverage',()=>{
+ const item={_id:'1',titleKey:'profit',kind:'news',title:'Profit rises',url:'https://example.com/story',publisher:'Example',publishedAt:new Date(now-3600000).toISOString(),knownAt:new Date(now-3600000).toISOString(),companies:[{isin:'A',symbol:'A',name:'Company A',confidence:1,method:'name',sentiment:-0.6}],sentiment:{score:0.8,label:'positive',confidence:0.9,method:'ai',eventType:'results',reason:'Mixed results',scoredAt:new Date(now).toISOString()}} as Parameters<typeof newsQuickSummary>[0][number];
+ const future={...item,_id:'future',titleKey:'future',knownAt:new Date(now+1000).toISOString()};
+ const routine={...item,_id:'routine',titleKey:'routine',kind:'filing' as const,companies:[{...item.companies[0],sentiment:0}]};
+ const summary=newsQuickSummary([item,{...item,_id:'duplicate'},future,routine], 'A',now);
+ assert.equal(summary.score,-60);assert.equal(summary.label,'Negative');assert.equal(summary.count,1);assert.equal(summary.stories[0].score,-60);
+ assert.equal(summary.aiCount,1);assert.equal(summary.stories[0].title,'Profit rises');
+ assert.equal(newsQuickSummary([item],'B',now).score,null);
 });

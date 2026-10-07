@@ -52,6 +52,8 @@ function constraint(c: Condition): Constraint | undefined {
     else key=JSON.stringify(['difference',key,right,multiple]);
     value=0;
   } else {
+    if (['open','high','low','close','price','ema','sma','ema5','ema21','sma50','sma200','vwap'].includes(c.left)) domain=[span(0,Infinity)];
+    if (['volume','avgVolume','avgVolume20','tradedValue','marketCap'].includes(c.left)) domain=[span(0,Infinity,true)];
     if (c.left==='rsi'||c.left==='bodyAboveEma'||c.left==='bodyBelowEma') domain=[span(0,100,true,true)];
     if (ruleFields[c.left]?.unit==='flag') domain=[span(0,0,true,true),span(1,1,true,true)];
   }
@@ -150,9 +152,10 @@ export function reviewStrategy(draft: Pick<StrategyDraft, 'entry' | 'exit'> & Pa
     positives.push(rules.exit.enabled===false?'The exit plan explicitly uses protective stops and targets.':'Sell conditions and protective stops/targets are configured separately.');
     if(risk.exitTargets?.length)positives.push(`${risk.exitTargets.length} profit targets divide the original position; the final target closes the remaining shares.`);
     if(!risk.overnight)positives.push('Intraday square-off is enabled; actual fills still require available market data.');
+    if(risk.overnight && ((risk.maxStopPercent??Infinity)<=3 || ['fixed','trailing'].includes(risk.stopMode)&&risk.stopPercent<=3))add({severity:'warning',section:'risk',title:'Tight stop for an overnight strategy',explanation:'A stop within 3% may exit during normal daily price movement, even when the weekly trend remains intact.',recommendation:'Review stop-out frequency, ATR and holding periods. A maximum stop cap skips entries with wider risk; it does not guarantee a long holding period.',locations:[]});
     const first=risk.exitTargets?.[0],fixed=risk.stopMode==='fixed'||risk.stopMode==='trailing';
     const targetPercent=first?(first.basis??'percent')==='percent'?first.profitPercent:fixed&&first.basis==='risk'?(first.value??0)*risk.stopPercent:undefined:fixed?risk.targetR*risk.stopPercent:undefined;
-    const friction=2*(risk.feePercent+risk.slippagePercent);
+    const friction=2*((risk.costModel==='indian-cash'?(risk.overnight?0.12:0.05):risk.feePercent)+risk.slippagePercent);
     if(targetPercent!=null&&targetPercent<=friction)add({severity:'warning',section:'risk',title:'The first target may be consumed by trading costs',explanation:`The first planned gain is ${targetPercent.toFixed(2)}%; configured fees plus slippage total roughly ${friction.toFixed(2)}% across entry and exit.`,recommendation:'Review these assumptions and inspect net P&L in a backtest before choosing a target.',locations:[]});
   }
   if(!issues.some(i=>i.severity==='error'))positives.unshift('No impossible combination was proven by the supported logic checks.');

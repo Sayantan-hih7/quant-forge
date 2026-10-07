@@ -13,11 +13,20 @@ class ReplayObservations(Observations):
         self.end = self.cutoff
         self.frames = {}
         self.series = {}
+        self.frame_ends = {}
 
     def bars(self, frame):
         if frame not in self.frames:
             self.frames[frame] = timeframe(self.daily, self.intraday, frame, self.end)
         return self.frames[frame]
+
+    def completed_count(self, frame):
+        if frame not in self.frame_ends:
+            self.frame_ends[frame] = pd.DatetimeIndex(self.bars(frame).end)
+        return self.frame_ends[frame].searchsorted(self.cutoff, side='right')
+
+    def completed_bars(self, frame):
+        return self.bars(frame).iloc[:self.completed_count(frame)]
 
     def values(self, field, frame, period=None, offset=0, settings=None):
         period, offset = parameters(field, period, offset)
@@ -28,10 +37,10 @@ class ReplayObservations(Observations):
         bars = self.bars(frame)
         if field in REPORT_FIELDS:
             values = self.calculate(field, frame, period, settings).shift(offset)
-            return values.loc[bars.end <= self.cutoff]
+            return values.iloc[:self.completed_count(frame)]
         if key not in self.series:
             self.series[key] = self.calculate(field, frame, period, settings).shift(offset)
-        return self.series[key].loc[bars.end <= self.cutoff] if not bars.empty else self.series[key]
+        return self.series[key].iloc[:self.completed_count(frame)] if not bars.empty else self.series[key]
 
     def atr(self, frame, period):
         bars = self.bars(frame)
@@ -41,14 +50,13 @@ class ReplayObservations(Observations):
         if key not in self.series:
             tr = pd.concat([bars.high-bars.low, (bars.high-bars.close.shift()).abs(), (bars.low-bars.close.shift()).abs()], axis=1).max(axis=1)
             self.series[key] = wilder(tr, period)
-        values = self.series[key].loc[bars.end <= self.cutoff]
+        values = self.series[key].iloc[:self.completed_count(frame)]
         value = float(values.iloc[-1]) if len(values) else math.nan
         return value if math.isfinite(value) and value > 0 else None
 
     def signal_low(self, frame):
         """Freeze a completed candle's low at decision time, never the fill day's low."""
-        bars = self.bars(frame)
-        completed = bars.loc[bars.end <= self.cutoff] if len(bars) else bars
+        completed = self.completed_bars(frame)
         return float(completed.low.iloc[-1]) if len(completed) else None
 
 

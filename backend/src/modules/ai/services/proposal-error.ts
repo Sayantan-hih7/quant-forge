@@ -36,8 +36,9 @@ function describe(issue: ZodIssue) {
 /** Keep failed drafts unapplied, but name the failed control instead of blaming the prompt. */
 export function invalidProposalError(error: ZodError | AppError) {
   const details = error instanceof ZodError ? [...new Set(error.issues.map(describe))].slice(0, 3).join(' ')
+    : error.code === 'AI_RULE_CONSTRAINT' ? error.message
     : error.code === 'AI_MISSING_SETTING' ? 'A requested partial exit or stop adjustment was missing from the generated settings.'
     : error.code === 'AI_CHANGED_SETTING' ? 'The generated settings changed an exit or stop adjustment you asked to keep.'
     : 'A generated rule used an unsupported field, timeframe or comparison.';
-  return new AppError(422, 'AI_INVALID_PROPOSAL', `The assistant's draft failed validation after a correction attempt. ${details} Your draft is unchanged. Retry the request; you do not need to invent extra trade settings.`);
+  return new AppError(422, 'AI_INVALID_PROPOSAL', `The assistant's draft failed validation after a correction attempt. ${details} Your draft is unchanged. Ask me to revise the affected condition using a supported option, or edit that condition in the manual builder. No rules were saved or trades started.`);
 }

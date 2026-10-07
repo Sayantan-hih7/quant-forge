@@ -20,6 +20,7 @@ async function fixture(page: Page) {
   await page.route('**/api/backtests**', route => route.fulfill({ json: route.request().url().includes('/universe') ? { stocks: [], listCount: 0 } : [] }));
   await page.route('**/api/ai/status', route => route.fulfill({ json: { configured: true, provider: 'Gemini', model: 'fixture' } }));
   await page.goto('/strategies?rule=' + id);
+  await page.getByRole('button', { name: 'Edit strategy', exact: true }).click();
   await page.getByRole('navigation', { name: 'Strategy editor steps' }).getByRole('button', { name: '4 Risk' }).click();
   await page.getByRole('button', { name: 'Explain my risk plan', exact: true }).click();
   return { saved: () => saved, writes: () => writes };
@@ -43,9 +44,10 @@ test('scenario questions survive closing and answers produce a risk-only editabl
   await expect(page.getByRole('button', { name: 'Apply risk settings' })).toBeDisabled();
   await page.getByRole('button', { name: 'Back to builder', exact: true }).click();
   await page.getByRole('button', { name: 'Explain my risk plan', exact: true }).click();
-  await page.getByLabel(questions[0].question, { exact: true }).fill('Example only, use a 4% stop');
-  await page.getByLabel(questions[1].question, { exact: true }).fill('50%, then the rest');
-  await page.getByRole('button', { name: 'Continue with my answers' }).click();
+  await page.getByRole('radio', { name: questions[0].options[0], exact: true }).check();
+  await page.getByRole('tab', { name: 'Question 2' }).click();
+  await page.getByRole('radio', { name: questions[1].options[0], exact: true }).check();
+  await page.getByRole('button', { name: 'Proceed' }).click();
   const preview = page.getByRole('region', { name: 'AI suggestion preview' });
   await expect(preview.getByText('₹108.00', { exact: true })).toBeVisible();
   await expect(preview.getByText('₹116.00', { exact: true })).toBeVisible();

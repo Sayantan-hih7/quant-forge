@@ -1,7 +1,8 @@
 // Regular cash sessions only. Special sessions require explicit configuration.
 // NSE capital-market circular CMTR71775 (12 Dec 2025).
 export const CALENDAR_SOURCE = 'https://nsearchives.nseindia.com/content/circulars/CMTR71775.pdf';
-const holidays2026 = ['01-26', '03-03', '03-26', '03-31', '04-03', '04-14', '05-01', '05-28', '06-26', '09-14', '10-02', '10-20', '11-10', '11-24', '12-25'];
+// Additional closure: NSE/CMTR/72260, 12 Jan 2026.
+const holidays2026 = ['01-15', '01-26', '03-03', '03-26', '03-31', '04-03', '04-14', '05-01', '05-28', '06-26', '09-14', '10-02', '10-20', '11-10', '11-24', '12-25'];
 const holidays = new Set(holidays2026.map(day => `2026-${day}`));
 export function marketTime(now = Date.now()) {
   const local = new Date(now + 19_800_000), date = local.toISOString().slice(0, 10);
@@ -10,6 +11,12 @@ export function marketTime(now = Date.now()) {
   const knownYear = local.getUTCFullYear() === 2026 || (process.env.MARKET_CALENDAR_YEARS ?? '').split(',').includes(String(local.getUTCFullYear()));
   const tradingDay = knownYear && local.getUTCDay() > 0 && local.getUTCDay() < 6 && !holidays.has(date) && !configured.includes(date);
   return { date, minute, knownYear, tradingDay, open: tradingDay && minute >= 555 && minute < 930, feedWindow: tradingDay && minute >= 540 && minute < 960 };
+}
+export function calendarExpiryWarning(now=Date.now()) {
+ const year=Number(marketTime(now).date.slice(0,4)),end=Date.parse(`${year+1}-01-01T00:00:00+05:30`);
+ if(!marketTime(now).knownYear)return 'Trading calendar is unverified for this year. Paper trading is blocked.';
+ if(end-now<=31*86400000&&!marketTime(end).knownYear)return 'Trading calendar expires within 31 days. Add verified exchange holidays for next year before paper trading can continue.';
+ return undefined;
 }
 export function nextRegularOpen(after: number) {
   const date = marketTime(after).date;

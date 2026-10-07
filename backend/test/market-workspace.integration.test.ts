@@ -1,3 +1,5 @@
+import { after } from 'node:test';
+import { maintenance } from '../src/shared/redis.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -74,3 +76,5 @@ test('dashboard respects published results and missing marks; closed markets nev
     await mongoose.disconnect(); await jobs.close(); redis.disconnect();
   }
 });
+
+after(async()=>{if(process.env.RUN_DB_TESTS!=='1'){await jobs.waitUntilReady();await maintenance.waitUntilReady();await jobs.close();await maintenance.close();redis.disconnect();}});

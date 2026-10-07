@@ -19,3 +19,14 @@
 .strategy-review-positives .anticon { color:var(--positive); }
 .strategy-review-limits { font-size:11px; margin-bottom:0; }
 @media(max-width:600px) { .strategy-rule-review { padding:14px; } .strategy-review-issue { padding:12px; } }
+
+.strategy-fix-input { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin:16px 0; }
+
+.strategy-fix-modal .ant-modal-body > h3 { font-size:15px; font-weight:600; margin:4px 0 12px; }
+.strategy-fix-modal .ant-modal-body > h4 { font-size:12px; font-weight:600; color:var(--muted); margin:18px 0 6px; }
+.strategy-fix-modal .ant-modal-body > p { margin:12px 0; line-height:1.7; }
+.strategy-fix-modal .condition-row-edit { margin:16px 0; }
+.strategy-fix-modal .ant-modal-body { max-height:70vh; overflow:auto; }
+
+.ai-fix-change { margin:12px 0; padding:12px; border:1px solid var(--border); border-radius:8px; }
+.ai-fix-change p { margin:8px 0 0; line-height:1.6; }

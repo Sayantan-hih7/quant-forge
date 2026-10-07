@@ -39,7 +39,13 @@ export function StrategyRiskFields({ example, onExampleChange, onAskAi }: { exam
     <section className="strategy-risk-section"><h4>Entry price</h4><div className="strategy-form-grid">
       <RhfSelect control={control} name="risk.entryOrderType" label="Buy order" placeholder="Market · next available price" options={[{ value: 'market', label: 'Market · next available price' }, { value: 'limit', label: 'Limit · my maximum buy price' }]} />
       {entryOrderType === 'limit' && <RhfInputNumber control={control} name="risk.entryLimitPrice" label="Maximum entry price (₹)" min={0.01} max={10000000} precision={2} />}
-    </div><p className="muted">After the buy rules match, {entryOrderType === 'limit' ? 'wait for this price or lower until ' + (overnight ? '15:30' : '15:15') + ' IST in the eligible session. Manual buys also respect the limit, with a 60-second expiry.' : 'fill at the next eligible price. The example calculator below does not set the buy price.'}</p></section>
+    </div><p className="muted">After the buy rules match, {entryOrderType === 'limit' ? 'wait for this price or lower until the session cutoff. NSE: ' + (overnight ? '15:15' : '15:10') + '; BSE: ' + (overnight ? '15:30' : '15:15') + ' IST. An earlier configured entry cutoff takes priority.' : 'fill at the next eligible price. The example calculator below does not set the buy price.'}</p></section>
+    <section className="strategy-risk-section" aria-label="Entry safeguards"><h4>Entry safeguards</h4><p className="muted">Reduce repeated entries after exits. These controls block new buys; stops and sells remain active. Zero means no cooldown or daily entry count limit.</p><div className="strategy-form-grid">
+      <RhfInputNumber control={control} emptyAsUndefined name="risk.reentryCooldownMinutes" label="Wait after full exit (minutes)" min={0} max={10080} precision={0} />
+      <RhfInputNumber control={control} emptyAsUndefined name="risk.maxEntriesPerStockPerDay" label="Max buys per stock per day" min={0} max={100} precision={0} />
+      <RhfInputNumber control={control} emptyAsUndefined name="risk.dailyLossLimitPercent" label="Daily loss limit (%)" min={0.1} max={10} step={0.1} />
+      <RhfInputNumber control={control} emptyAsUndefined name="risk.maxEntryDeviationPercent" label="Max entry deviation from signal (%)" min={0.1} max={10} step={0.1} />
+    </div><p className="muted">Daily loss blocks new entries until the next trading day; it does not forcibly close holdings. Paper checks live equity; backtests check available candle opens and closes, so intrabar timing can differ. Blank loss/deviation fields preserve legacy backtests; paper defaults to 2%. Save explicit values to test the same limits. Paper session overrides remain possible.</p></section>
     <FixedPriceNotice risk={risk} />
     <section className="strategy-risk-section" aria-label="Initial stop-loss"><h4>Initial stop-loss</h4><p className="muted">Protection starts when your buy fills, even if no profit target is reached. Entry minus this initial stop defines 1R.</p><div className="strategy-form-grid">
       <Controller control={control} name="risk.stopMode" render={({ field, fieldState }) => <Form.Item label="Initial stop method" htmlFor={field.name} validateStatus={fieldState.error ? 'error' : undefined} help={fieldState.error?.message}>
@@ -56,14 +62,17 @@ export function StrategyRiskFields({ example, onExampleChange, onAskAi }: { exam
       {mode === 'candleLow' && <p className="risk-inline-explanation">Uses the low of the latest completed {frameLabel} candle when the buy signal is confirmed. This low is frozen before entry. If the fill is at or below it, the buy is rejected. Manual buys use the latest completed candle when the order is submitted.</p>}
       {mode === 'ATR' && <p className="risk-inline-explanation">Uses {risk.atrPeriod} completed {frameLabel} candles. Initial stop distance = ATR × {risk.atrMultiplier}. ATR sets the starting distance; moving the stop later is optional below.</p>}
       {mode === 'trailing' && <p className="risk-inline-explanation">Trailing from entry uses this percentage distance. To choose a different initial method, turn off trailing or choose delayed trailing in “Move or trail the stop-loss” below.</p>}
-      <Tag>{overnight ? 'Overnight holding allowed' : 'Intraday: square off at 15:15 IST'}</Tag><span className="muted">Set by the trading horizon in Setup.</span>
+      <Tag>{overnight ? 'Overnight holding allowed' : 'Intraday: NSE square-off 15:10 / BSE 15:15 IST'}</Tag><span className="muted">Set by the trading horizon in Setup.</span>
     </section>
     <ProfitTargetFields />
     <StopManagementFields />
     <RiskExampleCalculator />
     <Collapse ghost className="strategy-risk-section" items={[{ key: 'costs', label: 'Estimated trading costs', children: <div className="strategy-form-grid">
       <RhfInputNumber control={control} name="risk.slippagePercent" label="Slippage per side (%)" min={0} max={2} step={0.01} />
-      <RhfInputNumber control={control} name="risk.feePercent" label="Estimated fees per side (%)" min={0} max={2} step={0.01} />
+      {!overnight&&<RhfSelect control={control} name="risk.entryCutoffMinute" label="Stop new intraday buys at (IST)" options={[{value:870,label:'14:30'},{value:885,label:'14:45'},{value:900,label:'15:00 (recommended)'},{value:915,label:'15:15 (NSE safety cap: 15:10)'}]}/>}
+      {risk.costModel!=='indian-cash'&&<p>Using flat estimated fees. <Button size="small" onClick={()=>setValue('risk.costModel','indian-cash',{shouldDirty:true,shouldValidate:true})}>Use Indian cash charges</Button> Save as a new revision and rerun your backtest to compare costs.</p>}
+      <RhfSelect control={control} name="risk.costModel" label="Cost model" options={[{value:"flat",label:"Flat fee percentage"},{value:"indian-cash",label:"Indian cash charges - Dhan-style estimate"}]}/>
+      {risk.costModel==='indian-cash'?<><RhfInputNumber control={control} name="risk.exchangeFeePercent" label="Exchange charges (%) - blank uses NSE 0.0030699" min={0} max={1} step={0.0001}/><p>Includes brokerage, STT, stamp duty, SEBI, IPFT, GST and INR 14.75 per delivery sell instruction. Overnight strategies use delivery rates. Rates dated 5 Oct 2026; BSE groups vary (standard 0.00375%). This is an estimate, not a contract note; historical tax changes and same-day delivery netting are not modelled.</p></>:<RhfInputNumber control={control} name="risk.feePercent" label="Estimated fees per side (%)" min={0} max={2} step={0.01} />}
     </div> }]} /><p className="strategy-footnote">Sell rules, the active stop or session close can exit all remaining shares before a target is reached. Protective exits run automatically in both paper execution modes.</p>
   </div></RiskExampleContext.Provider>;
 }

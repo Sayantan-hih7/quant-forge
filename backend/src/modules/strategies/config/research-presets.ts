@@ -6,7 +6,7 @@ const c = (left: string, frame: string, operator: string, right: string | number
   right: typeof right === 'string' ? right : 'ema20', rightFrame: frame, value: typeof right === 'number' ? right : 0, multiplier: 1, tolerance,
 });
 const risk: Risk = { initialCapital: 100000, riskPercent: 1, maxPositions: 4, timeframe: '1d', stopMode: 'ATR', stopPercent: 4,
-  atrPeriod: 14, atrMultiplier: 2, targetR: 2, overnight: true, slippagePercent: 0.05, feePercent: 0.1 };
+  costModel:'indian-cash', entryCutoffMinute:900, atrPeriod: 14, atrMultiplier: 2, targetR: 2, overnight: true, slippagePercent: 0.05, feePercent: 0.1 };
 function rule(side: 'BUY' | 'SELL', horizon: string, cadence: string, description: string, conditions: Condition[], logic = 'AND') {
   return { name: side === 'BUY' ? 'Buy entry' : 'Sell exit', description, tier: 'tactical', horizon, side, cadence, logic: 'AND', groups: [{ logic, conditions }] };
 }

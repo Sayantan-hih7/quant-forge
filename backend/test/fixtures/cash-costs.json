@@ -1,0 +1,26 @@
+[
+  {
+    "gross": 1000000000,
+    "side": "BUY",
+    "overnight": true,
+    "expected": 1187406
+  },
+  {
+    "gross": 1000000000,
+    "side": "SELL",
+    "overnight": true,
+    "expected": 1038881
+  },
+  {
+    "gross": 1000000000,
+    "side": "BUY",
+    "overnight": false,
+    "expected": 69766
+  },
+  {
+    "gross": 1000000000,
+    "side": "SELL",
+    "overnight": false,
+    "expected": 289766
+  }
+]

@@ -239,3 +239,43 @@ test('fixed-price plans identify shared prices during both backtest and signal-r
   await page.locator('.stock-scope-actions').getByRole('button', { name: 'Clear', exact: true }).click();
   await expect(page.getByText('The same fixed prices will apply to all 2 selected stocks', { exact: true })).toHaveCount(0);
 });
+
+test('Indian cash cost model saves and survives reopening the strategy',async({page})=>{
+ const state=await fixture(page);
+ await page.goto('/strategies?rule='+id);await riskStep(page).click();
+ await page.getByText('Estimated trading costs',{exact:true}).click();
+ await select(page,'Cost model (blank means flat estimate)','Indian cash charges - Dhan-style estimate');
+ await expect(page.getByText('Includes brokerage, STT, stamp duty',{exact:false})).toBeVisible();
+ await page.getByLabel('Exchange charges (%) - blank uses NSE 0.0030699',{exact:true}).fill('0.00375');
+ await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await expect.poll(()=>state.saved().risk.costModel).toBe('indian-cash');
+ expect(state.saved().risk.exchangeFeePercent).toBe(0.00375);
+ await page.reload();await riskStep(page).click();await page.getByText('Estimated trading costs',{exact:true}).click();
+ await expect(page.getByLabel('Exchange charges (%) - blank uses NSE 0.0030699',{exact:true})).toHaveValue('0.00375');
+});
+
+test('new plans default to Indian costs and an editable earlier intraday cutoff',()=>{
+ const plan=sampleTradingPlan('intraday');
+ expect(plan.risk.costModel).toBe('indian-cash');
+ expect(plan.risk.entryCutoffMinute).toBe(900);
+});
+
+test('entry safeguards survive save and reload, and optional fields can be cleared',async({page})=>{
+ const state=await fixture(page);
+ await page.goto('/strategies?rule='+id+'&mode=edit');await riskStep(page).click();
+ await page.getByLabel('Wait after full exit (minutes)',{exact:true}).fill('30');
+ await page.getByLabel('Max buys per stock per day',{exact:true}).fill('2');
+ await page.getByLabel('Daily loss limit (%)',{exact:true}).fill('1');
+ await page.getByLabel('Max entry deviation from signal (%)',{exact:true}).fill('0.5');
+ await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await expect.poll(state.writes).toBe(1);
+ expect(state.saved().risk).toMatchObject({reentryCooldownMinutes:30,maxEntriesPerStockPerDay:2,dailyLossLimitPercent:1,maxEntryDeviationPercent:0.5});
+ await page.goto('/strategies?rule='+id+'&mode=edit');await riskStep(page).click();
+ await expect(page.getByLabel('Wait after full exit (minutes)',{exact:true})).toHaveValue('30');
+ await page.getByLabel('Wait after full exit (minutes)',{exact:true}).fill('');
+ await page.getByLabel('Daily loss limit (%)',{exact:true}).fill('');
+ await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await expect.poll(state.writes).toBe(2);
+ expect(state.saved().risk.reentryCooldownMinutes).toBeUndefined();
+ expect(state.saved().risk.dailyLossLimitPercent).toBeUndefined();
+});

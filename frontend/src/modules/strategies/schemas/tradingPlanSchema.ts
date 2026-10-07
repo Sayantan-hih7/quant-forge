@@ -5,7 +5,7 @@ import { validateExitTargets } from './exitTargetsSchema';
 import { validateStopSettings } from './stopSettingsSchema';
 
 export const strategyRiskSchema = backtestSchema.innerType().pick({
-  initialCapital: true, riskPercent: true, maxPositions: true, timeframe: true,
+  reentryCooldownMinutes:true,maxEntriesPerStockPerDay:true,dailyLossLimitPercent:true,maxEntryDeviationPercent:true,entryCutoffMinute:true,costModel:true,exchangeFeePercent:true,initialCapital: true, riskPercent: true, maxPositions: true, timeframe: true,
   stopMode: true, stopPercent: true, atrPeriod: true, atrMultiplier: true,
   maxStopPercent: true,
   targetR: true, overnight: true, slippagePercent: true, feePercent: true,

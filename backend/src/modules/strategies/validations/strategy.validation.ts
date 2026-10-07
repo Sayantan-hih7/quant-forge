@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { exitTargetSchema, validateExitTargets } from './exit-targets.js';
 import { stopManagementSchema, validateStopSettings } from './stop-settings.js';
 export const riskSchema = z.object({
+  reentryCooldownMinutes:z.number().int().min(0).max(10080).optional(),
+  maxEntriesPerStockPerDay:z.number().int().min(0).max(100).optional(),
+  dailyLossLimitPercent:z.number().min(0.1).max(10).optional(),
+  maxEntryDeviationPercent:z.number().min(0.1).max(10).optional(),
+  entryCutoffMinute:z.number().int().min(555).max(915).optional(),
+  costModel:z.enum(['flat','indian-cash']).optional(),exchangeFeePercent:z.number().finite().min(0).max(1).optional(),
   initialCapital: z.number().min(1000).max(100000000), riskPercent: z.number().min(0.1).max(5),
   maxPositions: z.number().int().min(1).max(20), timeframe: z.enum(['1m', '5m', '15m', '1h', '1d']),
   stopMode: z.enum(['fixed', 'ATR', 'trailing', 'amount', 'price', 'candleLow']), stopPercent: z.number().min(0.1).max(25),

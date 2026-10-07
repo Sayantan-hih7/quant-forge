@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, App, Button, Drawer, Form, Space, Tag } from 'antd';
+import { Alert, App, Button, Drawer, Form, Select, Space, Tag } from 'antd';
 import { ArrowLeftOutlined, ArrowRightOutlined, RobotOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -35,9 +35,18 @@ export function StrategyBuilder({ id, saved, onSave, onBacktest, onDirtyChange }
   const conversation = useStrategyChatStore(s => s.conversations[chatKey]);
   const [example, setExample] = useState<AiExample>({ entry: null, atr: null });
   const [baseline, setBaseline] = useState(() => saved ? definition(saved) : undefined);
-  const [baseRevision, setBaseRevision] = useState(() => stored?.baseRevision ?? (stored?.draft && planFingerprint(stored.draft) !== planFingerprint(baseline) ? 0 : saved?.revision ?? 0));
+  const [initial] = useState(() => {
+    const revision = stored?.baseRevision ?? (stored?.draft && planFingerprint(stored.draft) !== planFingerprint(baseline) ? 0 : saved?.revision ?? 0);
+    const stale = !!saved && revision !== saved.revision;
+    const recovered = [...(stored?.recoveredDrafts ?? [])];
+    if (stale && stored?.draft && planFingerprint(stored.draft) !== planFingerprint(baseline) && !recovered.some(item => item.baseRevision === revision && planFingerprint(item.draft) === planFingerprint(stored.draft))) recovered.push({ draft: stored.draft, baseRevision: revision });
+    return { draft: (stale ? baseline : stored?.draft) ?? baseline ?? blankTradingPlan(), revision: stale ? saved.revision : revision, recovered };
+  });
+  const [baseRevision, setBaseRevision] = useState(initial.revision);
+  const [recoveryOpen, setRecoveryOpen] = useState(false), [recoveryIndex, setRecoveryIndex] = useState(Math.max(0, initial.recovered.length - 1));
+  const recovered = initial.recovered[recoveryIndex];
   const [step, setStep] = useState(0), [assistantOpen, setAssistantOpen] = useState(false), [assistantBusy, setAssistantBusy] = useState(false), [saveError, setSaveError] = useState<string>();
-  const form = useForm<TradingPlanDraft>({ resolver: zodResolver(tradingPlanSchema), mode: 'onBlur', defaultValues: stored?.draft ?? baseline ?? blankTradingPlan() });
+  const form = useForm<TradingPlanDraft>({ resolver: zodResolver(tradingPlanSchema), mode: 'onBlur', defaultValues: initial.draft });
   const draft = useWatch({ control: form.control }) as TradingPlanDraft;
   const review = useStrategyReview(draft);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -49,18 +58,18 @@ export function StrategyBuilder({ id, saved, onSave, onBacktest, onDirtyChange }
     const after = applyRuleReviewFix(before, issue);
     if (!after) { message.info('This suggestion no longer matches your draft.'); return; }
     setSimplification({ before: structuredClone(before), after: JSON.stringify(after) }); form.reset(after);
-    message.success('Simplified your draft. Review and save when ready.');
+    message.success('Applied the change to your draft. Rules are being checked again; save separately when ready.');
   };
   const undoSimplification = () => {
     if (!simplification || JSON.stringify(form.getValues()) !== simplification.after) return;
     form.reset(structuredClone(simplification.before)); setSimplification(undefined);
-    message.info('Restored the conditions from before the simplification.');
+    message.info('Restored your draft from before the suggested change.');
   };
   const reviewProps = { review, draft, disabled: form.formState.isSubmitting, onEdit: editReview, onApply: applySimplification,
     onUndo: undoSimplification, canUndo: simplification?.after === JSON.stringify(draft) };
   const changed = planFingerprint(draft) !== planFingerprint(baseline), conflict = !!saved && saved.revision !== baseRevision;
   useEffect(() => { onDirtyChange(changed); }, [changed, onDirtyChange]);
-  useEffect(() => { const old = useStrategyChatStore.getState().conversations[key]; if (planFingerprint(old?.draft) !== planFingerprint(draft) || old?.baseRevision !== baseRevision) update(key, { draft, baseRevision }); }, [draft, baseRevision, key, update]);
+  useEffect(() => { const old = useStrategyChatStore.getState().conversations[key]; if (planFingerprint(old?.draft) !== planFingerprint(draft) || old?.baseRevision !== baseRevision) update(key, { draft, baseRevision, recoveredDrafts: initial.recovered }); }, [draft, baseRevision, key, update, initial.recovered]);
   const parsedProposal = tradingPlanSchema.safeParse(conversation?.proposal), parsedRisk = strategyRiskSchema.safeParse(conversation?.proposal?.risk);
   const proposal = assistantFocus === 'risk' ? parsedRisk.success ? { ...draft, risk: parsedRisk.data } : undefined : parsedProposal.success ? parsedProposal.data : undefined;
   const suggestionMeta = conversation?.suggestionMeta;
@@ -95,15 +104,20 @@ export function StrategyBuilder({ id, saved, onSave, onBacktest, onDirtyChange }
   const frame: Timeframe = draft.entry.cadence === 'daily' ? '1d' : draft.entry.cadence;
   const condition = { left: 'close' as const, leftFrame: frame, operator: 'gt' as const, rightType: 'indicator' as const, right: 'ema20' as const, rightFrame: frame, value: 0, multiplier: 1, tolerance: 2 };
   return <section className="strategy-builder-workflow" aria-label="Trading rule builder">
-    <header className="strategy-workflow-header"><div><span className="strategy-eyebrow">{saved ? 'EDIT STRATEGY' : 'NEW STRATEGY'}</span><h2>{draft.name || 'Build your strategy'}</h2><p>{changed ? 'Draft kept on this device. Save to make these rules available for testing.' : 'Saved buy rules, sell rules and risk settings are ready to test.'}</p></div><Space wrap><Tag color={changed ? 'gold' : 'green'}>{changed ? 'Unsaved draft' : 'Saved'}</Tag><Button disabled={form.formState.isSubmitting} icon={<RobotOutlined aria-hidden />} onClick={() => openAssistant()}>AI assistant</Button></Space></header>
+    <header className="strategy-workflow-header"><div><span className="strategy-eyebrow">{saved ? 'EDIT STRATEGY' : 'NEW STRATEGY'}</span><h2>{draft.name || 'Build your strategy'}</h2><p>{changed ? 'Draft kept on this device. Save to make these rules available for testing.' : 'Saved buy rules, sell rules and risk settings are ready to test.'}</p></div><Space wrap><Tag color={changed ? 'gold' : 'green'}>{changed ? 'Unsaved draft' : `Saved revision ${baseRevision}`}</Tag>{!!initial.recovered.length && <Button onClick={() => setRecoveryOpen(true)}>Older local drafts ({initial.recovered.length})</Button>}<Button disabled={form.formState.isSubmitting} icon={<RobotOutlined aria-hidden />} onClick={() => openAssistant()}>AI assistant</Button></Space></header>
     {conflict && <Alert type="warning" showIcon className="mb-5" title="A newer saved strategy exists" description="Your local draft is based on an older revision. It will not overwrite the newer rules. Reload the saved strategy to continue editing it." action={<Button onClick={restore}>Reload saved strategy</Button>} />}
+    <Drawer title="Older local drafts" open={recoveryOpen} onClose={() => setRecoveryOpen(false)} size={640}>
+      <p>The editor opened the latest saved strategy. These older drafts were kept on this device for recovery.</p>
+      <Select aria-label="Choose older draft" style={{width:'100%',marginBottom:16}} value={recoveryIndex} onChange={setRecoveryIndex} options={initial.recovered.map((item,index)=>({value:index,label:`${item.draft.name} - based on ${item.baseRevision ? `revision ${item.baseRevision}` : 'an unknown revision'}`}))}/>
+      {recovered && <><StrategyDraftPreview draft={recovered.draft} changed saved={false}/><Alert type="info" showIcon title="Recovery does not save or start trading" description="Using this draft replaces the editor contents. Review all rules before saving it as a new revision."/><Button style={{marginTop:16}} disabled={changed || conflict || form.formState.isSubmitting || !!saved && recovered.draft.entry.horizon !== saved.entry.horizon} onClick={()=>{form.reset(structuredClone(recovered.draft));setSimplification(undefined);setSaveError(undefined);setRecoveryOpen(false);}}>Use as unsaved draft</Button>{changed && <p>Save or discard your current edits before recovering another draft.</p>}</>}
+    </Drawer>
     {saveError && <Alert type="error" showIcon className="mb-5" title="Strategy was not saved" description={saveError} />}
     <nav className="strategy-builder-steps" aria-label="Strategy editor steps">{steps.map((label, index) => <button key={label} type="button" disabled={form.formState.isSubmitting} aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}><span>{index + 1}</span>{label}</button>)}</nav>
     {step !== 4 && <StrategyRuleReview {...reviewProps} compact onOpen={() => setReviewOpen(true)} />}
     <FormProvider {...form}><Form layout="vertical" disabled={form.formState.isSubmitting} requiredMark={false} onFinish={() => { if (step === 4) void form.handleSubmit(save, invalid)(); else void next(); }}>
       <fieldset disabled={form.formState.isSubmitting} className="strategy-form-fields">
       <div className="strategy-step-content">
-        {step === 0 && <><div className="strategy-builder-intro"><h3>Start with the basics</h3><p>Name your strategy and decide how often both sides should be checked. Each condition can use its own timeframe.</p></div><div className="strategy-setup-grid"><RhfInput control={form.control} name="name" label="Strategy name" placeholder="e.g. Daily trend pullback" maxLength={50} /><RhfSelect control={form.control} name="entry.horizon" label="Trading horizon" onValueChange={changeHorizon} options={Object.entries(horizonLabels).map(([value, label]) => ({ value, label }))} /><RhfSelect control={form.control} name="entry.cadence" label="Check both rules on candle close" onValueChange={value => { form.setValue('exit.cadence', value, { shouldDirty: true }); form.setValue('risk.timeframe', value === 'daily' ? '1d' : value, { shouldDirty: true }); }} options={[{ value: '1m', label: 'Every 1 minute' }, { value: '5m', label: 'Every 5 minutes' }, { value: '15m', label: 'Every 15 minutes' }, { value: 'daily', label: 'Daily at market close' }].filter(option => draft.entry.horizon !== 'intraday' || option.value !== 'daily')} /></div><div className="strategy-context-note"><strong>Starts with your monthly qualified stocks</strong><p>Choose which of those stocks to include when running a backtest or monitoring signals. Buy rules open a long position; sell rules close held shares.</p></div></>}
+        {step === 0 && <><div className="strategy-builder-intro"><h3>Start with the basics</h3><p>Name your strategy and decide how often both sides should be checked. Each condition can use its own timeframe.</p></div><div className="strategy-setup-grid"><RhfInput control={form.control} name="name" label="Strategy name" placeholder="e.g. Daily trend pullback" maxLength={50} /><RhfSelect control={form.control} name="entry.horizon" label="Trading horizon" disabled={!!saved} onValueChange={changeHorizon} options={Object.entries(horizonLabels).map(([value, label]) => ({ value, label }))} /><RhfSelect control={form.control} name="entry.cadence" label="Check both rules on candle close" onValueChange={value => { form.setValue('exit.cadence', value, { shouldDirty: true }); form.setValue('risk.timeframe', value === 'daily' ? '1d' : value, { shouldDirty: true }); }} options={[{ value: '1m', label: 'Every 1 minute' }, { value: '5m', label: 'Every 5 minutes' }, { value: '15m', label: 'Every 15 minutes' }, { value: 'daily', label: 'Daily at market close' }].filter(option => draft.entry.horizon !== 'intraday' || option.value !== 'daily')} /></div><div className="strategy-context-note"><strong>Starts with your monthly qualified stocks</strong><p>Choose which of those stocks to include when running a backtest or monitoring signals. Buy rules open a long position; sell rules close held shares.</p></div></>}
         {(step === 1 || step === 2) && <div key={step} aria-label={step === 1 ? 'Buy rule editor' : 'Sell rule editor'}><div className="strategy-builder-intro"><Tag color={step === 1 ? 'green' : 'red'}>{step === 1 ? 'BUY · ENTRY' : 'SELL · EXIT'}</Tag><h3>{step === 1 ? 'When should this strategy buy?' : 'When should this strategy sell?'}</h3><p>{step === 1 ? 'These conditions apply to a selected qualified stock when you do not already hold it.' : 'These conditions close held shares. Protective stops and targets can also trigger an exit.'}</p></div>{step === 2 && <SellRuleMode />}{(step === 1 || draft.exit.enabled !== false) && <ConditionGroupsEditor tier="tactical" prefix={step === 1 ? 'entry.' : 'exit.'} initialCondition={{ ...condition, operator: step === 1 ? 'gt' : 'lt' }} />}<p className="muted">{step === 1 && 'Each crossover event can trigger one entry attempt per stock in a session. State conditions such as EMA 5 above EMA 21 may match again; manual buys remain available.'}</p></div>}
         {step === 3 && <StrategyRiskFields example={example} onExampleChange={setExample} onAskAi={() => openAssistant('risk')} />}
         {step === 4 && <><StrategyRuleReview {...reviewProps} /><StrategyDraftPreview draft={draft} changed={changed} saved={!!saved} /><p className="strategy-context-note">Saving makes this definition available to Backtests and Signal Runner. Existing monitoring sessions keep the rules they started with.</p></>}

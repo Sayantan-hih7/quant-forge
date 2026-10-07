@@ -50,7 +50,9 @@ async function setup(page: Page, limited = false) {
     return route.fulfill({json:path.endsWith('/replay')?view:path.endsWith('/chart')?{instrumentId:'NSE:1',timeframe:'1d',bars:view.frames['1d'],source:'Stored backtest history',refreshedAt:view.preparedAt}:path.endsWith('/universe')?{stocks:[],listCount:0}:path.endsWith(run._id)?run:[run]});
   });
   await page.goto(`/strategies?tab=backtests&rule=${run.strategy._id}`);
+  await page.getByRole('tab',{name:/Run history/}).click();
   await page.getByRole('button',{name:'View report',exact:true}).click();
+  await page.getByRole('tab',{name:/Stocks \(/}).click();
   await page.getByRole('button',{name:'View ALPHA chart'}).click();
   await page.getByRole('button',{name:'Replay trade',exact:true}).click();
   return page.getByRole('region',{name:'Trade replay',exact:true});
@@ -87,6 +89,7 @@ test('playback explains signals, hides future outcomes, steps exits and restores
   await expect.poll(()=>page.getByRole('dialog').last().evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
   await page.screenshot({path:'.tools/backtest-replay-mobile.png',fullPage:true});
   await page.getByRole('button',{name:'Close replay',exact:true}).click();
+  await page.getByRole('dialog').last().getByText('Trade history', { exact:true }).click();
   await expect(page.getByRole('region',{name:'Backtest trade history'})).toBeVisible();expect(errors).toEqual([]);expect(writes).toEqual([]);
 });
 

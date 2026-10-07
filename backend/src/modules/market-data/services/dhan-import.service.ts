@@ -39,7 +39,7 @@ export async function syncHistory(ids: string[], interval: '1d' | '1m', from: st
         const data = await dhanRequest(interval === '1d' ? '/charts/historical' : '/charts/intraday', {
           securityId: stock.securityId, exchangeSegment: `${stock.exchange}_EQ`, instrument: 'EQUITY',
           oi: false, ...(interval === '1m' ? { interval: '1' } : { expiryCode: 0 }),
-          fromDate: interval === '1d' ? window.from : `${window.from} 09:15:00`, toDate: interval === '1d' ? window.to : `${window.to} 09:15:00`,
+          fromDate: interval === '1d' ? window.from : `${window.from} 09:14:00`, toDate: interval === '1d' ? window.to : `${window.to} 09:15:00`,
         });
         const rows = parseDhanHistory(data, stock, interval, new Date().toISOString());
         for (let i = 0; i < rows.length; i += 500) await storedCandles.bulkWrite(rows.slice(i, i + 500).map(row => ({ updateOne: {

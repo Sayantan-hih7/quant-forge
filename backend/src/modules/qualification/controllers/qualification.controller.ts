@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import * as service from '../services/qualification.service.js';
 import { addManualStock, removeManualStocks, qualifiedStocks, qualificationMembership } from '../services/universe.service.js';
-import { saveMonthlyRuleSchema, runIdSchema, resultQuerySchema, publishSchema, manualStockSchema } from '../validations/qualification.validation.js';
+import { saveMonthlyRuleSchema, startQualificationSchema, runIdSchema, resultQuerySchema, publishSchema, manualStockSchema } from '../validations/qualification.validation.js';
 import { instrumentIdSchema } from '../../market-data/validations/market-data.validation.js';
 
 export async function state(_req: Request, res: Response) { res.json(await service.qualificationState()); }
@@ -11,7 +11,7 @@ export async function saveRule(req: Request, res: Response) {
   const { rule, expectedRevision } = saveMonthlyRuleSchema.parse(req.body);
   res.json(await service.saveMonthlyRule(rule, expectedRevision));
 }
-export async function start(_req: Request, res: Response) { res.status(202).json(await service.startQualification()); }
+export async function start(req: Request, res: Response) { const { expectedRevision } = startQualificationSchema.parse(req.body ?? {}); res.status(202).json(await service.startQualification(expectedRevision)); }
 export async function results(req: Request, res: Response) {
   const { status, page, ...options } = resultQuerySchema.parse(req.query);
   res.json(await service.qualificationResults(runIdSchema.parse(req.params.id), page, status, options));

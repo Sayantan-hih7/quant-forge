@@ -106,3 +106,29 @@ test('published backend stocks retain NSE and BSE index previews and focused nav
   await bse.click();
   await expect(page).toHaveURL(/market-data\/indices\?exchange=BSE.*index=bse%3Abse-sensex/);
 });
+
+
+test('qualified exchange view defaults to NSE and remembers an explicit BSE choice',async({page})=>{
+ await page.route(url=>url.pathname.startsWith('/api/'),route=>route.fulfill({json:route.request().url().endsWith('/session')?{authenticated:true,mode:'local'}:{}}));
+ await page.route('**/api/qualification',route=>route.fulfill({json:{month:'2026-10',rule:{rule:initialMonthlyRule,fingerprint:'test',revision:1},runs:[],universe:{month:'2026-10',members:[],revision:1},canRun:false}}));
+ await page.route('**/api/qualification/universe',route=>route.fulfill({json:['NSE','BSE'].map(exchange=>({instrumentId:exchange+':1',isin:exchange,source:'scan',addedAt:'2026-10-01',metrics:{},instrument:{symbol:exchange+'STOCK',name:exchange+' Company',exchange}}))}));
+ await page.route('**/api/market-data/capabilities',route=>route.fulfill({json:{monthlyFields:[],technical:[],snapshotFields:[],choices:{index:[],sector:[]}}}));
+ await page.route('**/api/watchlists',route=>route.fulfill({json:{lists:[]}}));
+ await page.route('**/api/qualification/membership',route=>route.fulfill({json:{members:[],published:true}}));
+ await page.route('**/api/stocks/quotes?**',route=>route.fulfill({json:{quotes:[]}}));
+ await page.route('**/api/news/summaries?**',route=>route.fulfill({json:{items:{'NSE:1':{score:60,label:'Positive',count:1,aiCount:1,stories:[{id:'headline',title:'Company wins order',url:'https://example.com/story',publisher:'Test source',publishedAt:new Date().toISOString(),score:60,reason:'New contract supports revenue',method:'ai'}]},'BSE:1':{score:null,label:'No coverage',count:0,aiCount:0,stories:[]}}}}));
+ await page.goto('/qualification');
+ await expect(page.getByRole('button',{name:'View NSESTOCK details',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'View BSESTOCK details',exact:true})).toHaveCount(0);
+ await expect(page.getByText('Positive +60',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Explain news sentiment',exact:true}).hover();
+ await expect(page.getByText('New contract supports revenue',{exact:true})).toBeVisible();
+ await expect(page.getByRole('link',{name:'Company wins order'})).toHaveAttribute('href','https://example.com/story');
+ await page.getByRole('combobox',{name:'Qualified stock exchange',exact:true}).click();
+ await page.getByText('BSE only',{exact:true}).click();
+ await expect(page.getByRole('button',{name:'View BSESTOCK details',exact:true})).toBeVisible();
+ await expect(page.getByText('No recent news',{exact:true})).toBeVisible();
+ await page.reload();
+ await expect(page.getByRole('button',{name:'View BSESTOCK details',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'View NSESTOCK details',exact:true})).toHaveCount(0);
+});

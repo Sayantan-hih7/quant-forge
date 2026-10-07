@@ -1,3 +1,5 @@
+import { after } from 'node:test';
+import { maintenance } from '../src/shared/redis.js';
 import {test,mock} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -33,7 +35,12 @@ test('history accounting, price edits, direct exits and clock-based square-off k
   // No shared feed keys or real workspace orders are changed by this test.
   mock.method(redis,'exists',async()=>1);mock.method(redis,'publish',async()=>0);
   await MonthlyUniverseModel.create({_id:currentMonth(),month:currentMonth(),members:[{instrumentId:'NSE:1',isin:'TEST',source:'scan',addedAt:stamp(-100)}]});
-  const id=await session(),buy=await order(id,'BUY',11,0);await fill(buy._id,100,1);
+  const id=await session(),buy=await order(id,'BUY',11,0);
+  await fillPaperOrder(buy._id,{...quote(100,1),at:'not-a-date'},base+1000);
+  assert.equal(await held(id),null,'Invalid quote timestamps must never fill an order');
+  await fillPaperOrder(buy._id,{...quote(100,1),at:stamp(0).replace('Z','+00:00')},base+1000);
+  assert.equal(await held(id),null,'Equivalent timestamps cannot count as a subsequent tick');
+  await fill(buy._id,100,1);
   const sell=await order(id,'SELL',3,2);await fill(sell._id,110,3);
   const first=await PaperOrderModel.findById(sell._id).lean();
   assert.equal(first?.realizedPnlPaise,2937);assert.equal(first?.entryFeePaise,30);assert.equal(first?.allocatedCostPaise,30030);
@@ -46,6 +53,13 @@ test('history accounting, price edits, direct exits and clock-based square-off k
   history=await paperOrderHistory({sessionId:id,exitsOnly:true});assert.equal(history.summary.realizedPnlPaise,-5215);
   assert.equal((await PaperSessionModel.findById(id))!.cashPaise-10000000,history.summary.realizedPnlPaise);
   assert.equal(history.summary.missing,0);
+
+  const roundingSession=await session({...risk,feePercent:0.005});
+  const roundingBuy=await order(roundingSession,'BUY',1,0);await fill(roundingBuy._id,100,1);
+  const roundingSell=await order(roundingSession,'SELL',1,2);await fill(roundingSell._id,100,3);
+  assert.equal((await PaperOrderModel.findById(roundingBuy._id))?.feePaise,1);
+  assert.equal((await PaperOrderModel.findById(roundingSell._id))?.feePaise,1);
+  assert.equal((await PaperSessionModel.findById(roundingSession))?.cashPaise,9999998,'Half-paise fees match the historical engine');
 
   const archived=await session();
   for(let i=0;i<21;i++){
@@ -122,3 +136,5 @@ test('history accounting, price edits, direct exits and clock-based square-off k
   await mongoose.disconnect();await jobs.waitUntilReady();await jobs.close();if(redis.status!=='end')await redis.quit();
  }
 });
+
+after(async()=>{if(process.env.RUN_DB_TESTS!=='1'){await jobs.waitUntilReady();await maintenance.waitUntilReady();await jobs.close();await maintenance.close();redis.disconnect();}});

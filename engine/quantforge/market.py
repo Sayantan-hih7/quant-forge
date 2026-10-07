@@ -15,7 +15,7 @@ def candles(rows, cutoff, interval="1d"):
     """Validate before aggregation; duplicates with conflicting values fail closed."""
     if not rows:
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume", "end"])
-    raw = pd.DataFrame(rows)
+    raw = pd.DataFrame(rows, columns=['time', 'open', 'high', 'low', 'close', 'volume']) if isinstance(rows[0], list) else pd.DataFrame(rows)
     df = raw[["open", "high", "low", "close", "volume"]].astype(float)
     if not np.isfinite(df.to_numpy()).all():
         raise ValueError("Non-finite candle value")

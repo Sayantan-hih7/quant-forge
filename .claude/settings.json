@@ -66,7 +66,14 @@
       "Bash(sed -i \"s/const holdingsPaise = marked.reduce\\(\\(sum, p\\) => sum + \\(\\(p.mark as { valuePaise?: number } | undefined\\)?.valuePaise ?? p.costPaise\\), 0\\);/const holdingsPaise = marked.reduce\\(\\(sum, p\\) => sum + \\(p.mark?.valuePaise ?? p.costPaise\\), 0\\);/\" services/manual.service.ts)",
       "Bash(sed -i \"s/  positions?: \\(PaperPosition & { plan?: { overnight: boolean; noTarget?: boolean } }\\)\\\\[\\\\];/  positions?: \\(PaperPosition \\\\& { costPaise: number; plan?: { overnight: boolean; noTarget?: boolean } }\\)[];/\" manual-trading/types.ts)",
       "Bash(timeout 120 node --test dist-test/test/manual-trading.test.js)",
-      "Bash(node -e \"console.log\\(new Date\\(\\).toLocaleString\\('en-IN',{timeZone:'Asia/Kolkata'}\\)\\)\")"
+      "Bash(node -e \"console.log\\(new Date\\(\\).toLocaleString\\('en-IN',{timeZone:'Asia/Kolkata'}\\)\\)\")",
+      "Bash(cd /f/Office/quant-forge/backend && npx tsc -p tsconfig.json --noEmit 2>&1 | head -30; echo \"=== FRONTEND\"; cd ../frontend && npx tsc -b 2>&1 | head -30)",
+      "Bash(git diff *)",
+      "Bash(grep -rn \"manual\\\\.service\\\\|manual-plan\\\\|manual\\\\.validation\\\\|manual-trading\\\\|PaperTrigger\\\\|TradePlan\\\\|triggerPaise\\\\|evaluateManualTriggers\\\\|mode==='manual'\\\\|mode !== 'manual'\\\\|mode!=='manual'\" backend/src backend/test frontend/src frontend/tests --include=*.ts --include=*.tsx | head; echo \"--- refs above \\(none expected\\)\"; cd backend && npx tsc -p tsconfig.json --noEmit 2>&1 | head -10; npx eslint src test 2>&1 | tail -3; echo \"=== FE\"; cd ../frontend && npx tsc -b 2>&1 | head -10; npx eslint src 2>&1 | tail -3; echo done)",
+      "Bash(curl -s -m 5 http://127.0.0.1:4100/health)",
+      "Bash(curl -s -m 5 -o /dev/null -w \"frontend %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s -m 5 http://127.0.0.1:8100/health)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"name='\\\\''node.exe'\\\\'' or name='\\\\''python.exe'\\\\''\" | Where-Object { $_.CommandLine -match '\\\\''worker.ts|paper.ts|feed.ts|dev.ts|server.ts|uvicorn'\\\\'' } | ForEach-Object { $_.CreationDate.ToString\\('\\\\''dd HH:mm'\\\\''\\) + '\\\\''  '\\\\'' + \\($_.CommandLine -replace '\\\\''.*\\(src/\\\\w+\\\\.ts|scripts/dev.ts|uvicorn\\).*'\\\\'','\\\\''$1'\\\\''\\) }')"
     ]
   }
 }

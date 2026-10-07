@@ -71,8 +71,10 @@ async function verifyAndSaveDhanToken(token: string, expiry: string | undefined,
     status: 'connected', dataPlan: String(profile.dataPlan ?? 'unknown'), dataValidity: String(profile.dataValidity ?? ''),
     verifiedAt: new Date().toISOString(), tokenSource, autoRenew, renewalState: autoRenew ? 'scheduled' : 'off',
     ...(autoRenew ? { nextRenewalAt: nextDhanRenewal(expiresAt) } : {}) },
-    $unset: { consentExpiresAt: 1, renewalError: 1, lastRenewedAt: 1, ...(!autoRenew ? { nextRenewalAt: 1 } : {}) } }, { upsert: true });
-  return { connected: true, expiresAt, dataPlan: profile.dataPlan, autoRenew };
+    $unset: { reconnectState: 1, reconnectCheckedAt: 1, reconnectAt: 1, reconnectError: 1, consentExpiresAt: 1, renewalError: 1, lastRenewedAt: 1, ...(!autoRenew ? { nextRenewalAt: 1 } : {}) } }, { upsert: true });
+  const { retryResearchAfterDhanConnect } = await import('../../qualification/services/research-refresh.service.js');
+  const researchRefresh = await retryResearchAfterDhanConnect();
+  return { connected: true, expiresAt, dataPlan: profile.dataPlan, autoRenew, researchRefresh };
 }
 export async function dhanRequest(path: '/data/companyinfo' | '/charts/historical' | '/charts/intraday', data: unknown, options: { maxWaitMs?: number } = {}) {
   const deadline = options.maxWaitMs ? Date.now() + options.maxWaitMs : Infinity;
@@ -107,6 +109,6 @@ export async function disconnectDhan() {
   await withDhanSessionLock(async assertOwnership => {
     await assertOwnership();
     await ConnectionModel.updateOne({ _id: 'dhan' }, { $set: { status: 'disconnected', autoRenew: false, renewalState: 'off' },
-      $unset: { encryptedToken: 1, consentExpiresAt: 1, nextRenewalAt: 1, renewalError: 1 } });
+      $unset: { reconnectState: 1, reconnectCheckedAt: 1, reconnectAt: 1, reconnectError: 1, encryptedToken: 1, consentExpiresAt: 1, nextRenewalAt: 1, renewalError: 1 } });
   });
 }

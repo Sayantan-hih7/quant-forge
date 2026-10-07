@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Collapse, Drawer, Skeleton, Space, Tag } from 'antd';
 import { LeftOutlined, RightOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
+import { StockQuickSwitch } from './StockQuickSwitch';
+import { QuickPaperTrade } from './QuickPaperTrade';
 import { StockMonitoringChart } from './StockMonitoringChart';
 import { StockMarketDepth } from './StockMarketDepth';
 import { StockPerformance } from './StockPerformance';
@@ -18,9 +20,6 @@ import { useRecentStocks } from '../store/recentStocks';
 import { WatchlistButton } from '../../watchlists/components/WatchlistButton';
 import { QualificationButton } from '../../qualification/components/QualificationButton';
 import { useStockActionData } from '../../watchlists/hooks/useStockActions';
-import { TradeActions } from '../../manual-trading/components/TradeActions';
-import { StockTradePanel } from '../../manual-trading/components/StockTradePanel';
-import type { ManualOverview } from '../../manual-trading/types';
 import type { ChartEvent, ChartLevel, StockDetail, StockFact, StockListing, StockListings, StockSelection } from '../types';
 import '../../../styles/stock-details.css';
 
@@ -43,10 +42,6 @@ function StockDetails({ stock, listing, exchangeControl, comparisonNotice, onRel
   const { quotes, status, error, now, liveBars } = useStockQuotes([stock.instrumentId], true, true);
   const quote = quotes[stock.instrumentId], data = detail.data, facts = new Map(data?.facts.map(fact => [fact.field, fact]) ?? []);
   const membership = data?.qualification, indices = facts.get('index')?.value ?? stock.metrics?.index;
-  // Manual paper trading for this stock: account, position, open orders and conditions (refreshed every 3 s).
-  const manual = useStockResource<ManualOverview>(`/paper/manual?instrumentId=${encodeURIComponent(stock.instrumentId)}`, 3000);
-  const [sellRequest, setSellRequest] = useState(0);
-  const symbol = stock.instrument?.symbol ?? data?.instrument.symbol ?? stock.instrumentId;
   const source = membership?.source ?? stock.source;
   useEffect(() => { if (listing) useRecentStocks.getState().record(listing); }, [listing]);
   const qualificationContent=(
@@ -60,20 +55,17 @@ function StockDetails({ stock, listing, exchangeControl, comparisonNotice, onRel
       </>}
     </section>
   );
-  return <div className="stock-detail-content">
-    <div className="stock-exchange-toolbar">{exchangeControl}
+  return <div className="stock-detail-content stock-monitoring-workspace">
+    <div className="stock-exchange-toolbar"><StockQuickSwitch onSelect={onRelated}/>{exchangeControl}
       {listing && <Space size={8} wrap><WatchlistButton stock={listing}/><QualificationButton key={listing._id} stock={listing} onAdded={detail.retry}/></Space>}
     </div>
     {comparisonNotice}
-    <section className="stock-quote-overview" aria-label="Stock quote">
-      <div className="stock-quote-main"><StockPrice quote={quote} connected={isQuoteConnected(quote, status)} now={now} large /><div><StockChange quote={quote} /><span className="stock-change-context">vs previous close</span></div>
-        <TradeActions symbol={symbol} instrumentId={stock.instrumentId} quote={quote} data={manual.data} refresh={manual.retry} sellRequest={sellRequest} /></div>
+    <StockMonitoringChart quickTradeContent={<QuickPaperTrade key={stock.instrumentId} instrumentId={stock.instrumentId} symbol={stock.instrument?.symbol ?? stock.instrumentId} quote={quote} now={now}/>} quoteContent={<section className="stock-quote-overview" aria-label="Stock quote">
+      <div className="stock-quote-main"><StockPrice quote={quote} connected={isQuoteConnected(quote, status)} now={now} large /><div><StockChange quote={quote} /><span className="stock-change-context">vs previous close</span></div></div>
       <p className="stock-quote-timestamp">{quote ? `Last trade · ${stockTime(quote.lastTradeAt)}` : 'Waiting for a stock quote…'} <span>INR · {stock.instrument?.exchange}{quote ? ` · ${stockSource(quote)}` : ''}</span></p>
       <StockFeedStatus status={status} />
       {status.state !== 'streaming' && !status.marketClosed && (error || status.message) && <Alert type="warning" showIcon title={error || status.message} />}
-    </section>
-    <StockMonitoringChart instrumentId={stock.instrumentId} symbol={stock.instrument?.symbol ?? data?.instrument.symbol ?? stock.instrumentId} quote={quote} liveBars={liveBars[stock.instrumentId]} now={now} strategy={strategy} events={events} levels={levels} focusEventId={focusEventId} onSelectEvent={onSelectEvent} tradeContent={tradeContent} qualificationContent={qualificationContent} overviewContent={<>
-    {manual.data?.account && <StockTradePanel data={manual.data} quote={quote} onChanged={manual.retry} onSell={() => setSellRequest(Date.now())} />}
+    </section>} instrumentId={stock.instrumentId} symbol={stock.instrument?.symbol ?? data?.instrument.symbol ?? stock.instrumentId} quote={quote} liveBars={liveBars[stock.instrumentId]} now={now} strategy={strategy} events={events} levels={levels} focusEventId={focusEventId} onSelectEvent={onSelectEvent} tradeContent={tradeContent} qualificationContent={qualificationContent} relatedContent={<RelatedStocks instrumentId={stock.instrumentId} ready={!detail.loading} onSelect={onRelated}/>} overviewContent={<>
     <StockMarketDepth instrumentId={stock.instrumentId} now={now} quote={quote}/>
     <StockPerformance instrumentId={stock.instrumentId} quote={quote} now={now}/>
     <section className="stock-company-section" aria-label="Company details">
@@ -86,8 +78,6 @@ function StockDetails({ stock, listing, exchangeControl, comparisonNotice, onRel
         {Array.isArray(indices) && indices.length > 0 && <div className="stock-detail-indices"><span>Index memberships</span><StockIndexTags indices={indices.map(String)} /></div>}
       </>}
     </section>
-    <RelatedStocks instrumentId={stock.instrumentId} ready={!detail.loading} onSelect={onRelated}/>
-    {qualificationContent}
     </>}/>
   </div>;
 }
@@ -121,7 +111,7 @@ export function StockDetailDrawer({ stock, onClose, onPrevious, onNext, ...conte
       onRelated={next => { setSelection(undefined); setResearch({ origin: stock.instrumentId, stock: { instrumentId: next._id, instrument: next, isin: next.isin } }); }}
       exchangeControl={<StockExchangeSwitch selectedId={viewed.instrumentId} exchange={viewed.instrument?.exchange ?? viewed.instrumentId.split(':')[0]} {...listings}
         onRetry={listings.retry} onSelect={next => setSelection({ origin: selectedStock.instrumentId, listing: next })} />}
-      comparisonNotice={researching ? <div className="stock-exchange-context stock-related-return"><span>Exploring a related company</span><Button size="small" aria-label={`Back to ${stock.instrument?.symbol ?? stock.instrumentId}`} icon={<LeftOutlined/>} onClick={resetResearch}>Back to {stock.instrument?.symbol ?? stock.instrumentId}</Button></div> : comparingTrade && <div className="stock-exchange-context"><Alert type="info" showIcon title={`Comparing ${viewed.instrument?.exchange} prices`}
+      comparisonNotice={researching ? <div className="stock-exchange-context stock-related-return"><span>Exploring another stock</span><Button size="small" aria-label={`Back to ${stock.instrument?.symbol ?? stock.instrumentId}`} icon={<LeftOutlined/>} onClick={resetResearch}>Back to {stock.instrument?.symbol ?? stock.instrumentId}</Button></div> : comparingTrade && <div className="stock-exchange-context"><Alert type="info" showIcon title={`Comparing ${viewed.instrument?.exchange} prices`}
         description={`This paper trade belongs to ${originalExchange}. Its fills, stop-loss and targets are shown on that exchange's chart.`}
         action={<Button size="small" onClick={() => setSelection(undefined)}>Back to {originalExchange} trade</Button>}/></div>}
     />}

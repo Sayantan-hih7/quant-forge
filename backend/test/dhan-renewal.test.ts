@@ -28,33 +28,35 @@ test('Dhan automatic renewal lifecycle with isolated MongoDB and mocked provider
   const name = `quantforge_test_${randomUUID().replaceAll('-', '')}`;
   const uri = new URL(env.MONGODB_URI); uri.pathname = `/${name}`;
   const originalAdapter = axios.defaults.adapter, originalKey = env.SECRET_ENCRYPTION_KEY, originalClient = process.env.DHAN_CLIENT_ID;
-  env.SECRET_ENCRYPTION_KEY = randomBytes(32).toString('hex'); process.env.DHAN_CLIENT_ID = 'fixture-account';
+  env.SECRET_ENCRYPTION_KEY = randomBytes(32).toString('hex'); process.env.DHAN_CLIENT_ID = '1234567890';
   const oldToken = 'eyJmaXh0dXJl.old.signature', newToken = 'eyJmaXh0dXJl.new.signature';
   const calls: string[] = [];
-  let failProfile = false, failRenew = 0;
+  let failProfile = false, rejectProfile = false, failRenew = 0;
   let duringRenew: (() => Promise<void>) | undefined;
   axios.defaults.adapter = async config => {
     calls.push(config.url!);
     const response = { status: 200, statusText: 'OK', headers: {}, config, data: {} as Record<string, unknown> };
     if (config.url === '/RenewToken') {
-      assert.equal(config.method, 'get'); assert.equal(config.headers.get('dhanClientId'), 'fixture-account');
+      assert.equal(config.method, 'get'); assert.equal(config.headers.get('dhanClientId'), '1234567890');
       assert.equal(config.headers.get('access-token'), oldToken);
       if (failRenew) throw new AxiosError('fixture-sensitive-error', 'ERR_BAD_REQUEST', config, undefined, { ...response, status: failRenew });
       if (duringRenew) await duringRenew();
-      response.data = { accessToken: newToken, dhanClientId: 'fixture-account' };
+      response.data = { accessToken: newToken, dhanClientId: 1234567890 };
     } else if (config.url === '/profile') {
+      if (rejectProfile) throw new AxiosError('fixture-sensitive-error', 'ERR_BAD_REQUEST', config, undefined, { ...response, status: 400, data: { errorCode: 'DH-906', errorMessage: 'Invalid Token' } });
       if (failProfile) throw new AxiosError('fixture-sensitive-error', 'ECONNABORTED', config);
-      response.data = { dhanClientId: 'fixture-account', dataPlan: 'Active', tokenValidity: new Date(Date.now() + 24 * 60 * 60_000).toISOString() };
+      response.data = { dhanClientId: '1234567890', dataPlan: 'Active', tokenValidity: new Date(Date.now() + 24 * 60 * 60_000).toISOString() };
     } else throw new Error('Unexpected provider request');
     return response;
   };
   const { ConnectionModel } = await import('../src/modules/connections/models/connection.model.js');
   const { encrypt, decrypt } = await import('../src/shared/secrets.js');
   const { renewDhanConnectionIfDue, setDhanAutoRenew } = await import('../src/modules/connections/services/dhan-renewal.service.js');
+  const { reconnectSavedDhan } = await import('../src/modules/connections/services/dhan-reconnect.service.js');
   const { connectDhanCredential, disconnectDhan } = await import('../src/modules/connections/services/dhan.service.js');
   const { jobs, redis } = await import('../src/shared/redis.js');
   async function seed(overrides: Partial<Connection> = {}) {
-    calls.length = 0; failProfile = false; failRenew = 0; duringRenew = undefined;
+    calls.length = 0; failProfile = false; rejectProfile = false; failRenew = 0; duringRenew = undefined;
     await ConnectionModel.deleteMany({});
     await ConnectionModel.create({ _id: 'dhan', encryptedToken: encrypt(oldToken), status: 'connected', tokenSource: 'web', autoRenew: true,
       renewalState: 'scheduled', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
@@ -63,6 +65,37 @@ test('Dhan automatic renewal lifecycle with isolated MongoDB and mocked provider
   const saved = () => ConnectionModel.findById('dhan').select('+encryptedToken').lean();
   try {
     await mongoose.connect(uri.toString()); assert.equal(mongoose.connection.name, name);
+    await t.test('startup restores saved token after failed renewal without rotating it or repeating verification', async () => {
+      await seed({ status: 'expired', renewalState: 'login_required' });
+      const startedAt = Date.now();
+      await reconnectSavedDhan(startedAt); await reconnectSavedDhan(startedAt);
+      assert.deepEqual(calls, ['/profile']);
+      assert.equal((await saved())!.status, 'connected');
+      assert.equal((await saved())!.reconnectState, 'connected');
+      assert.equal((await saved())!.renewalState, 'scheduled');
+      assert.equal(decrypt((await saved())!.encryptedToken!), oldToken);
+    });
+    await t.test('startup outage schedules a retry and explicit disconnect prevents recovery', async () => {
+      await seed({ autoRenew: false, tokenSource: 'oauth' }); failProfile = true;
+      const startedAt = Date.now();
+      await reconnectSavedDhan(startedAt); await reconnectSavedDhan(startedAt);
+      assert.deepEqual(calls, ['/profile']); assert.equal((await saved())!.reconnectState, 'retrying');
+      assert.ok(!(await saved())!.reconnectError?.includes('fixture-sensitive'));
+      failProfile = false;
+      await ConnectionModel.updateOne({ _id: 'dhan' }, { reconnectAt: new Date(Date.now() - 1000).toISOString() });
+      await reconnectSavedDhan(startedAt);
+      assert.deepEqual(calls, ['/profile', '/profile']); assert.equal((await saved())!.autoRenew, false);
+      await disconnectDhan(); await reconnectSavedDhan(Date.now() + 1);
+      assert.equal(calls.length, 2); assert.equal((await saved())!.encryptedToken, undefined);
+    });
+    await t.test('provider rejection stops startup retries even when the saved expiry is in the future', async () => {
+      await seed(); rejectProfile = true; const startedAt = Date.now();
+      await reconnectSavedDhan(startedAt); await reconnectSavedDhan(startedAt); await renewDhanConnectionIfDue();
+      assert.deepEqual(calls, ['/profile']);
+      assert.equal((await saved())!.status, 'expired');
+      assert.equal((await saved())!.reconnectState, 'login_required');
+      assert.equal((await saved())!.reconnectAt, undefined);
+    });
     await t.test('renews once, encrypts the replacement, schedules from verified expiry and skips early repetition', async () => {
       await seed(); await renewDhanConnectionIfDue(); await renewDhanConnectionIfDue();
       const row = (await saved())!;

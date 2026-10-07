@@ -9,7 +9,7 @@ export interface StrategyHistory { strategyId:string; currentRevision:number|nul
 type RecordedUse={strategy:Strategy;use:RevisionUse};
 function definition(value:unknown):unknown {
   if(Array.isArray(value))return value.map(definition);
-  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!['_id','id','revision','savedAt'].includes(key)).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>[key,definition(v)]));
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!['_id','id','revision','savedAt','archivedAt','lifecycleSerial'].includes(key)).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>[key,definition(v)]));
   return value;
 }
 

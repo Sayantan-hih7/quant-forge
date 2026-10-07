@@ -30,7 +30,7 @@ export async function dataStatus() {
       hasSavedToken: !!dhan?.encryptedToken || !!process.env.DHAN_ACCESS_TOKEN,
       tokenSource: dhan?.tokenSource ?? 'unknown', autoRenew: dhan?.autoRenew ?? false,
       renewalState: dhan?.renewalState ?? 'off', nextRenewalAt: dhan?.nextRenewalAt,
-      lastRenewedAt: dhan?.lastRenewedAt, renewalError: dhan?.renewalError },
+      lastRenewedAt: dhan?.lastRenewedAt, renewalError: dhan?.renewalError, reconnectState: dhan?.reconnectState, reconnectError: dhan?.reconnectError, reconnectAt: dhan?.reconnectAt },
     limitations: ['Company metrics are snapshots from their collection date, not historical fundamentals.',
       'NSE/BSE pledge disclosures are matched by company identifiers; absent or stale disclosures are unknown, never zero.',
       'Index membership coverage is limited to the displayed imported index catalogue.',

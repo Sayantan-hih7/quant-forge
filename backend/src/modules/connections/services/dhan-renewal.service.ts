@@ -1,3 +1,4 @@
+import { reconnectSavedDhan } from './dhan-reconnect.service.js';
 import { object } from '../../../shared/http-client.js';
 import { AppError, invariant } from '../../../shared/errors.js';
 import { decrypt, encrypt } from '../../../shared/secrets.js';
@@ -81,6 +82,8 @@ export async function renewDhanConnectionIfDue() {
         connection = { ...connection, encryptedToken, renewalState: 'verifying' };
       }
       await verifyRenewedToken(connection, assertOwnership);
+      const { retryResearchAfterDhanConnect } = await import('../../qualification/services/research-refresh.service.js');
+      await retryResearchAfterDhanConnect();
     } catch (error) {
       await assertOwnership();
       const terminal = error instanceof AppError && ['DHAN_TOKEN_REJECTED', 'INVALID_DATA', 'DHAN_TOKEN_FORMAT', 'DHAN_ENDPOINT_UNAVAILABLE'].includes(error.code);
@@ -102,10 +105,11 @@ export async function renewDhanConnectionIfDue() {
 
 /** Runs independently of the long-running history/qualification job queue. */
 export function startDhanRenewalMonitor() {
+  const startedAt = Date.now();
   let running: Promise<void> | undefined;
   const tick = () => {
     if (running) return;
-    running = renewDhanConnectionIfDue().catch(error => {
+    running = reconnectSavedDhan(startedAt).then(() => renewDhanConnectionIfDue()).catch(error => {
       if (!(error instanceof AppError && error.code === 'DHAN_SESSION_BUSY')) console.error('Dhan renewal check could not finish; it will retry.');
     }).finally(() => { running = undefined; });
   };

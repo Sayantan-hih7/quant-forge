@@ -41,9 +41,8 @@ test('new strategy from scratch clarifies the example and applies all rules and 
   await page.getByLabel('Message the strategy assistant', { exact: true }).fill(mondayPrompt);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Apply to builder', exact: true })).toBeDisabled();
-  await page.getByLabel(turnoverQuestion.question, { exact: true }).fill(turnoverQuestion.options[0]);
-  await page.getByLabel(turnoverQuestion.question, { exact: true }).press('Escape');
-  await page.getByRole('button', { name: 'Continue with my answers' }).click();
+  await page.getByRole('radio', { name: turnoverQuestion.options[0], exact: true }).check();
+  await page.getByRole('button', { name: 'Proceed' }).click();
   await expect(page.getByRole('button', { name: 'Apply to builder', exact: true })).toBeEnabled();
   expect(written).toBeUndefined();
   await page.getByRole('button', { name: 'Apply to builder', exact: true }).click();

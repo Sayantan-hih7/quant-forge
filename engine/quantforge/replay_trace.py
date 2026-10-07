@@ -36,8 +36,7 @@ class ReplayTrace:
 
 
 def signal_candle(observations, frame):
-    bars = observations.bars(frame)
-    available = bars.loc[bars.end <= observations.cutoff]
+    available = observations.completed_bars(frame)
     if available.empty:
         return None
     row = available.iloc[-1]

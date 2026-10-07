@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import { env } from '../src/config/env.js';
-import { jobs, redis } from '../src/shared/redis.js';
+import { jobs, maintenance, redis } from '../src/shared/redis.js';
 import { FactModel, InstrumentModel } from '../src/modules/market-data/models/market-data.model.js';
 import { stockListings } from '../src/modules/stock-details/services/listings.service.js';
 import { stockDetail } from '../src/modules/stock-details/services/details.service.js';
 import { currentMonth } from '../src/modules/qualification/services/universe.service.js';
 import { MonthlyUniverseModel, QualificationResultModel, QualificationRunModel } from '../src/modules/qualification/models/qualification.model.js';
-after(async () => { await jobs.close(); redis.disconnect(); });
+after(async () => { await jobs.waitUntilReady(); await maintenance.waitUntilReady(); await jobs.close(); await maintenance.close(); redis.disconnect(); });
 
 test('exchange lookup matches securities by ISIN and preserves the original qualification evidence', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
   const name = `quantforge_test_${randomUUID().replaceAll('-', '')}`, uri = new URL(env.MONGODB_URI); uri.pathname = `/${name}`;

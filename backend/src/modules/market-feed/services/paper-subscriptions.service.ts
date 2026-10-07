@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FeedSettingsModel, type FeedAutomation } from '../models/feed-settings.model.js';
-import { PaperSessionModel, PaperPositionModel, PaperOrderModel, PaperTriggerModel } from '../../paper-trading/models/paper.model.js';
+import { PaperSessionModel, PaperPositionModel, PaperOrderModel } from '../../paper-trading/models/paper.model.js';
 import { MonthlyUniverseModel } from '../../qualification/models/qualification.model.js';
 import { instruments } from '../../market-data/repository.js';
 import { ConnectionModel } from '../../connections/models/connection.model.js';
@@ -15,16 +15,14 @@ export async function syncPaperSubscriptions() {
     FeedSettingsModel.findById('primary').lean(), PaperSessionModel.find({ active: true }).select('_id ids').lean(),
     MonthlyUniverseModel.findById(marketTime().date.slice(0, 7)).select('members.instrumentId').lean(),
   ]);
-  const [held, pending, conditions] = await Promise.all([
+  const [held, pending] = await Promise.all([
     PaperPositionModel.distinct('instrumentId', { sessionId: { $in: sessions.map(s => s._id) } }),
     PaperOrderModel.distinct('instrumentId', { sessionId: { $in: sessions.map(s => s._id) }, status: { $in: ['pending', 'confirmation'] }, expiresAt: { $gt: new Date().toISOString() } }),
-    // Manual conditional orders need live candles for their stock.
-    PaperTriggerModel.distinct('instrumentId', { sessionId: { $in: sessions.map(s => s._id) }, status: 'active' }),
   ]);
   const qualified = new Set(universe?.members.map(m => m.instrumentId) ?? []);
   // Pausing automatic entries does not disable manual buys or exits for held shares.
   const eligible = sessions.flatMap(s => (s.ids ?? [...qualified]).filter(id => qualified.has(id)));
-  const paperIds = [...new Set([...held.sort(), ...pending.sort(), ...conditions.sort(), ...eligible.sort()])];
+  const paperIds = [...new Set([...held.sort(), ...pending.sort(), ...eligible.sort()])];
   const manualRequest = settings?.paperManaged ? settings.manualRequest : settings?.request;
   const manualEnabled = settings?.paperManaged ? !!settings.manualEnabled : !!settings?.enabled;
   const paused = !!settings?.automationPaused;

@@ -19,6 +19,6 @@ export function StockExchangeSwitch({ selectedId, exchange, data, loading, error
       </Radio.Group>
     </Space>
     {error ? <span className="stock-exchange-note">Could not check other listings. <Button type="link" size="small" onClick={onRetry}>Retry exchanges</Button></span>
-      : <span className="stock-exchange-note">{loading ? 'Checking available listings…' : data?.listings.length === 2 ? 'Same stock · exchange-specific prices and volume' : data?.listings.length === 0 ? 'No active listing · viewing saved history' : `Only ${data?.listings[0]?.exchange ?? exchange} is available for this stock`}</span>}
+      : <span className={`stock-exchange-note ${!loading && data?.listings.length === 2 ? 'stock-exchange-hint' : ''}`}>{loading ? 'Checking available listings…' : data?.listings.length === 2 ? 'Same stock · exchange-specific prices and volume' : data?.listings.length === 0 ? 'No active listing · viewing saved history' : `Only ${data?.listings[0]?.exchange ?? exchange} is available for this stock`}</span>}
   </div>;
 }

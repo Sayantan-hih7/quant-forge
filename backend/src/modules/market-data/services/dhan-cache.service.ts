@@ -1,7 +1,7 @@
 import { dhanRequest } from '../../connections/services/dhan.service.js';
 import { facts, instruments, storedCandles, writeFacts } from '../repository.js';
 import { parseDhanCompany } from '../sources/dhan-company.js';
-import { parseDhanHistory } from '../sources/dhan-history.js';
+import { downloadDailyWindows } from './daily-history-download.js';
 import { DatasetReceiptModel } from '../models/dataset-receipt.model.js';
 import type { Instrument } from '../types.js';
 import { isClosedHistoryRange, missingHistoryRanges } from './history-coverage.js';
@@ -62,24 +62,12 @@ export async function ensureMonthlyHistory(stock: Instrument, from: string, to: 
       } }, { upsert: true });
       continue;
     }
-    // Persist each successful interval independently so cancellation/retries resume
-    // from the remaining gaps. A short IPO response never invents earlier candles.
-    // Dhan rejects an entirely pre-history interval with DH-907. Include one
-    // known candle as an overlap when checking an older prefix, then retain only
-    // the requested gap. Only a valid response can establish an empty interval;
-    // a provider error must never become a successful zero-record receipt.
-    const requestTo = firstDay && gap.to <= firstDay
-      ? new Date(Date.parse(firstDay) + 86400000).toISOString().slice(0, 10) : gap.to;
-    const data = await request('/charts/historical', { securityId: stock.securityId, exchangeSegment: `${stock.exchange}_EQ`, instrument: 'EQUITY', oi: false, expiryCode: 0, fromDate: gap.from, toDate: requestTo }, options);
-    const at = new Date().toISOString();
-    const rows = parseDhanHistory(data, stock, '1d', at).filter(row => {
-      const sessionDate = new Date(Date.parse(row.time) + 19800000).toISOString().slice(0, 10);
-      return sessionDate >= gap.from && sessionDate < gap.to;
-    });
-    for (let offset = 0; offset < rows.length; offset += 500) await storedCandles.bulkWrite(rows.slice(offset, offset + 500).map(row => ({ updateOne: {
-      filter: { instrumentId: row.instrumentId, interval: '1d', time: row.time }, update: { $set: row }, upsert: true,
-    } })));
-    await DatasetReceiptModel.updateOne({ _id: `daily:${stock._id}:${gap.from}:${gap.to}` }, { $set: { instrumentId: stock._id, kind: 'daily', ...gap, checkedAt: at, records: rows.length } }, { upsert: true });
+    await downloadDailyWindows(stock, gap.from, gap.to, async (window, rows) => {
+      for (let offset = 0; offset < rows.length; offset += 500) await storedCandles.bulkWrite(rows.slice(offset, offset + 500).map(row => ({ updateOne: {
+        filter: { instrumentId: row.instrumentId, interval: '1d', time: row.time }, update: { $set: row }, upsert: true,
+      } })));
+      await DatasetReceiptModel.updateOne({ _id: `daily:${stock._id}:${window.from}:${window.to}` }, { $set: { instrumentId: stock._id, kind: 'daily', ...window, checkedAt: new Date().toISOString(), records: rows.length } }, { upsert: true });
+    }, options, request, firstDay);
   }
   return gaps.length > 0;
 }

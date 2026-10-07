@@ -11,6 +11,7 @@ test('Today isolates the latest session and weekends keep its actual date', () =
   const today = overviewWindow(bars,'today',Date.parse('2026-09-25T06:00:00Z'));
   assert.equal(today.latestSession,false);
   assert.equal(overviewRequest('today').timeframe,'5m');
+  assert.equal(overviewRequest('today','line').timeframe,'1m');
   assert.equal(overviewRequest('1w').timeframe,'15m');
   assert.equal(overviewRequest('1mo').timeframe,'1d');
 });

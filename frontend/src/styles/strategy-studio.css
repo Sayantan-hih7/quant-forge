@@ -134,3 +134,13 @@
 .strategy-ai-footer > span { margin-right: auto; color: var(--muted); font-size: 10px; }
 @media (max-width: 800px) { .strategy-ai-layout { grid-template-columns: minmax(0, 1fr); } .strategy-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .strategy-builder-heading { align-items: start; flex-direction: column; gap: 14px; } .strategy-builder-basics { grid-template-columns: minmax(0, 1fr); gap: 0; } .strategy-builder-actions { align-items: stretch; flex-direction: column; } .strategy-builder-actions > div { justify-content: flex-end; } .strategy-form-grid { grid-template-columns: minmax(0, 1fr); gap: 0; } .strategy-manual-builder .ant-tabs-tab + .ant-tabs-tab { margin-left: 20px; } .strategy-ai-drawer .ant-drawer-body { padding: 14px; } .strategy-ai-footer > span { flex-basis: 100%; line-height: 1.8; } }
+
+.strategy-archive { margin-top: 24px; }
+.strategy-archive-row { padding: 8px 0; }
+.strategy-archive-row + .strategy-archive-row { margin-top: 16px; padding-top: 24px; border-top: 1px solid var(--border); }
+.strategy-archive-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.strategy-archive-heading .ant-tag { margin: 0; }
+.strategy-archive-heading > .muted { font-size: 12px; }
+.strategy-archive-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.strategy-restore-control { display: inline-flex; vertical-align: middle; }
+.strategy-archive-note { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }

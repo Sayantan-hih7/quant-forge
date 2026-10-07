@@ -21,3 +21,26 @@ export function aggregateBars(bars: ChartBar[], frame: StockTimeframe): ChartBar
   }
   return [...groups.values()];
 }
+
+export interface IntradayGap { time: string; end: string; missingMinutes: string[] }
+/** Inspect observed sessions; missing observations are not proof of missing trades. */
+export function intradayGapDetails(rows: ChartBar[], frame: StockTimeframe, now: number): IntradayGap[] {
+ const minutes=Number(frame.slice(0,-1))*(frame.endsWith('h')?60:1);
+ if(!Number.isFinite(minutes)||minutes<=0)return [];
+ const observed=new Set(rows.map(row=>Date.parse(row.time)));
+ const missing:IntradayGap[]=[];
+ for(const day of new Set(rows.map(row=>indianDate(row.time)))){
+  const close=Date.parse(`${day}T10:00:00Z`);
+  for(let start=Date.parse(`${day}T03:45:00Z`);start<Math.min(now,close);start+=minutes*60000){
+   const end=Math.min(start+minutes*60000,close);
+   if(end>now)break;
+   const missingMinutes:string[]=[];
+   for(let at=start;at<end;at+=60000)if(!observed.has(at))missingMinutes.push(new Date(at).toISOString());
+   if(missingMinutes.length)missing.push({time:new Date(start).toISOString(),end:new Date(end).toISOString(),missingMinutes});
+  }
+ }
+ return missing;
+}
+export function missingIntradayIntervals(rows: ChartBar[], frame: StockTimeframe, now: number): string[] {
+ return intradayGapDetails(rows,frame,now).map(gap=>gap.time);
+}

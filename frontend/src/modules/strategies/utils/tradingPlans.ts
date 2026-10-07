@@ -12,7 +12,7 @@ export function draftFromEntry(entry: RuleDefinition): TradingPlanDraft {
   return {
     name: entry.name.replace(/ · Buy$/, ''), entry: structuredClone(entry),
     exit: { ...exit, name: `${entry.name.slice(0, 48)} · Sell`, horizon: entry.horizon, cadence: entry.cadence, description: 'Close held shares when momentum weakens. Protective stops and targets also apply.' },
-    risk: strategyRiskSchema.parse({ ...defaultBacktestConfig('', ''), timeframe: entry.horizon === 'intraday' ? '15m' : '1d', overnight: entry.horizon !== 'intraday' }),
+    risk: strategyRiskSchema.parse({ ...defaultBacktestConfig('', ''), costModel:'indian-cash', dailyLossLimitPercent:2,maxEntryDeviationPercent:2,reentryCooldownMinutes:0,maxEntriesPerStockPerDay:0,entryCutoffMinute:900, timeframe: entry.horizon === 'intraday' ? '15m' : '1d', overnight: entry.horizon !== 'intraday' }),
   };
 }
 export function sampleTradingPlan(horizon: Horizon): TradingPlanDraft {

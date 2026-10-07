@@ -38,8 +38,9 @@ export async function saveMonthlyRule(rule: Record<string, unknown>, expectedRev
   invariant(saved, 'The rule changed in another tab; reload before saving');
   return saved;
 }
-export async function startQualification() {
+export async function startQualification(expectedRevision?: number) {
   const state = await qualificationState();
+  invariant(expectedRevision === undefined || state.rule?.revision === expectedRevision, 'Monthly rules changed. Reload the saved rules before running a scan.');
   invariant(state.canRun && state.rule, 'Save changed monthly rules before running a scan');
   const stocks = await instruments.find({ active: true, primary: true }).select('_id').lean();
   invariant(stocks.length, 'Import the stock universe first');

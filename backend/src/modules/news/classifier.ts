@@ -1,5 +1,4 @@
-import { env } from '../../config/env.js';
-import { generateGemini } from '../ai/providers/gemini.provider.js';
+import { generateAi, providerStatus } from '../ai/providers/provider.js';
 import { object } from '../../shared/http-client.js';
 import type { EventType } from './lexicon.js';
 
@@ -23,11 +22,11 @@ const SCHEMA = { type: 'object', required: ['items'], properties: { items: { typ
 } } } } };
 
 const clamp = (n: unknown, lo: number, hi: number) => { const v = Number(n); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : null; };
-export const aiModel = () => env.GEMINI_MODEL;
-export const aiConfigured = () => !!env.GEMINI_API_KEY;
+export const aiModel = () => `${providerStatus().provider}:${providerStatus().model}`;
+export const aiConfigured = () => providerStatus().configured;
 
-/** One Gemini request for up to 25 stories. Unknown ids and malformed rows are dropped, never guessed. */
-export async function classifyBatch(items: ClassifyInput[], generate = generateGemini): Promise<Classified[]> {
+/** One AI provider request for up to 25 stories. Unknown ids and malformed rows are dropped, never guessed. */
+export async function classifyBatch(items: ClassifyInput[], generate = generateAi): Promise<Classified[]> {
   if (!items.length) return [];
   const input = JSON.stringify(items.map(x => ({ id: x.id, headline: x.title, summary: x.summary.slice(0, 400), source: x.publisher, ...(x.category ? { filingCategory: x.category } : {}), ...(x.companies.length ? { detectedCompanies: x.companies } : {}) })));
   const output = object(await generate(SYSTEM, input, SCHEMA));

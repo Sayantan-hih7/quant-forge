@@ -1,3 +1,5 @@
+import { PaperPositionModel, PaperOrderModel } from '../../paper-trading/models/paper.model.js';
+import { migrateInstrumentReferences } from './instrument-migration.service.js';
 import mongoose from 'mongoose';
 import { invariant } from '../../../shared/errors.js';
 import { instruments } from '../repository.js';
@@ -50,6 +52,12 @@ export async function publishInstrumentSnapshot(rows: Instrument[]) {
     }
     // Keep historical records and broker mappings; delisted/missing listings are only made inactive.
     await instruments.updateMany({ _id: { $nin: [...incomingIds] } }, { $set: { active: false, primary: false } }, { session });
-    return stats;
+    for(const change of stats.reissuedIsins){
+      const message='Security ISIN changed; possible split/consolidation. Position quantities and price levels require reconciliation before automated exits resume.';
+      await PaperPositionModel.updateMany({instrumentId:change.id},{$set:{corporateActionPending:message}},{session});
+      await PaperOrderModel.updateMany({instrumentId:change.id,status:{$in:['pending','confirmation']}},{$set:{status:'cancelled',message}},{session});
+    }
+    const remapped = await migrateInstrumentReferences(previous, rows, session);
+    return {...stats, remapped};
   });
 }

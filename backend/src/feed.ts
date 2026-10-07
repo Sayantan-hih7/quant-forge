@@ -95,11 +95,12 @@ async function reconcile() {
   state = { ...feed.status(), depth: depthFeed.status(), requestId: desired?.id, instruments: stocks, updatedAt: new Date().toISOString(), marketClosed: !clock.open };
   if (!clock.feedWindow) state = { ...state, state: stocks.length ? 'waiting' : 'disconnected', message: clock.knownYear ? 'Market closed. Prices retain their last trade time; streaming resumes next session.' : 'Update the trading calendar before this year can run paper sessions.' };
   await redis.set(FEED_KEYS.status, JSON.stringify(state), 'EX', 30);
-  const latest = [...quotes.values()].filter(q => currentQuote(state, q)); quotes.clear();
+  const latest = [...quotes.values()].filter(q => currentQuote(state, q)).map(q=>{const book=books.get(q.instrumentId);return book?.session===q.session&&book.receivedAt.slice(0,10)===q.receivedAt.slice(0,10)?{...q,details:{...q.details,upperCircuit:book.upperCircuit,lowerCircuit:book.lowerCircuit}}:q;}); quotes.clear();
   // Order-book-only changes for stocks without a new trade in this cycle (research views only).
   const bookOnly = [...changedBooks].filter(id => !latest.some(q => q.instrumentId === id)).flatMap(id => {
     const tick = lastTicks.get(id); return tick && currentQuote(state, tick) ? [tick] : [];
   });
+  for(const id of changedBooks){const book=books.get(id);if(book)await redis.set(`quantforge:execution:book:${id}`,JSON.stringify(book),'EX',15);}
   changedBooks.clear();
   const research = [...latest, ...bookOnly].map(q => sharedStockQuote(q, books.get(q.instrumentId), depthBooks.get(q.instrumentId)));
   const previewBars = [...bars.values()].filter(b => chartIds.has(b.instrumentId) && Object.values(state.connections ?? {}).some(c => ['live', 'waiting'].includes(c.state) && c.session === b.streamSession && c.ids.includes(b.instrumentId))); bars.clear();

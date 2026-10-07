@@ -1,0 +1,60 @@
+import {test,expect} from '@playwright/test';
+import {sampleTradingPlan} from '../src/modules/strategies/utils/tradingPlans';
+test('three slots replace duplication; archive keeps history and frees only its type',async({page})=>{
+ let rows=['intraday','swing','long-term'].map((h,i)=>({...sampleTradingPlan(h as 'intraday'|'swing'|'long-term'),_id:`aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${i}`,revision:1,savedAt:new Date().toISOString(),archivedAt:undefined as string|undefined}));
+ await page.route(url=>url.pathname.startsWith('/api/'),route=>route.fulfill({json:route.request().url().endsWith('/session')?{authenticated:true,mode:'local'}:{}}));
+ await page.route('**/api/strategies',route=>route.fulfill({json:rows}));
+ await page.route('**/api/strategies/examples',route=>route.fulfill({json:[]}));
+ await page.route('**/api/strategies/*/archive',route=>{expect(route.request().postDataJSON()).toEqual({expectedRevision:1});rows=rows.map((s,i)=>i===0?{...s,archivedAt:new Date().toISOString()}:s);return route.fulfill({json:rows[0]});});
+ await page.goto('/strategies');
+ await expect(page.getByRole('heading',{name:'Three trading plans'})).toBeVisible({timeout:20000});
+ await expect(page.getByRole('button',{name:'New strategy',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:/Duplicate/})).toHaveCount(0);
+ const slot=page.getByRole('article',{name:'Intraday strategy slot'});
+ await slot.getByRole('button',{name:'View strategy',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Saved strategy overview'})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'Strategy name'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Version history',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Edit strategy',exact:true}).click();
+ await expect(page.getByRole('textbox',{name:'Strategy name'})).toBeVisible();
+ await page.getByRole('textbox',{name:'Strategy name'}).fill('Unsaved example');
+ await page.locator('.strategy-mode-switch').getByText('View mode',{exact:true}).click();
+ await expect(page.getByRole('region',{name:'Saved strategy overview'})).toBeVisible();
+ await page.locator('.strategy-mode-switch').getByText('Edit mode',{exact:true}).click();
+ await expect(page.getByRole('textbox',{name:'Strategy name'})).toHaveValue('Unsaved example');
+ await page.getByRole('button',{name:'All strategies',exact:true}).click();
+ await slot.getByRole('button',{name:'Archive and replace'}).click();
+ await page.getByRole('button',{name:'OK',exact:true}).click();
+ await expect(slot.getByRole('button',{name:'Create intraday strategy'})).toBeVisible();
+ await expect(page.getByText('Archived strategies (1)',{exact:true})).toBeVisible();
+ await slot.getByRole('button',{name:'Create intraday strategy'}).click();
+ await expect(page.getByRole('button',{name:'Start from scratch'})).toBeEnabled();
+ await page.getByRole('button',{name:'Start from scratch'}).click();
+ await expect(page.getByRole('textbox',{name:'Strategy name'})).toBeVisible();
+});
+
+
+test('archived strategy restores to its slot and occupied slots explain why restore is disabled', async ({page}) => {
+ const archivedAt='2026-10-01T12:00:00.000Z';
+ const archived={...sampleTradingPlan('swing'),name:'Archived swing',_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',revision:4,savedAt:archivedAt,archivedAt:archivedAt as string|undefined};
+ let rows=[archived];let restores=0;
+ await page.route(url=>url.pathname.startsWith('/api/'),route=>route.fulfill({json:{}}));
+ await page.route('**/api/strategies',route=>route.fulfill({json:rows}));
+ await page.route('**/api/strategies/*/restore',route=>{
+   restores++;expect(route.request().postDataJSON()).toEqual({expectedRevision:4,expectedArchivedAt:archivedAt});
+   rows=[{...archived,archivedAt:undefined}];return route.fulfill({json:rows[0]});
+ });
+ await page.goto('/strategies');
+ await page.getByText('Archived strategies (1)',{exact:true}).click();
+ await page.getByRole('button',{name:'Restore strategy',exact:true}).click();
+ const slot=page.getByRole('article',{name:'Swing strategy slot'});
+ await expect(slot.getByRole('button',{name:'Archived swing',exact:true})).toBeVisible();
+ await expect(page.getByText('Archived strategies (1)',{exact:true})).toHaveCount(0);
+ expect(restores).toBe(1);
+ rows=[archived,{...archived,_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',name:'Current swing',archivedAt:undefined}];
+ await page.reload();
+ await page.getByText('Archived strategies (1)',{exact:true}).click();
+ await expect(page.getByRole('button',{name:'Restore strategy',exact:true})).toBeDisabled();
+ await expect(page.getByText('Archive the current strategy of this type first.')).toBeVisible();
+ expect(restores).toBe(1);
+});

@@ -1,3 +1,4 @@
+import { newsQuickSummary } from './aggregates.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { AppError } from '../../shared/errors.js';
@@ -53,6 +54,13 @@ newsRouter.get('/', async (req, res) => {
   res.json({ items, total, page: input.page, pageSize: input.pageSize });
 });
 /** One company's coverage: aggregates plus its latest stories. Fetches the company's own search on demand. */
+newsRouter.get('/summaries',async(req,res)=>{
+ const ids=z.string().max(4000).transform(s=>s.split(',')).pipe(z.array(instrumentIdSchema).min(1).max(100)).parse(req.query.ids);
+ const stocks=await instruments.find({_id:{$in:ids}}).select('_id isin').lean(),now=Date.now(),at=new Date(now).toISOString();
+ const items=await NewsItemModel.find({isins:{$in:stocks.map(s=>s.isin)},knownAt:{$lte:at},publishedAt:{$gte:new Date(now-7*DAY).toISOString(),$lte:at}})
+  .select('_id titleKey title url publisher publishedAt knownAt companies sentiment kind').sort({publishedAt:-1}).lean();
+ res.json({checkedAt:at,items:Object.fromEntries(stocks.map(stock=>[stock._id,newsQuickSummary(items,stock.isin,now)]))});
+});
 newsRouter.get('/stock/:id', async (req, res) => {
   const stock = await instruments.findById(instrumentIdSchema.parse(req.params.id)).select('isin symbol name').lean();
   if (!stock) throw new AppError(404, 'STOCK_NOT_FOUND', 'Stock not found');
@@ -85,11 +93,12 @@ newsRouter.get('/movers', async (req, res) => {
     negative: withListing.filter(r => r.score < 0).sort((a, b) => a.score - b.score || b.stories - a.stories).slice(0, 10) });
 });
 newsRouter.get('/sources', async (_req, res) => {
-  const [last, stats] = await Promise.all([
+  const [last, stats, publishers] = await Promise.all([
     sourceRuns.findOne({ source: 'news' }).sort({ startedAt: -1 }).lean(),
     NewsItemModel.aggregate<{ _id: string; stories: number; latest: string }>([{ $match: { publishedAt: { $gte: new Date(Date.now() - DAY).toISOString() } } }, { $group: { _id: '$publisher', stories: { $sum: 1 }, latest: { $max: '$publishedAt' } } }, { $sort: { stories: -1 } }]),
+    NewsItemModel.distinct('publisher', { publishedAt: { $gte: new Date(Date.now() - 90 * DAY).toISOString(), $lte: new Date().toISOString() }, knownAt: { $lte: new Date().toISOString() } }),
   ]);
-  res.json({ sources: [...new Set(NEWS_SOURCES.map(s => s.name))].concat('NSE filing', 'Google News (per company)'), last24h: stats,
+  res.json({ publishers, sources: [...new Set(NEWS_SOURCES.map(s => s.name))].concat('NSE filing', 'Google News (per company)'), last24h: stats,
     lastRun: last ? { status: last.status, startedAt: last.startedAt, finishedAt: last.finishedAt, failures: last.failures.slice(0, 10), details: last.details } : null });
 });
 newsRouter.post('/refresh', async (_req, res) => {

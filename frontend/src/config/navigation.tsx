@@ -1,5 +1,6 @@
 import {
   AppstoreOutlined,
+  RobotOutlined,
   ExperimentOutlined,
   SafetyCertificateOutlined,
   CodeOutlined,
@@ -27,7 +28,7 @@ export interface NavItem {
 export const navigation: { title: string; items: NavItem[] }[] = [
   {
     title: "",
-    items: [{ path: "/", label: "Dashboard", icon: <AppstoreOutlined /> }],
+    items: [{ path: "/", label: "Dashboard", icon: <AppstoreOutlined /> }, { path: "/assistant", label: "AI assistant", icon: <RobotOutlined /> }],
   },
   {
     title: "Market Data",

@@ -1,6 +1,7 @@
+import { ChartGapDetails } from './ChartGapDetails';
 import { indicatorCatalog } from '../utils/indicatorCatalog';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Button, Checkbox, Empty, Segmented, Skeleton, Space, Tag, Tooltip } from 'antd';
+import { Alert, Button, Checkbox, Empty, Popover, Segmented, Skeleton, Space, Tag, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { StockCandlestickChart } from '../../../components/charts/StockCandlestickChart';
 import { useStockResource } from '../hooks/useStockResource';
@@ -20,11 +21,11 @@ import type { SavedStrategy } from '../../strategies/hooks/useBackendStrategies'
 
 const noBars: LiveChartBar[] = [], noEvents: ChartEvent[] = [];
 export interface StockChartPanelProps {
-  instrumentId: string; symbol: string; quote?: StockQuote; liveBars?: LiveChartBar[]; now: number;
+  compact?: boolean; instrumentId: string; symbol: string; quote?: StockQuote; liveBars?: LiveChartBar[]; now: number;
   strategy?: SavedStrategy; events?: ChartEvent[]; levels?: ChartLevel[]; focusEventId?: string; onSelectEvent?: (id: string) => void; historyAt?: string;
   historyPath?: string; visibleRange?: { from: string; to: string };
 }
-export function StockChartPanel({ instrumentId, symbol, quote, liveBars = noBars, now, strategy, events = noEvents, levels, focusEventId, onSelectEvent, historyAt, historyPath, visibleRange }: StockChartPanelProps) {
+export function StockChartPanel({ compact = false, instrumentId, symbol, quote, liveBars = noBars, now, strategy, events = noEvents, levels, focusEventId, onSelectEvent, historyAt, historyPath, visibleRange }: StockChartPanelProps) {
   const mode = strategy ? 'strategy' : 'research';
   const profile = useChartPreferences(s => s[mode]), update = useChartPreferences(s => s.update);
   const { custom, kind, showVolume = true } = profile;
@@ -41,7 +42,7 @@ export function StockChartPanel({ instrumentId, symbol, quote, liveBars = noBars
   const params = new URLSearchParams({ timeframe });
   if (historyAt) params.set('at', historyAt);
   if (!historyPath && needs[timeframe]) { params.set('minBars', String(needs[timeframe]!.minBars)); if (needs[timeframe]!.from) params.set('from', needs[timeframe]!.from!); }
-  const chart = useStockResource<StockChartData>(`${historyPath ?? `/stocks/${encodeURIComponent(instrumentId)}/chart`}?${params}`, historyAt ? undefined : 60_000);
+  const chart = useStockResource<StockChartData>(`${historyPath ?? `/stocks/${encodeURIComponent(instrumentId)}/chart`}?${params}`, historyAt ? undefined : 60_000, undefined, historyPath || historyAt ? '' : 'repair=true');
   const extraFrames = (Object.keys(needs) as StockTimeframe[]).filter(frame => frame !== timeframe);
   const otherNeeds = Object.fromEntries(Object.entries(needs).filter(([frame]) => frame !== timeframe));
   const otherHistory = useIndicatorHistory(instrumentId, extraFrames, historyAt, historyPath, otherNeeds);
@@ -59,7 +60,7 @@ export function StockChartPanel({ instrumentId, symbol, quote, liveBars = noBars
   const visibleEvents = visibleChartEvents(shownEvents, view.bars, timeframe);
   const missingEvent = focusEventId && showTrades && events.some(e => e.id === focusEventId) && !visibleEvents.some(e => e.id === focusEventId);
   const indicatorWarnings = [...new Set(extraFrames)].flatMap(frame => otherHistory.data[frame]?.message ? [`${frame}: ${otherHistory.data[frame]!.message}`] : []);
-  return <section className="stock-chart-section" aria-label="Price chart">
+  return <section className={`stock-chart-section ${compact ? 'stock-chart-section--compact' : ''}`} aria-label="Price chart">
     <div className="stock-section-heading"><h3>Price & volume</h3><Space size={8} wrap>
       <ChartLayouts profile={{ ...profile, timeframe, showVolume }} onApply={value => update(mode, value)}/>
       <ChartIndicators showVolume={showVolume} volumeStyle={profile.volumeStyle} onVolumeChange={change=>update(mode,change)} custom={custom} onChange={value => update(mode, { custom: value })} strategy={strategyConfig.indicators} showStrategy={showStrategy} onShowStrategy={setShowStrategy} timeframe={timeframe}/>
@@ -67,7 +68,7 @@ export function StockChartPanel({ instrumentId, symbol, quote, liveBars = noBars
     </Space></div>
     <div className="stock-chart-controls"><div className="stock-chart-control-group"><span>Candle interval</span><Segmented aria-label="Chart timeframe" size="small" value={timeframe} options={frameOptions} onChange={value => update(mode, { timeframe: value })}/></div><Space wrap>{(!!events.length || !!levels?.length) && <Checkbox checked={showTrades} onChange={e => setShowTrades(e.target.checked)}>Trades & signals</Checkbox>}<ChartAppearanceControls kind={kind} showVolume={showVolume} onKindChange={value => update(mode, { kind: value })} onVolumeChange={value => update(mode, { showVolume: value })}/></Space></div>
     <p className="stock-chart-interval-note">Each candle represents {timeframe === '1d' ? 'one trading day' : timeframe === '1w' ? 'one week' : timeframe === '1mo' ? 'one month' : `${parseInt(timeframe)} ${timeframe.endsWith('h') ? 'hour' : 'minute'}${parseInt(timeframe) === 1 ? '' : 's'}`}. Zoom or pan to change the period shown.</p>
-    {!!configs.length && <p className="stock-chart-note">Indicator values · {hoverTime ? `crosshair at ${new Date(hoverTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}` : 'latest available candle'}</p>}
+    {!compact && !!configs.length && <p className="stock-chart-note">Indicator values · {hoverTime ? `crosshair at ${new Date(hoverTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}` : 'latest available candle'}</p>}
     <div className="chart-indicator-legend" aria-label="Visible indicators">{configs.map(i => {
       const lines = plots.filter(p => p.id.startsWith(`${i.id}-`));
       const values = lines.map(line => hoverTime ? line.values.find(p => p.time === hoverTime) : line.values.at(-1));
@@ -86,7 +87,7 @@ export function StockChartPanel({ instrumentId, symbol, quote, liveBars = noBars
     })}</div>
     {chart.data?.latestCandleAt && <p className="stock-chart-note" aria-label="Chart data timestamp">Stored candles through {new Date(chart.data.latestCandleAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. {view.forming ? <Tag color={view.partial ? 'gold' : 'blue'}>{view.partial ? 'Forming · incomplete preview' : view.bars.at(-1) && barEnd(view.bars.at(-1)!.time,timeframe) <= now ? 'Session preview · awaiting final history' : 'Forming candle'}</Tag> : <Tag>Completed candles</Tag>}</p>}
     {view.partial && <p className="stock-chart-note">The current candle shows received ticks only. Earlier ticks are missing; indicators exclude this preview until history is available.</p>}
-    {(chart.error || chart.data?.message) && <Alert className="stock-inline-alert" type="warning" showIcon title={chart.error || chart.data?.message} action={<Button size="small" onClick={chart.retry}>Retry</Button>}/>}
+    {(chart.error || chart.data?.message) && <Alert className="stock-inline-alert" type="warning" showIcon title={chart.error || chart.data?.message} action={<Space>{!!chart.data?.incompleteIntervals?.length && <Popover trigger="click" title="Missing candle times (IST)" content={<div style={{maxWidth:360}}><ChartGapDetails data={chart.data}/></div>}><Button size="small">View gaps</Button></Popover>}<Button size="small" loading={chart.loading} onClick={chart.retry}>{chart.loading ? 'Checking history...' : 'Retry'}</Button></Space>}/>}
     {!!otherHistory.errors.length && <Alert type="warning" showIcon title={otherHistory.errors.join(' ')}/>}
     {!!benchmarks.errors.length&&<Alert type="warning" showIcon title="Benchmark history unavailable" description={benchmarks.errors.join(' ')}/>}
     {!!indicatorWarnings.length && <Alert type="warning" showIcon title="Some indicator history has gaps" description={indicatorWarnings.join(' ')}/>}

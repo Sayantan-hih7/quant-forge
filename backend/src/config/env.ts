@@ -15,6 +15,10 @@ const schema = z.object({
   OWNER_PASSWORD_HASH: z.string().default(''),
   FRONTEND_DIST: z.string().default(''),
   FRONTEND_ORIGIN: z.string().default('http://localhost:5173'),
+  AI_PROVIDER: z.enum(['gemini', 'openai', 'anthropic']).default('gemini'),
+  AI_MODEL: z.string().trim().max(150).default(''),
+  OPENAI_API_KEY: z.string().default(''),
+  ANTHROPIC_API_KEY: z.string().default(''),
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().regex(/^gemini-[a-z0-9.-]+$/).default('gemini-3.5-flash-lite'),
 });

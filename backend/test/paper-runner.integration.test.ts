@@ -1,4 +1,5 @@
-import { after, test } from 'node:test';
+import { after, test, mock } from 'node:test';
+import { engineClient } from '../src/modules/engine/services/engine.service.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
@@ -53,6 +54,7 @@ test('real engine decisions: late daily history, durable deduplication, next-ses
     await storedCandles.insertMany([candle('NSE:1', '2026-09-28', 120)]);
     await evaluatePaperStrategies(at('2026-09-28', '16:00:00'));
     const sell = (await PaperOrderModel.findOne({ sessionId: 'auto', side: 'SELL' }))!;
+    assert.equal(sell?.positionOpenedAt, (await PaperPositionModel.findOne({ sessionId: 'auto' }))?.openedAt, 'Sell signals bind to the holding they evaluated');
     assert.ok(sell, 'Held stocks keep sell rules after leaving the qualified universe');
     const next = new Date(at('2026-09-29', '09:16:00')).toISOString();
     await fillPaperOrder(sell._id, { ...quote, price: 120, at: next, receivedAt: next }, Date.parse(next));
@@ -91,7 +93,26 @@ test('real engine decisions: late daily history, durable deduplication, next-ses
     assert.match(observation?.entry.checks[0].reason??'',/already triggered/);
     assert.equal(observation?.exit.disabled,true);
 
+    // A protective/manual round trip may complete while an engine call is pending.
+    await PaperSessionModel.updateMany({},{$set:{active:false}});
+    await PaperSessionModel.create({_id:'replacement-race',strategyId:'replacement-race',strategy,ids:['NSE:1'],mode:'automatic',cashPaise:9900000,initialPaise:10000000,entriesPaused:false,active:true,createdAt:'2026-09-25T03:30:00Z',revision:1});
+    await PaperPositionModel.create({_id:'replacement-race:NSE:1',sessionId:'replacement-race',instrumentId:'NSE:1',symbol:'FIXTURE',quantity:10,entryPaise:10000,costPaise:100000,stopPaise:9000,targetPaise:15000,openedAt:'2026-09-25T04:00:00Z'});
+    mock.method(engineClient,'post',async()=>{
+      await PaperPositionModel.updateOne({_id:'replacement-race:NSE:1'},{$set:{openedAt:'2026-09-29T03:48:00Z'}});
+      return {data:{results:[{id:'NSE:1',barEnd:'2026-09-28T10:00:00Z',referencePrice:120,atr:2,entry:{matched:false,checks:[]},exit:{matched:true,checks:[]}}]}};
+    });
+    await evaluatePaperStrategies(at('2026-09-29','09:20:00'));
+    assert.equal(await PaperOrderModel.countDocuments({sessionId:'replacement-race'}),0,'A sell result from the former holding must not close its replacement');
+    mock.restoreAll();
+    await PaperSessionModel.updateMany({},{$set:{active:false}});
+    await PaperSessionModel.create({_id:'capacity',strategyId:'capacity',strategy:{...strategy,risk:{...strategy.risk,maxPositions:1}},ids:['NSE:3','NSE:2'],mode:'automatic',cashPaise:10000000,initialPaise:10000000,entriesPaused:false,active:true,createdAt:'2026-09-25T03:30:00Z',revision:1});
+    await evaluatePaperStrategies(at('2026-09-25','16:00:00'));
+    assert.equal(await PaperSignalModel.countDocuments({sessionId:'capacity'}),2,'Both matching signals remain visible');
+    assert.equal(await PaperOrderModel.countDocuments({sessionId:'capacity'}),1,'Pending buys reserve the available position slot');
+    assert.equal((await PaperOrderModel.findOne({sessionId:'capacity'}))?.instrumentId,'NSE:2','Deterministic instrument order, independent of scope order');
+    assert.match((await PaperSignalModel.findOne({sessionId:'capacity',instrumentId:'NSE:3'}))?.message??'',/position slots/);
   } finally {
+    mock.restoreAll();
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();
     await disconnectDatabase(); await jobs.waitUntilReady(); await jobs.close(); if (redis.status !== 'end') await redis.quit();
   }

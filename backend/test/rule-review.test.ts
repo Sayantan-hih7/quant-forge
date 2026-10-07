@@ -154,3 +154,10 @@ test('numeric simplifications preserve matches over boundaries and ordinary valu
     }
   }
 });
+
+test('nonpositive cash prices cannot match; overnight tight stops receive a warning',()=>{
+ const d=draft([c('gt',50)]);d.exit={...d.exit,enabled:true,groups:[{logic:'AND',conditions:[c('lte',0,{left:'close'})]}]};
+ assert.equal(reviewStrategy(d).blocked,true);
+ d.exit={...d.exit,enabled:false,groups:[]};d.risk={...d.risk,overnight:true,maxStopPercent:3};
+ assert.ok(reviewStrategy(d).issues.some(i=>i.title==='Tight stop for an overnight strategy'));
+});

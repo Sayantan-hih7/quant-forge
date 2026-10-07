@@ -23,6 +23,7 @@ export interface QualificationState {
   latestCompletedRun?: BackendScan | null;
 }
 export interface QualifiedStock {
+  suitability?: { version:string; assessedAt:string; profiles:{horizon:'intraday'|'swing'|'long-term';label:string;status:'matched'|'not-matched'|'unavailable';checks:{label:string;rule:string;value:number|null;unit:string;status:'pass'|'fail'|'unavailable';asOf?:string;source?:string;reason?:string}[]}[] };
   instrumentId: string; isin: string; source: 'scan' | 'manual'; addedAt: string; note?: string;
   instrument?: { symbol: string; name: string; exchange: string };
   metrics: Record<string, number | string | string[]>;

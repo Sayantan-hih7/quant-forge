@@ -6,8 +6,9 @@ export function RhfInputNumber<T extends FieldValues>({
   control,
   label,
   required,
+  emptyAsUndefined = false,
   ...props
-}: RhfFieldProps<T> &
+}: RhfFieldProps<T> & { emptyAsUndefined?: boolean } &
   Omit<InputNumberProps, "value" | "defaultValue" | "onChange" | "onBlur">) {
   return (
     <Controller
@@ -24,6 +25,7 @@ export function RhfInputNumber<T extends FieldValues>({
           <InputNumber
             {...props}
             {...field}
+            onChange={value => field.onChange(emptyAsUndefined && value === null ? undefined : value)}
             id={name}
             style={{ width: "100%" }}
             aria-invalid={!!fieldState.error}

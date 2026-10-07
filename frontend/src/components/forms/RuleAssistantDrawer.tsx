@@ -41,13 +41,13 @@ export function RuleAssistantDrawer<T extends object>({ open, onClose, title, st
   };
   const close = () => { assistant.cancel(); onClose(); };
   return <Drawer className="strategy-ai-drawer" title={title} open={open} onClose={close} size={1040} footer={<div className="strategy-ai-footer"><span>Applying replaces the draft. Review and save it separately.</span><Button onClick={close}>Back to builder</Button><Button type="primary" disabled={!proposal || assistant.busy} onClick={() => { if (proposal) { onApply(proposal); setProposal(undefined); close(); } }}>Apply to builder</Button></div>}>
-    {assistant.status?.configured === false && <Alert className="mb-5" type="warning" showIcon title="AI is not configured" description="Add GEMINI_API_KEY to backend/.env and restart the API." />}
+    {assistant.status?.configured === false && <Alert className="mb-5" type="warning" showIcon title="AI is not configured" description="Configure your AI provider key and model on the backend and restart the API." />}
     {assistant.error && <Alert className="mb-5" type="error" showIcon title="AI request failed" description={assistant.error} />}
     <div className="strategy-ai-layout"><section className="strategy-chat" aria-label="Monthly rule assistant">
-      <header className="strategy-chat-header"><span className="strategy-assistant-icon"><RobotOutlined /></span><div><h2>Build with AI</h2><p>Describe which stocks should qualify each month.</p></div><Tag>Gemini</Tag></header>
+      <header className="strategy-chat-header"><span className="strategy-assistant-icon"><RobotOutlined /></span><div><h2>Build with AI</h2><p>Describe which stocks should qualify each month.</p></div><Tag>{assistant.status?.provider ?? "AI"}</Tag></header>
       <div className="strategy-chat-log" role="log" aria-label="Monthly rule conversation" aria-live="polite" ref={log}>
         {!messages.length && <div className="strategy-chat-welcome"><h3>Start with your stock-selection idea</h3><p>Use monthly trend, liquidity, ownership and company filters. Trading entry and exit rules belong in Algo Strategies.</p></div>}
-        {messages.map((item, index) => <div className={`strategy-message ${item.role}`} key={index}><div><strong>{item.role === 'user' ? 'You' : 'Gemini assistant'}</strong><p>{item.text}</p></div></div>)}
+        {messages.map((item, index) => <div className={`strategy-message ${item.role}`} key={index}><div><strong>{item.role === 'user' ? 'You' : 'QuantForge assistant'}</strong><p>{item.text}</p></div></div>)}
         {assistant.busy && <p role="status" className="strategy-thinking">Drafting and validating monthly conditions…</p>}
       </div>
       <div className="strategy-chat-suggestions"><span>Start an idea</span><Space wrap>{starters.map(item => <Button key={item.label} size="small" disabled={assistant.busy || assistant.status?.configured === false} onClick={() => { void send({ prompt: item.prompt }); }}>{item.label}</Button>)}</Space></div>

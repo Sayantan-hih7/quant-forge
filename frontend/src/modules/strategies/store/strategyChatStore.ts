@@ -4,7 +4,7 @@ import type { StrategyMessage, TradingPlanDraft } from '../types/tradingPlan';
 import type { AiExample } from '../../../services/aiAssistant';
 
 export interface StrategySuggestionMeta { awaitingReply: boolean; example: AiExample | null; assumptions: string[]; baseFingerprint?: string }
-interface Conversation { messages: StrategyMessage[]; draft?: TradingPlanDraft; proposal?: TradingPlanDraft; savedPlanId?: string; baseRevision?: number; suggestionMeta?: StrategySuggestionMeta }
+interface Conversation { recoveredDrafts?: { draft: TradingPlanDraft; baseRevision: number }[]; messages: StrategyMessage[]; draft?: TradingPlanDraft; proposal?: TradingPlanDraft; savedPlanId?: string; baseRevision?: number; suggestionMeta?: StrategySuggestionMeta }
 interface StrategyChatState {
   conversations: Record<string, Conversation>;
   update: (key: string, value: Partial<Conversation>) => void;

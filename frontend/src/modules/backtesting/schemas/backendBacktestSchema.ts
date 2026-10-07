@@ -2,6 +2,7 @@ import { z } from 'zod';
 const dayMs = 86400000;
 export const backtestSetupSchema = (daily: boolean) => z.object({
   strategyId: z.string().uuid('Save and select a strategy'), from: z.string().date('Choose a start date'), to: z.string().date('Choose an end date'),
+  dataPolicy:z.enum(['ready','all']),
   universe: z.enum(['historical', 'current']), includeManual: z.boolean(), acknowledgeSelectionBias: z.boolean(), ids: z.array(z.string()).min(1, 'Choose at least one qualified stock').max(200, 'Select up to 200 stocks'),
 }).superRefine((value, ctx) => {
   if (value.from > value.to) ctx.addIssue({ code: 'custom', path: ['to'], message: 'End date must follow the start date' });

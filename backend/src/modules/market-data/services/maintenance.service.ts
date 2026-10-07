@@ -1,3 +1,4 @@
+import { refreshQualifiedResearch } from '../../qualification/services/research-refresh.service.js';
 import type { Queue } from 'bullmq';
 import { maintenance } from '../../../shared/redis.js';
 import { facts, sourceRuns } from '../repository.js';
@@ -18,6 +19,8 @@ const ranSince = (source: string, since: string, extra: Record<string, unknown> 
  * tell at startup that a run was missed (worker offline, provider outage, new install).
  */
 export const MAINTENANCE_TASKS = [
+  { name: 'qualified-research', schedule: 'Weekdays 18:00 IST', pattern: '0 0 18 * * 1-5', data: {},
+    run: () => refreshQualifiedResearch(), catchUp: async () => await ranSince('qualified-research', sinceDays(1)) ? null : {} },
   { name: 'daily-closes', schedule: 'Weekdays 19:30 IST', pattern: '0 30 19 * * 1-5', data: { days: 10 },
     run: (data: { days?: number }) => syncDailyCloses(data.days ?? 10),
     // The first run backfills a year of closes; afterwards only recent sessions are checked.

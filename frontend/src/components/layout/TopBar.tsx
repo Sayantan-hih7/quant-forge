@@ -4,6 +4,7 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { Avatar, Button, Flex, Input, Modal, Dropdown, Tooltip, Typography, theme } from "antd";
 import {
+  RobotOutlined,
   BellOutlined,
   MenuOutlined,
   SearchOutlined,
@@ -77,6 +78,7 @@ export function TopBar({ onOpenMenu, realData = false }: { onOpenMenu: () => voi
           <span className="muted">{realData ? 'No real orders' : 'No broker feed'}</span>
         </div>
         <Flex className="topbar-actions" align="center">
+          {realData && <Button className="assistant-nav-button" aria-label="Assistant" icon={<RobotOutlined aria-hidden />} onClick={() => navigate('/assistant')}>Assistant</Button>}
           <ThemeSwitcher />
           <Tooltip title="Search workspace (Ctrl K)">
             <Button

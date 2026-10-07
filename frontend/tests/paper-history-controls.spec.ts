@@ -55,3 +55,23 @@ test('pending price edits use a visible limit price and leave fills immutable',a
  await expect.poll(()=>input).toEqual({orderType:'limit',limitPrice:97.5,expectedEligibleAfter:pending.eligibleAfter});
  await page.getByRole('tab',{name:'Trade & order history'}).click();await expect(page.getByRole('button',{name:'Modify price',exact:true}).filter({visible:true})).toHaveCount(0);
 });
+
+for (const marketOpen of [false,true]) test(`market session status: open=${marketOpen}`,async({page})=>{
+ await setup(page);
+ await page.route('**/api/paper',route=>route.fulfill({json:{...paper,positions:[],marketOpen,feed:{...paper.feed,state:'connected',message:'Feed connected. Waiting for new trades.'},safety:{warnings:[],notices:['NSE paper execution uses a conservative window.']}}}));
+ await page.goto('/paper-trading');
+ await expect(page.getByText('Market closed',{exact:true})).toHaveCount(marketOpen?0:1);
+ await expect(page.getByText('Paper fills are waiting',{exact:true})).toHaveCount(marketOpen?1:0);
+ await expect(page.getByText('Execution safety',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('NSE paper execution uses a conservative window.',{exact:true})).not.toBeVisible();
+ await page.getByText('Paper execution hours and limitations',{exact:true}).click();
+ await expect(page.getByText('NSE paper execution uses a conservative window.',{exact:true})).toBeVisible();
+});
+test('closed market retains actual safety warnings and unclosed intraday positions',async({page})=>{
+ await setup(page);
+ await page.route('**/api/paper',route=>route.fulfill({json:{...paper,marketOpen:false,safety:{warnings:['Clock check failed.'],notices:[]}}}));
+ await page.goto('/paper-trading');
+ await expect(page.getByText('Market closed',{exact:true})).toBeVisible();
+ await expect(page.getByText('Clock check failed.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Intraday positions remain open after market close',{exact:true})).toBeVisible();
+});

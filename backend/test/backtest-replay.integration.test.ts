@@ -1,4 +1,7 @@
-import { test, mock } from 'node:test';
+import { test, mock, after } from 'node:test';
+import type { Readable } from 'node:stream';
+import { jobs, redis } from '../src/shared/redis.js';
+after(async()=>{await jobs.waitUntilReady();await jobs.close();if(redis.status!=='end')await redis.quit();});
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
@@ -37,10 +40,13 @@ test('replay verifies old reports, caches read-only results and falls back on di
     const run = fixture(); await BacktestRunModel.create(run);
     const before = await BacktestRunModel.findById(run._id).lean();
     const trace = {version:1,complete:true,timeframe:'1d',events:recordedFillEvents(run,'NSE:1')};
-    const post = mock.method(engineClient,'post',async (_path: string, request: {replayInstrumentId: string; strategy: {revision: number}; instruments: {daily: unknown[]}[]}) => {
+    const post = mock.method(engineClient,'post',async (path: string, input: Readable) => {
+      assert.equal(path,'/backtest-stream');
+      let text='';for await(const chunk of input)text+=chunk.toString();
+      const [request,stock,end]=text.trim().split('\n').map(line=>JSON.parse(line));
       assert.equal(request.replayInstrumentId,'NSE:1');
       assert.equal(request.strategy.revision,14);
-      assert.equal(request.instruments[0].daily.length,3);
+      assert.equal(stock.daily.length,3);assert.equal(end.candles,3);
       return {data:{...run.result,replay:trace}};
     });
     const result = await backtestReplay(run._id,'NSE:1');

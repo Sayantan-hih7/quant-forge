@@ -16,16 +16,16 @@ engineClient.interceptors.response.use(response => response, (error: unknown) =>
     typeof detail === 'string' ? detail.slice(0, 1500) : 'The calculation engine is unavailable'));
 });
 export interface EvaluationResult { id: string; matched: boolean | null; status: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history'; checks: { matched: boolean | null; field: string; eventKey?: string; missingField?: string; reason?: string; code?: string; availableMonths?: number; requiredMonths?: number; left?: number; right?: number }[] }
-export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { benchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false) {
+export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { benchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false, candleLimit = 150000) {
   const [prices, observations, reports] = await Promise.all([
     factsOnly ? Promise.resolve([]) : storedCandles.find({ instrumentId: { $in: ids }, time: { $lt: cutoff }, ...(monthly ? { interval: '1d' } : {}), ...(window ? { $or: [
       ...(window.dailyFrom ? [{ interval: '1d' as const, time: { $gte: `${window.dailyFrom}T00:00:00.000Z`, $lt: cutoff } }] : []),
       ...(window.intradayFrom ? [{ interval: '1m' as const, time: { $gte: `${window.intradayFrom}T00:00:00.000Z`, $lt: cutoff } }] : []),
-    ] } : {}) }).select('instrumentId interval time open high low close volume -_id').sort({ time: 1 }).limit(150001).lean(),
+    ] } : {}) }).select('instrumentId interval time open high low close volume -_id').sort({ time: 1 }).limit(candleLimit + 1).lean(),
     facts.find({ instrumentId: { $in: ids }, knownAt: { $lte: cutoff } }).sort({ knownAt: 1 }).lean(),
     !factsOnly && window?.reportsFrom ? deliveryDays.find({ instrumentId: { $in: ids }, date: { $gte: window.reportsFrom }, knownAt: { $lte: cutoff } }).select('instrumentId date turnoverCr knownAt -_id').lean() : Promise.resolve([]),
   ]);
-  invariant(prices.length<=150000,'This calculation exceeds 150,000 stored candles. Reduce the stock scope or use a smaller historical dataset.');
+  invariant(prices.length<=candleLimit,`This history batch exceeds ${candleLimit.toLocaleString('en-US')} candles. Reduce the indicator warm-up or historical date range.`);
   const byStock=new Map<string,typeof prices>();
   for(const price of prices){const rows=byStock.get(price.instrumentId)??[];rows.push(price);byStock.set(price.instrumentId,rows);}
   const factsByStock = new Map<string, typeof observations>();

@@ -1,3 +1,4 @@
+import { workspaceChat, workspaceChatSchema } from '../src/modules/ai/services/workspace-chat.service.js';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { AxiosError, AxiosHeaders } from 'axios';
@@ -7,7 +8,7 @@ import { AppError } from '../src/shared/errors.js';
 import { aiRequestSchema, aiResponseSchema } from '../src/modules/ai/validations/ai.validation.js';
 import { draftContext, monthlyDraft, tradingDraft, riskDraft, type Capabilities } from '../src/modules/ai/services/proposal.service.js';
 import { proposeRules } from '../src/modules/ai/services/assistant.service.js';
-import { geminiError } from '../src/modules/ai/providers/gemini.provider.js';
+import { geminiError, geminiRequest } from '../src/modules/ai/providers/gemini.provider.js';
 import { geminiSchema } from '../src/modules/ai/providers/gemini-schema.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { explicitRiskSchema, normalizeRiskReply } from '../src/modules/ai/providers/proposal-schema.js';
@@ -309,4 +310,130 @@ test('connected daily turnover is drafted directly without replacing it with a m
     assert.deepEqual(result.questions, []);
     assert.equal((result.proposal as ReturnType<typeof tradingDraft>).entry.groups[0].conditions[1].left, 'dailyTurnover');
   } finally { env.GEMINI_API_KEY = key; }
+});
+
+
+test('large strategy schemas use JSON mode without rejected provider grammar; small requests retain grammar', () => {
+  const schema = geminiSchema(explicitRiskSchema(zodToJsonSchema(aiResponseSchema('strategy'), { $refStrategy: 'none' })));
+  const request = geminiRequest('Draft rules', 'Fix sell conflict', schema);
+  assert.equal(request.generationConfig.responseMimeType, 'application/json');
+  assert.equal('responseJsonSchema' in request.generationConfig, false);
+  assert.ok(request.systemInstruction.parts[0].text.includes(JSON.stringify(schema)));
+  assert.deepEqual(request.contents, [{ role: 'user', parts: [{ text: 'Fix sell conflict' }] }]);
+  const small = { type: 'object', properties: { message: { type: 'string' } } };
+  assert.deepEqual(geminiRequest('Clarify', 'Question', small).generationConfig.responseJsonSchema, small);
+});
+
+
+const chatEmpty = { usage: async () => {}, strategies: async () => [], monthly: async () => null };
+const chatReply = (proposal: ReturnType<typeof tradingDraft> | ReturnType<typeof monthlyDraft> | null) => ({ text: 'Review the proposal', assumptions: [], proposal, questions: [], blockers: [], example: null, explanationOnly: false, provider: 'Test', configured: true, model: 'test' });
+
+test('workspace guidance cannot invent actions and accepts no preference field', async () => {
+  const dependencies = { ...chatEmpty, generate: async () => ({ text: 'Inspect the feed.', action: 'connections' }), propose: async () => { throw new Error('Must not generate'); } };
+  const reply = await workspaceChat(workspaceChatSchema.parse({ prompt: 'Why snapshot?' }), undefined, dependencies);
+  assert.equal(reply.destination, '/data-sources'); assert.equal(reply.proposal, null);
+  await assert.rejects(workspaceChat(workspaceChatSchema.parse({ prompt: 'Place a trade' }), undefined, { ...dependencies, generate: async () => ({ text: 'Done', action: 'execute-order' }) }));
+  assert.equal(workspaceChatSchema.safeParse({ prompt: 'hello', preferences: 'NSE only' }).success, false);
+});
+
+test('workspace editing uses actual saved strategy and retains its revision across follow-ups', async () => {
+  const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const saved = { ...tradingDraft(strategy, capabilities), _id: id, revision: 4 };
+  const task = { scope: 'strategy', id, revision: 4 };
+  const dependencies = { ...chatEmpty, strategies: async () => [saved], generate: async () => ({ text: 'Edit this strategy', action: 'edit-strategy', strategyId: id }), propose: async (input: import('../src/modules/ai/validations/ai.validation.js').AiRequest) => {
+    assert.equal(input.scope, 'strategy'); assert.equal(input.currentDraft?.name, saved.name);
+    return chatReply(tradingDraft(strategy, capabilities));
+  } };
+  const reply = await workspaceChat(workspaceChatSchema.parse({ prompt: 'Edit my intraday strategy' }), undefined, dependencies);
+  assert.deepEqual(reply.task, task); assert.ok(reply.baseline); assert.ok(reply.review); assert.ok(reply.proposal);
+  let calls = 0;
+  const next = await workspaceChat(workspaceChatSchema.parse({ prompt: 'Use 100000 capital', task, currentDraft: saved }), undefined, { ...dependencies, generate: async () => ({ text: 'Continue', action: 'continue' }), propose: async input => { calls++; assert.equal(input.currentDraft?.name, saved.name); return chatReply(null); } });
+  assert.equal(calls, 1); assert.equal(next.proposal, null);
+  await assert.rejects(workspaceChat(workspaceChatSchema.parse({ prompt: 'Change risk', task: { ...task, revision: 3 } }), undefined, { ...dependencies, generate: async () => ({ text: 'Continue', action: 'continue' }) }), /changed or was archived/);
+});
+
+test('monthly chat starts from saved qualification and can switch away from strategy task', async () => {
+  const rule = monthlyDraft(monthly, capabilities);
+  const reply = await workspaceChat(workspaceChatSchema.parse({ prompt: 'Now add a monthly market cap rule', task: { scope: 'strategy', id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: 0 }, currentDraft: { name: 'unrelated' } }), undefined, {
+    ...chatEmpty, monthly: async () => ({ revision: 6, rule }), generate: async () => ({ text: 'Monthly qualification', action: 'qualification' }), propose: async input => {
+      assert.equal(input.scope, 'monthly'); assert.deepEqual(input.currentDraft, rule); return chatReply(rule);
+    },
+  });
+  assert.deepEqual(reply.task, { scope: 'monthly', id: 'monthly', revision: 6 });
+  assert.ok(reply.review); assert.deepEqual(reply.baseline, rule);
+});
+
+test('chat rejects unknown edit target and stale monthly rules before generation', async () => {
+  const dependencies = { ...chatEmpty, generate: async () => ({ text: 'Edit', action: 'edit-strategy', strategyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), propose: async () => { throw new Error('Must not generate'); } };
+  await assert.rejects(workspaceChat(workspaceChatSchema.parse({ prompt: 'Edit a missing strategy' }), undefined, dependencies), /Choose the strategy/);
+  await assert.rejects(workspaceChat(workspaceChatSchema.parse({ prompt: 'Change market cap', task: { scope: 'monthly', id: 'monthly', revision: 1 } }), undefined, { ...dependencies, generate: async () => ({ text: 'Continue', action: 'continue' }) }), /Monthly rules changed/);
+});
+
+test('AI editing context keeps trading costs and intraday entry cutoff', () => {
+  const result = draftContext('strategy', { risk: { costModel: 'indian-cash', entryCutoffMinute: 900, exchangeFeePercent: 0.003, secret: 'omit' } }) as { risk: Record<string, unknown> };
+  assert.equal(result.risk.costModel, 'indian-cash'); assert.equal(result.risk.entryCutoffMinute, 900); assert.equal(result.risk.secret, undefined);
+});
+
+test('workspace follow-up with no task is rerouted instead of pretending a draft exists',async()=>{
+ let calls=0,proposals=0;
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Swing, paper capital 100000'}),undefined,{
+  usage:async()=>{},strategies:async()=>[],monthly:async()=>null,
+  generate:async()=>++calls===1?{text:'Continue',action:'continue'}:{text:'Preparing your draft',action:'draft-strategy'},
+  propose:async()=>{proposals++;return {text:'Choose your risk',assumptions:[],questions:[{id:'risk',question:'Risk?',reason:'Sizing',options:['0.25%']}],blockers:[],example:null,proposal:null,...{provider:'Gemini' as const,model:'test',configured:true}};},
+ });
+ assert.equal(calls,2);assert.equal(proposals,1);assert.equal(result.task?.scope,'strategy');assert.equal(result.questions[0].id,'risk');
+});
+
+test('occupied strategy slot asks a relevant choice and never claims the discarded draft is ready',async()=>{
+ const saved={...tradingDraft(strategy,capabilities),_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',revision:4};
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Build a new intraday draft'}),undefined,{
+  ...chatEmpty,strategies:async()=>[saved],generate:async()=>({text:'Prepare',action:'draft-strategy'}),propose:async()=>chatReply(tradingDraft(strategy,capabilities)),
+ });
+ assert.equal(result.proposal,null);assert.match(result.text,/already have/);assert.equal(result.questions[0].id,'existing_strategy');assert.equal(result.questions[0].allowRecommendedDefault,false);
+});
+
+
+test('improve correction edits the workflow strategy instead of reopening backtest or an unrelated draft',async()=>{
+ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',old='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ const saved={...tradingDraft(strategy,capabilities),_id:id,revision:6};
+ for(const action of ['explain','edit-strategy','continue']){
+ let proposals=0;
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'no i mean improve strategy for probable good results.',task:{scope:'strategy',id:old,revision:0},currentDraft:{name:'Unrelated draft'},activeWorkflow:{kind:'backtest',strategyId:id,revision:6}}),undefined,{
+ ...chatEmpty,strategies:async()=>[saved],generate:async()=>({text:'Test it',action,strategyId:id,workflow:{kind:'backtest',strategyId:id}}),
+ prepareWorkflow:async()=>{throw new Error('Must not reopen a backtest');},propose:async input=>{proposals++;assert.equal(input.currentDraft?.name,saved.name);return chatReply(tradingDraft(strategy,capabilities));}
+ });assert.equal(proposals,1);assert.deepEqual(result.task,{scope:'strategy',id,revision:6});assert.ok(result.proposal);assert.ok('clearWorkflow' in result&&result.clearWorkflow);
+ }
+});
+test('ambiguous improvement correction asks for strategy instead of guessing workflow target',async()=>{
+ const a={...tradingDraft(strategy,capabilities),_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',revision:6};
+ const b={...a,_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',name:'Other'};
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Improve strategy for better results'}),undefined,{...chatEmpty,strategies:async()=>[a,b],generate:async()=>({text:'Run it',action:'explain',workflow:{kind:'backtest',strategyId:a._id}}),propose:async()=>{throw new Error('Must clarify');},prepareWorkflow:async()=>{throw new Error('Must not run');}});
+ assert.equal(result.questions[0].id,'improve_strategy');assert.equal(result.proposal,null);
+});
+
+
+test('named holding period overrides the previous workflow when improving another strategy',async()=>{
+ const a={...tradingDraft(strategy,capabilities),_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'Intraday plan',revision:6};
+ const b={...a,_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',name:'Swing plan',entry:{...a.entry,horizon:'swing'}};
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Improve my swing strategy',activeWorkflow:{kind:'backtest',strategyId:a._id,revision:6}}),undefined,{...chatEmpty,strategies:async()=>[a,b],generate:async()=>({text:'Run it',action:'explain',workflow:{kind:'backtest',strategyId:b._id}}),propose:async input=>{assert.equal(input.currentDraft?.name,b.name);return chatReply(null);},prepareWorkflow:async()=>{throw new Error('Must not run');}});
+ assert.equal(result.task?.id,b._id);
+});
+
+test('invalid relative strength interval names the condition and a valid alternative',()=>{
+ const caps={...capabilities,technical:[...capabilities.technical,'relativeStrength']};
+ const rule={...technical,left:'relativeStrength',leftFrame:'5m',rightType:'value',operator:'gt',value:0};
+ const draft={...strategy,entry:{logic:'AND',groups:[{logic:'AND',conditions:[rule]}]}};
+ assert.throws(()=>tradingDraft(draft,caps),(error:unknown)=>{assert.ok(error instanceof AppError);const visible=invalidProposalError(error);assert.match(visible.message,/Buy rule, group 1, condition 1/);assert.match(visible.message,/Relative strength vs benchmark cannot use 5m/);assert.match(visible.message,/1d, 1w, 1mo/);return true;});
+ assert.doesNotThrow(()=>tradingDraft({...draft,entry:{logic:'AND',groups:[{logic:'AND',conditions:[{...rule,leftFrame:'1d'}]}]}},caps));
+});
+
+test('workspace returns failed draft explanation in chat without stale questions or actionable proposal',async()=>{
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Apply my confirmed settings'}),undefined,{...chatEmpty,generate:async()=>({text:'Draft',action:'draft-strategy'}),propose:async()=>{throw invalidProposalError(new AppError(422,'AI_RULE_CONSTRAINT','Buy rule, group 1, condition 1: Relative strength requires daily candles. Choose 1d.'));}});
+ assert.match(result.text,/Choose 1d/);assert.equal(result.proposal,null);assert.equal(result.review,null);assert.deepEqual(result.questions,[]);assert.deepEqual(result.assumptions,[]);assert.equal(result.blockers.length,1);assert.ok('clearWorkflow' in result&&result.clearWorkflow);
+});
+
+test('explicit existing strategy choice binds to its saved revision instead of asking again',async()=>{
+ const saved={...tradingDraft(strategy,capabilities),_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'Intraday plan',revision:6};
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'My answers:\n1. [existing_strategy] Prepare changes to Intraday plan'}),undefined,{...chatEmpty,strategies:async()=>[saved],generate:async()=>({text:'New draft',action:'draft-strategy'}),propose:async input=>{assert.equal(input.currentDraft?.name,saved.name);return chatReply(null);}});
+ assert.equal(result.task?.id,saved._id);assert.equal(result.task?.revision,6);
 });

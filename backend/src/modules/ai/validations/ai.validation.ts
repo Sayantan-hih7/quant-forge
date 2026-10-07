@@ -1,3 +1,4 @@
+import {attachmentsSchema} from './attachment.validation.js';
 import { calculationSettingsSchema } from '../../../shared/calculation-settings-schema.js';
 import { z } from 'zod';
 import { monthlyCatalog, tradingCatalog } from '../config/rule-catalog.js';
@@ -42,20 +43,29 @@ export const aiQuestionSchema = z.object({
   question: z.string().trim().min(1).max(300),
   reason: z.string().trim().min(1).max(300),
   options: z.array(z.string().trim().min(1).max(120)).max(4),
-}).strict();
+  recommendedOption: z.string().trim().min(1).max(120).nullable().optional(),
+  recommendationReason: z.string().trim().min(1).max(300).optional(),
+  allowRecommendedDefault: z.boolean().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.recommendedOption && !value.options.includes(value.recommendedOption)) ctx.addIssue({code:'custom',path:['recommendedOption'],message:'Recommendation must match a supplied option.'});
+  if (value.allowRecommendedDefault && (!value.recommendedOption || !value.recommendationReason)) ctx.addIssue({code:'custom',message:'A skippable question needs an explained recommended option.'});
+});
+export const aiQuestionsSchema = z.array(aiQuestionSchema).max(3).superRefine((questions,ctx)=>{
+  if(new Set(questions.map(q=>q.id)).size!==questions.length)ctx.addIssue({code:'custom',message:'Question IDs must be unique.'});
+});
 export const aiExampleSchema = z.object({
   entry: number.positive().max(10000000).nullable(),
   atr: number.positive().max(10000000).nullable(),
 }).strict();
 export const aiDialogueSchema = z.object({
-  questions: z.array(aiQuestionSchema).max(3).default([]),
+  questions: aiQuestionsSchema.default([]),
   blockers: z.array(z.string().trim().min(1).max(400)).max(5).default([]),
   example: aiExampleSchema.nullable().default(null),
 });
 export const strategyIntentSchema = z.object({
   status: z.enum(['clarify', 'unsupported', 'explain', 'ready']),
   message: z.string().trim().min(1).max(3000),
-  questions: z.array(aiQuestionSchema).max(3),
+  questions: aiQuestionsSchema,
   blockers: z.array(z.string().trim().min(1).max(400)).max(5),
   assumptions: z.array(z.string().max(300)).max(8),
   requirements: z.array(z.string().trim().min(1).max(400)).max(16),
@@ -71,9 +81,10 @@ export const aiResponseSchema = (scope: 'monthly' | 'strategy', focus?: 'risk') 
   message: z.string().trim().min(1).max(3000), assumptions: z.array(z.string().max(300)).max(8),
   proposal: (scope === 'monthly' ? monthlyProposalSchema : focus === 'risk' ? riskProposalSchema : tradingProposalSchema).nullable(),
   }).strict();
-  return scope === 'monthly' ? base : base.extend(aiDialogueSchema.shape);
+  return base.extend(aiDialogueSchema.shape);
 };
 export const aiRequestSchema = z.object({
+  attachments: attachmentsSchema.optional(),
   scope: z.enum(['monthly', 'strategy']), prompt: z.string().trim().min(3).max(1200),
   focus: z.literal('risk').optional(),
   example: aiExampleSchema.optional(),

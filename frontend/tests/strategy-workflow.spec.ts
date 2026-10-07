@@ -97,8 +97,8 @@ test('new manual strategy completes both sides, validates and saves only on expl
   expect(writes).toMatchObject([{ expectedRevision: 0, draft: { name: 'My daily strategy', entry: { side: 'BUY', cadence: 'daily' }, exit: { side: 'SELL', cadence: 'daily' }, risk: { riskPercent: 0.5 } } }]);
 });
 
-test('failed save retains local edits and a later server revision requires explicit reload', async ({ page }) => {
-  await page.goto('/strategies?rule=' + id);
+test('failed save retains edits but newer saved revision opens first with recoverable local backup', async ({ page }) => {
+  await page.goto('/strategies?rule=' + id + '&mode=edit');
   await page.getByLabel('Strategy name', { exact: true }).fill('Unsaved local name');
   await expect(page.getByRole('tab', { name: 'Backtests', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -107,11 +107,19 @@ test('failed save retains local edits and a later server revision requires expli
   await expect(page.getByLabel('Strategy name', { exact: true })).toHaveValue('Unsaved local name');
   await page.route('**/api/strategies', route => route.fulfill({ json: [{ ...record(), name: 'Saved elsewhere', revision: 3 }] }));
   await page.reload();
-  await expect(page.getByText('A newer saved strategy exists')).toBeVisible();
+  await expect(page.getByText('A newer saved strategy exists')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Reload saved strategy' }).click();
+
   await expect(page.getByLabel('Strategy name', { exact: true })).toHaveValue('Saved elsewhere');
   await expect(page.getByRole('tab', { name: 'Backtests', exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(page.getByLabel('Strategy name', { exact: true })).toHaveValue('Saved elsewhere');
+  await page.getByRole('button',{name:'Older local drafts (1)',exact:true}).click();
+  await expect(page.getByRole('dialog')).toContainText('Unsaved local name');
+  await page.getByRole('button',{name:'Use as unsaved draft',exact:true}).click();
+  await expect(page.getByLabel('Strategy name',{exact:true})).toHaveValue('Unsaved local name');
+  await expect(page.getByText('A newer saved strategy exists')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Save changes',exact:true})).toBeEnabled();
 });
 
 test('draft navigation preserves changes, and duplicating never overwrites a saved strategy', async ({ page }) => {
@@ -289,7 +297,7 @@ test('R targets, limit entry and staged stop management save and reload together
 test('an unchanged draft from the old editor does not falsely report a version conflict', async ({ page }) => {
   const { name, entry, exit, risk } = record();
   await page.addInitScript(({ id, draft }) => localStorage.setItem('quantforge-strategy-chat', JSON.stringify({ version: 2, state: { conversations: { ['backend-local:' + id]: { messages: [], draft } } } })), { id, draft: { name, entry, exit, risk } });
-  await page.goto('/strategies?rule=' + id);
+  await page.goto('/strategies?rule=' + id + '&mode=edit');
   await expect(page.getByLabel('Strategy name', { exact: true })).toHaveValue(name);
   await expect(page.getByText('A newer saved strategy exists')).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Backtests', exact: true })).toBeEnabled();
@@ -329,7 +337,7 @@ test('signal inspection evaluates both sides, places no orders and expires when 
 });
 
 test('backtest validation enforces completed dates and intraday length before submission', () => {
-  const data = { strategyId: id, from: '2025-01-01', to: '2025-05-01', universe: 'current', includeManual: false, acknowledgeSelectionBias: true, ids: [stock._id] };
+  const data = { dataPolicy:'ready', strategyId: id, from: '2025-01-01', to: '2025-05-01', universe: 'current', includeManual: false, acknowledgeSelectionBias: true, ids: [stock._id] };
   expect(backtestSetupSchema(false).safeParse(data).success).toBe(false);
   expect(backtestSetupSchema(true).safeParse(data).success).toBe(true);
   expect(backtestSetupSchema(true).safeParse({ ...data, to: '2099-01-01' }).success).toBe(false);

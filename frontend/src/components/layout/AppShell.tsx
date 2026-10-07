@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Drawer } from "antd";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
@@ -7,6 +7,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useScanRuntime } from '../../modules/qualification/hooks/useScanRuntime';
 import { useMonitorRuntime } from '../../modules/signals/hooks/useMonitorRuntime';
 import {localWorkspacePaths} from '../../config/localWorkspace';
+const WorkspaceAssistant = lazy(() => import('./WorkspaceAssistant').then(module => ({ default: module.WorkspaceAssistant })));
 function PreviewRuntime() {
   useScanRuntime();
   useMonitorRuntime();
@@ -14,6 +15,9 @@ function PreviewRuntime() {
 }
 export function AppShell() {
   const pathname = useLocation().pathname;
+  const assistantActive = pathname === '/assistant';
+  const [assistantLoaded, setAssistantLoaded] = useState(assistantActive);
+  if (assistantActive && !assistantLoaded) setAssistantLoaded(true);
   const realData = localWorkspacePaths.includes(pathname);
   const collapsed = useUiStore((s) => s.collapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -35,10 +39,11 @@ export function AppShell() {
       </Drawer>
       <div className="app-content">
         <TopBar realData={realData} onOpenMenu={() => setMobileOpen(true)} />
-        <main id="main-content">
+        <main id="main-content" className={assistantActive ? "assistant-main" : undefined}>
+          {assistantLoaded && <Suspense fallback={assistantActive ? <p role="status">Loading assistant...</p> : null}><WorkspaceAssistant active={assistantActive} /></Suspense>}
           <Outlet />
         </main>
-        <footer className="app-footer">
+        <footer className="app-footer" hidden={assistantActive}>
           <span>
             <span className="status-dot" /> {realData ? 'Local data service · no live orders' : 'Simulated workspace · no live orders'}
           </span>

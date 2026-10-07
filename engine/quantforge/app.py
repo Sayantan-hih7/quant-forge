@@ -1,12 +1,17 @@
 import os
 import secrets
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
+from tempfile import TemporaryFile
+from threading import BoundedSemaphore
+from .backtest_stream import run_stream, MAX_BYTES
 from pydantic import BaseModel, Field
 from .rules import evaluate, validate_rule, TECHNICAL, FACTS
 from .replay import decision
 from .backtest import run_backtest
 
 app = FastAPI(title="QuantForge calculation engine", version="0.1.0")
+backtest_slot = BoundedSemaphore(1)
 if os.getenv("NODE_ENV") == "production" and not os.getenv("ENGINE_TOKEN"):
     raise RuntimeError("Production requires ENGINE_TOKEN")
 
@@ -69,9 +74,38 @@ def decisions(body: dict, x_engine_token: str = Header(default="")):
 @app.post("/backtest")
 def backtest(body: dict, x_engine_token: str = Header(default="")):
     authorize(x_engine_token)
+    if not backtest_slot.acquire(blocking=False):
+        raise HTTPException(503, "Another portfolio calculation is running. Retry after it completes.")
     try:
         if not 1 <= len(body["instruments"]) <= 200:
             raise ValueError("Backtests support 1–200 selected stocks")
         return run_backtest(body)
     except (ValueError, KeyError, TypeError) as error:
         raise HTTPException(422, str(error)) from error
+    finally:
+        backtest_slot.release()
+
+
+@app.post("/backtest-stream")
+async def streamed_backtest(request: Request, x_engine_token: str = Header(default="")):
+    authorize(x_engine_token)
+    if request.headers.get("content-type", "").split(";")[0] != "application/x-ndjson":
+        raise HTTPException(415, "Use the versioned backtest stream format")
+    if not backtest_slot.acquire(blocking=False):
+        raise HTTPException(503, "Another portfolio calculation is running. Retry after it completes.")
+    try:
+        # Spool to temporary disk instead of buffering the entire upload in RAM.
+        # TemporaryFile closes/deletes on success, validation failure or disconnect.
+        with TemporaryFile() as handle:
+            size = 0
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise HTTPException(413, "Backtest history exceeds the safe transfer size")
+                await run_in_threadpool(handle.write, chunk)
+            handle.seek(0)
+            return await run_in_threadpool(run_stream, handle)
+    except (ValueError, KeyError, TypeError) as error:
+        raise HTTPException(422, str(error)) from error
+    finally:
+        backtest_slot.release()

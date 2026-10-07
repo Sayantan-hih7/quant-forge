@@ -91,7 +91,7 @@ async function start(instruments: FeedInstrument[]) {
   const details = new Map<string, { day: string; values: { open: number | null; high: number | null; low: number | null; previousClose: number | null } }>();
   const last = new Map<string, string>();
   // Depth arrives one level per packet; coalesce a burst into one book update per stock.
-  const books = new Map<string, { bids: (BookLevel | null)[]; asks: (BookLevel | null)[]; seen: Set<number>; circuits?: { upperCircuit: number; lowerCircuit: number } }>();
+  const books = new Map<string, { bids: (BookLevel | null)[]; asks: (BookLevel | null)[]; seen: Set<number>; bestBidAt?:string; circuits?: { upperCircuit: number; lowerCircuit: number } }>();
   const bookTimers = new Map<string, NodeJS.Timeout>();
   const flushBook = (id: string) => {
     if (bookTimers.has(id)) return;
@@ -99,7 +99,7 @@ async function start(instruments: FeedInstrument[]) {
       bookTimers.delete(id);
       const book = books.get(id); if (!book || !lookup.size) return;
       send({ type: 'book', book: { instrumentId: id, source: 'motilal', receivedAt: new Date().toISOString(),
-        bids: book.bids.filter((x): x is BookLevel => !!x), asks: book.asks.filter((x): x is BookLevel => !!x), levels: book.seen.size, ...book.circuits } });
+        bestBidAt:book.bestBidAt, bids: book.bids.filter((x): x is BookLevel => !!x), asks: book.asks.filter((x): x is BookLevel => !!x), levels: book.seen.size, ...book.circuits } });
     }, 200));
   };
   sdk.onBroadcast('tick', packet => {
@@ -108,8 +108,8 @@ async function start(instruments: FeedInstrument[]) {
     if (!stock) return;
     const level = parseDepthLevel(packet), circuits = parseCircuits(packet);
     if (level || circuits) {
-      const book = books.get(stock.id) ?? { bids: Array<BookLevel | null>(5).fill(null), asks: Array<BookLevel | null>(5).fill(null), seen: new Set<number>() };
-      if (level) { book.bids[level.index] = level.bid; book.asks[level.index] = level.ask; book.seen.add(level.index); }
+      const book = books.get(stock.id) ?? { bids: Array<BookLevel | null>(5).fill(null), asks: Array<BookLevel | null>(5).fill(null), seen: new Set<number>(), bestBidAt:undefined as string|undefined };
+      if (level) { if(level.index===0)book.bestBidAt=level.bid?new Date().toISOString():undefined; book.bids[level.index] = level.bid; book.asks[level.index] = level.ask; book.seen.add(level.index); }
       if (circuits) book.circuits = circuits;
       books.set(stock.id, book); flushBook(stock.id);
       return;

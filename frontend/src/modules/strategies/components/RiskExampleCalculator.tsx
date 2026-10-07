@@ -1,3 +1,4 @@
+import { affordableShares } from '../utils/tradingCosts';
 import { Alert, Button, Form, InputNumber, Tag } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import type { TradingPlanDraft } from '../types/tradingPlan';
@@ -26,7 +27,7 @@ export function RiskExampleCalculator() {
 export function RiskExampleOutcome({ risk, entry, atr, signalLow = null }: { signalLow?: number | null; risk: StrategyRisk; entry: number | null; atr: number | null }) {
   const distance = referenceRisk(risk, entry, entry && atr ? entry - atr * risk.atrMultiplier : null, signalLow);
   const budget = risk.initialCapital * risk.riskPercent / 100;
-  const quantity = entry && distance ? Math.max(0, Math.min(Math.floor(budget / distance), Math.floor(risk.initialCapital / (entry * (1 + risk.feePercent / 100))))) : null;
+  const quantity = entry && distance ? Math.max(0, Math.min(Math.floor(budget / distance), affordableShares(Math.round(risk.initialCapital * 100), Math.round(entry * 100), risk))) : null;
   const targets = risk.exitTargets?.length ? risk.exitTargets : [{ basis: 'risk' as const, value: risk.targetR, closePercent: 100 }];
   const plan = stopPlan(risk);
   const when = (rule: { trigger: 'risk' | 'target'; at: number }) => rule.trigger === 'target' ? `After Target ${rule.at} fills` : `At ${entry && distance ? targetMoney(entry + distance * rule.at) : `+${rule.at}R`}`;

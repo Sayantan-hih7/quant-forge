@@ -56,3 +56,37 @@ test('a tested strategy passes its report into paper monitoring and preserves it
  await page.getByRole('button',{name:'Start paper trading',exact:true}).click();
  await expect.poll(()=>input).toMatchObject({sourceBacktestId:runId,strategyId:strategy._id,ids:['NSE:1'],mode:'automatic'});
 });
+
+test('clock warning and emergency entry halt are visible and explicit',async({page})=>{
+ await page.route('**/api/paper',route=>route.fulfill({json:{...paper,safety:{clock:{state:'blocked',message:'Clock drift'},warnings:['Computer clock differs by 15 seconds. Signals and fills are paused.'],halted:false}}}));
+ let requested:unknown;
+ await page.route('**/api/paper/safety',async route=>{requested=route.request().postDataJSON();await route.fulfill({json:{ok:true}});});
+ await page.goto('/paper-trading');
+ await expect(page.getByText('Computer clock differs by 15 seconds. Signals and fills are paused.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Emergency: stop new buys',exact:true}).click();
+ await expect.poll(()=>requested).toEqual({halted:true});
+});
+
+
+test('backtest exchange choice persists and suitability follows the saved holding period',async({page})=>{
+ const assessedAt=new Date().toISOString();
+ const fit=(status:'matched'|'not-matched'|'unavailable')=>({version:'test',assessedAt,profiles:[{horizon:'swing',label:'Swing',status,checks:[{label:'Liquidity',rule:'At least INR 2 Cr',value:status==='unavailable'?null:1,unit:'Cr',status:status==='matched'?'pass':status==='not-matched'?'fail':'unavailable',reason:'Fixture assessment'}]}]});
+ const rows=[{...stocks[0],suitability:fit('matched')},{...stocks[1],suitability:fit('not-matched')},{_id:'BSE:3',symbol:'BSEONLY',exchange:'BSE',source:'scan',suitability:fit('unavailable')}];
+ await page.route('**/api/backtests/universe**',route=>route.fulfill({json:{stocks:rows,listCount:1}}));
+ await page.route('**/api/backtests?**',route=>route.fulfill({json:[]}));
+ await page.goto('/strategies?tab=backtests&rule='+strategy._id);
+ await expect(page.getByText('2 selected / 2 available',{exact:true})).toBeVisible({timeout:20000});
+ await expect(page.getByText('Swing / short-term screening: 1 selected matches, 1 outside profile, 0 need data')).toBeVisible();
+ await page.getByRole('combobox',{name:'Qualified stocks',exact:true}).click();
+ await expect(page.locator('.ant-select-dropdown').filter({visible:true}).getByText('Swing: Matches profile',{exact:true})).toBeVisible();
+ await expect(page.locator('.ant-select-dropdown').filter({visible:true}).getByText('Swing: Outside profile',{exact:true})).toBeVisible();
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Select matching stocks (1)',exact:true}).click();
+ await expect(page.getByText('1 selected / 2 available',{exact:true})).toBeVisible();
+ await page.getByRole('combobox',{name:'Backtest exchange',exact:true}).click();
+ await page.getByText('BSE only',{exact:true}).click();
+ await expect(page.getByText('1 selected / 1 available',{exact:true})).toBeVisible();
+ await expect(page.getByText('Swing / short-term screening: 0 selected matches, 0 outside profile, 1 need data')).toBeVisible();
+ await page.reload();
+ await expect(page.getByText('1 selected / 1 available',{exact:true})).toBeVisible();
+});

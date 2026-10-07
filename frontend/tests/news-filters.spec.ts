@@ -1,0 +1,25 @@
+import { test, expect } from '@playwright/test';
+test('news combines stock and publisher filters and events use the selected stock', async ({page}) => {
+ const queries:string[]=[];
+ await page.route(url=>url.pathname.startsWith('/api/'),route=>route.fulfill({json:{}}));
+ await page.route('**/api/news/sources',route=>route.fulfill({json:{sources:[],publishers:['Mint','Economic Times'],last24h:[],lastRun:null}}));
+ await page.route('**/api/news/movers?*',route=>route.fulfill({json:{positive:[],negative:[]}}));
+ await page.route('**/api/news?*',route=>{queries.push(route.request().url());return route.fulfill({json:{items:[],total:0,page:1,pageSize:30}});});
+ await page.route('**/api/market-data/instruments?*',route=>route.fulfill({json:[{_id:'NSE:2885',symbol:'RELIANCE',name:'Reliance Industries',exchange:'NSE',isin:'INE002A01018'}]}));
+ await page.goto('/market-data/news');
+ await page.getByRole('combobox',{name:'News source'}).click();
+ await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({hasText:/^Mint$/}).click();
+ const picker=page.getByRole('combobox',{name:'Filter by stock'});
+ await picker.fill('rel');
+ await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({hasText:'Reliance Industries'}).click();
+ await expect.poll(()=>{const q=new URL(queries.at(-1)!).searchParams;return [q.get('scope'),q.get('instrumentId'),q.get('publisher'),q.get('page')];}).toEqual(['stock','NSE:2885','Mint','1']);
+ await page.getByRole('button',{name:'Reset filters',exact:true}).click();
+ await expect.poll(()=>new URL(queries.at(-1)!).searchParams.has('instrumentId')).toBe(false);
+ await expect.poll(()=>new URL(queries.at(-1)!).searchParams.has('publisher')).toBe(false);
+ await page.getByRole('tab',{name:'Events calendar'}).click();
+ const request=page.waitForRequest(req=>req.url().includes('/stocks/NSE%3A2885/events'));
+ await page.getByRole('tabpanel',{name:'Events calendar'}).getByRole('combobox',{name:'Filter by stock'}).click();
+ await page.getByRole('tabpanel',{name:'Events calendar'}).getByRole('combobox',{name:'Filter by stock'}).fill('rel');
+ await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({hasText:'Reliance Industries'}).click();
+ await request;
+});

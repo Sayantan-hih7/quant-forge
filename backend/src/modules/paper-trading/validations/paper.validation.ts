@@ -13,4 +13,4 @@ export const amendOrderSchema=z.object({orderType:z.enum(['market','limit']),lim
 export const exitPositionSchema=z.object({id:z.string().uuid(),expectedOpenedAt:z.string().datetime(),quantity:z.number().int().positive().max(1000000).optional()}).strict();
 export const controlSchema = z.object({entriesPaused:z.boolean()}).strict();
 
-export const sessionConfigurationSchema = z.object({ids:z.array(instrumentIdSchema).min(1).max(200).optional(),mode:z.enum(['signals','confirmation','automatic']).optional()}).strict().refine(x=>x.ids!==undefined||x.mode!==undefined,'Choose a scope or execution mode');
+export const sessionConfigurationSchema = z.object({dailyLossLimitPercent:z.number().min(0.1).max(10).optional(),maxEntryDeviationPercent:z.number().min(0.1).max(10).optional(),ids:z.array(instrumentIdSchema).min(1).max(200).optional(),mode:z.enum(['signals','confirmation','automatic']).optional()}).strict().refine(x=>x.ids!==undefined||x.mode!==undefined||x.dailyLossLimitPercent!==undefined||x.maxEntryDeviationPercent!==undefined,'Choose a scope or execution mode');
