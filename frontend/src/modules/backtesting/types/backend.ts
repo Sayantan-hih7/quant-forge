@@ -1,5 +1,5 @@
 import type { SavedStrategy } from '../../strategies/hooks/useBackendStrategies';
-export interface BackendBacktest {
+export interface BackendBacktest { paperEligibilitySettings?:import('../components/BacktestPaperEligibility').EligibilitySettings;
   selectionAudit?: {policy:'ready'|'all';requestedIds:string[];includedIds:string[];excluded:{instrumentId:string;reasons:string[]}[];method:string};
   _id: string; status: string; stage?: string; createdAt: string; strategy: SavedStrategy; message?: string; symbols?: Record<string, string>;
   config: { from: string; to: string; universe: 'historical' | 'current'; ids: string[]; includeManual: boolean; dataPolicy?: 'ready'|'all' };

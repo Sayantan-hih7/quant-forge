@@ -9,7 +9,7 @@ MAX_LINE_BYTES = 64 * 1024 * 1024
 MAX_CANDLES = 8_000_000
 
 
-def run_stream(handle):
+def run_stream(handle, progress=None):
     def record():
         line = handle.readline(MAX_LINE_BYTES + 1)
         if len(line) > MAX_LINE_BYTES:
@@ -29,6 +29,8 @@ def run_stream(handle):
         raise ValueError("Backtests require 1-200 distinct stocks")
     prepared, total = {}, 0
     for ident in ids:
+        if progress:
+            progress({"phase": "loading", "processed": len(prepared), "total": len(ids)})
         stock = record()
         if stock.get("id") != ident or stock.get("candleEncoding") != "ohlcv-v1":
             raise ValueError("Backtest stock history is missing, duplicated or out of order")
@@ -41,13 +43,15 @@ def run_stream(handle):
     end = record()
     if end != {"end": True, "instruments": len(ids), "candles": total} or handle.read(1):
         raise ValueError("Incomplete or inconsistent backtest upload")
-    audit = assess_scope(body, prepared) if body.get('readinessVersion') == 1 and body['config'].get('dataPolicy') else None
+    if progress:
+        progress({"phase": "readiness", "processed": 0, "total": len(prepared)})
+    audit = assess_scope(body, prepared, progress) if body.get('readinessVersion') == 1 and body['config'].get('dataPolicy') else None
     if audit and body['config']['dataPolicy'] == 'ready':
         if not audit['includedIds']:
             return {'noEligibleStocks': True, 'selectionAudit': audit}
         body = {**body, 'config': {**body['config'], 'ids': audit['includedIds']}}
         prepared = {ident: prepared[ident] for ident in audit['includedIds']}
-    result = run_backtest(body, prepared=prepared)
+    result = run_backtest(body, prepared=prepared, progress=progress)
     if audit:
         result['selectionAudit'] = audit
     result["inputCandles"] = total

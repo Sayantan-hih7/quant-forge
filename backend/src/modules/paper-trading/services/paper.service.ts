@@ -1,3 +1,4 @@
+import {assessPaperEligibility} from '../../backtesting/services/paper-eligibility.js';
 import {executionOpen,executionCloseMinute} from './execution-session.js';
 import {entryCutoffMinute} from './entry-safety.js';
 import { PaperSafetyModel } from './execution-safety.js';
@@ -69,6 +70,12 @@ export async function createPaperSession(raw:unknown) {
   invariant(!strategy.archivedAt,'Archived strategies cannot start monitoring. Choose a current strategy.');
   const review=reviewStrategy(strategy);invariant(!review.blocked,review.issues.filter(i=>i.severity==='error').map(i=>i.title+'. '+i.recommendation).join(' '));
   invariant(input.expectedRevision === undefined || strategy.revision === input.expectedRevision, 'The strategy changed. Reload its saved rules before starting monitoring.');
+  if(input.eligibility){
+    invariant(input.sourceBacktestId,'Select a source backtest for the eligibility filters');
+    const eligibility=await assessPaperEligibility(input.sourceBacktestId,input.eligibility);
+    invariant(!eligibility.blockers.length,eligibility.blockers.join('. '));
+    invariant(input.ids.every(id=>eligibility.eligibleIds.includes(id)),'Some selected stocks do not pass the saved paper eligibility filters');
+  }
   if(input.sourceBacktestId){
     const run=await BacktestRunModel.findById(input.sourceBacktestId).lean();
     invariant(run?.status==='completed'&&run.strategy._id===strategy._id&&run.strategy.revision===strategy.revision,'Run a completed backtest of the current saved strategy before using this report.');
@@ -85,7 +92,7 @@ export async function createPaperSession(raw:unknown) {
     const locked=await StrategyModel.updateOne({_id:strategy._id,revision:strategy.revision,archivedAt:{$exists:false}},{$inc:{lifecycleSerial:1}},{session:transaction});
     invariant(locked.modifiedCount,'The strategy changed or was archived. Refresh before monitoring.');
     invariant(!await PaperSessionModel.exists({strategyId:strategy._id,active:true}).session(transaction),'This strategy already has an active paper session');
-    return (await PaperSessionModel.create([{_id:randomUUID(),strategyId:strategy._id,strategy,ids,sourceBacktestId:input.sourceBacktestId,mode:input.mode,dailyLossLimitPercent:strategy.risk.dailyLossLimitPercent??2,maxEntryDeviationPercent:strategy.risk.maxEntryDeviationPercent??2,cashPaise:Math.round(strategy.risk.initialCapital*100),initialPaise:Math.round(strategy.risk.initialCapital*100),entriesPaused:false,active:true,createdAt:new Date().toISOString(),revision:1,message:'Connecting live data automatically. Waiting for fresh quotes and a completed candle after session start.'}],{session:transaction}))[0];
+    return (await PaperSessionModel.create([{_id:randomUUID(),strategyId:strategy._id,strategy,ids,eligibility:input.eligibility,sourceBacktestId:input.sourceBacktestId,mode:input.mode,dailyLossLimitPercent:strategy.risk.dailyLossLimitPercent??2,maxEntryDeviationPercent:strategy.risk.maxEntryDeviationPercent??2,cashPaise:Math.round(strategy.risk.initialCapital*100),initialPaise:Math.round(strategy.risk.initialCapital*100),entriesPaused:false,active:true,createdAt:new Date().toISOString(),revision:1,message:'Connecting live data automatically. Waiting for fresh quotes and a completed candle after session start.'}],{session:transaction}))[0];
   });
   await updatePaperSubscriptions(true);
   return session;
@@ -170,6 +177,16 @@ export async function configurePaperSession(id:string,raw:unknown){
   await mongoose.connection.transaction(async transaction=>{
     const session=await PaperSessionModel.findById(id).session(transaction).lean();
     invariant(session?.active,'Active monitoring required');
+    invariant(!input.eligibility||!!input.sourceBacktestId,'Select the backtest for these eligibility filters');
+    invariant(!input.sourceBacktestId||!!input.eligibility,'Supply eligibility filters when changing the linked report');
+    const settings=input.eligibility??session.eligibility,source=input.sourceBacktestId??session.sourceBacktestId;
+    if(settings&&(input.ids||input.eligibility)){
+      invariant(source,'This eligibility filter needs its source report');
+      const assessment=await assessPaperEligibility(source,settings);
+      invariant(assessment.strategyId===session.strategyId&&assessment.revision===session.strategy.revision,'This paper session uses different strategy rules. Close positions and stop the old session before starting the new revision.');
+      invariant(!assessment.blockers.length,assessment.blockers.join('. '));
+      invariant((input.ids??session.ids??[]).every(stock=>assessment.eligibleIds.includes(stock)),'The selection contains stocks that do not pass the saved eligibility filters');
+    }
     if(input.mode==='signals'){
       invariant(!await PaperPositionModel.exists({sessionId:id}).session(transaction),'Close held paper positions before changing to signals only. You can pause new entries instead.');
       await PaperOrderModel.updateMany({sessionId:id,status:{$in:['pending','confirmation']}},{$set:{status:'cancelled',message:'Changed to signals only'}},{session:transaction});

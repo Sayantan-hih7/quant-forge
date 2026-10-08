@@ -89,3 +89,19 @@ def test_indexed_history_slicing_never_reads_future_or_shifted_values():
         assert len(data.completed_bars("1d")) == len(expected)
     data.cutoff = stamp("2026-09-15T10:00:00Z")
     assert data.values("close", "1d", offset=1).iloc[-1] == 100
+
+
+def test_progress_transport_matches_original_report_and_reports_invalid_input(monkeypatch):
+    monkeypatch.setenv("ENGINE_TOKEN", "isolated-test")
+    headers = {"Content-Type": "application/x-ndjson", "Accept": "application/x-ndjson", "X-Engine-Token": "isolated-test"}
+    with TestClient(app) as client:
+        response = client.post("/backtest-stream", content=stream_bytes(body()), headers=headers)
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.text.splitlines()]
+        assert events[0]["type"] == "progress"
+        assert events[-1]["type"] == "result"
+        assert events[-1]["data"] == run_stream(io.BytesIO(stream_bytes(body())))
+        response = client.post("/backtest-stream", content=b"bad", headers=headers)
+        assert json.loads(response.text.splitlines()[-1])["code"] == "ENGINE_VALIDATION"
+        assert backtest_slot.acquire(blocking=False)
+        backtest_slot.release()

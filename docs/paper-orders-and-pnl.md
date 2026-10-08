@@ -26,3 +26,11 @@ The clock can queue square-off without a recent tick, but filling still requires
 Feed ticks and order submissions wake the paper worker through Redis Pub/Sub after persistence. A one-second timer remains as a recovery path; rule evaluation/history downloads run separately. Quote freshness, position identity, cash and risk checks continue to apply.
 
 Validation: isolated Mongo integration tests cover fee allocation/legacy history across pages, repeated exits, market/limit edits, stale edits, edit/fill races, protective-order restrictions, paused confirmation-mode square-off, expiry retries and prevention of new intraday fills after cutoff. Browser tests cover totals/history, direct and partial sells, price editing, chart navigation and mobile overflow.
+
+## Visible monitoring and position exit controls
+
+Signal Runner now shows every selected or held stock in Watching stocks, including stocks with no signals. The view distinguishes the first candle check, unmet buy conditions, held-position protection, missing data/feed, paused entries, queued orders and market closure. Expand a row for saved rule descriptions and the latest completed-candle results. Paper trading has the same view under Waiting for signals. Counts of individual passing checks are not a prediction or a substitute for AND/OR rule evaluation.
+
+Open positions expose Manage SL / targets. Prices can be changed independently of saved strategy rules; target counts, allocation quantities and completed exits remain fixed. Changes require review and pause new entries for that paper session. Pending orders, corporate-action holds and stale position snapshots block edits. Exit prices apply only to subsequent eligible quotes. A crossed level may trigger immediately on that next quote; no fill at an old displayed price is fabricated.
+
+Manual stop overrides remain fixed. Strategy breakeven/trailing calculations continue separately, using original target prices and actual completed exits. Restore strategy levels restores that current state and removes overrides without undoing sales. Changes are recorded in paper_exit_amendments and the latest 20 are visible in the editor; records survive closing the position. Market-hours, feed and execution safeguards continue to apply. The paper worker publishes exit-controls capability; an older worker must be restarted before accepting edits.

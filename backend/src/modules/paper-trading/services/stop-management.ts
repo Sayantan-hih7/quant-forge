@@ -14,12 +14,12 @@ export function stopPlan(risk: Risk): StopManagement | undefined {
 }
 /** 1R never changes after entry. Peaks are tracked from trailing activation. */
 export function advanceStop(position: PaperPosition, risk: Risk, pricePaise: number) {
-  let stopPaise = position.stopPaise, highWaterPaise = position.highWaterPaise;
+  let stopPaise = position.exitControl?.strategyStopPaise ?? position.stopPaise, highWaterPaise = position.highWaterPaise;
   let breakevenActivated = position.breakevenActivated, trailingActivated = position.trailingActivated;
   const plan = stopPlan(risk), distance = position.initialRiskPaise;
   for (const [index, target] of (risk.exitTargets ?? []).entries()) {
     if (target.moveStopTo === undefined || !position.targets?.[index]?.filledQuantity) continue;
-    const level = target.moveStopTo === 0 ? position.entryPaise : position.targets[target.moveStopTo - 1]?.pricePaise;
+    const level = target.moveStopTo === 0 ? position.entryPaise : (position.exitControl?.strategyTargetPrices[target.moveStopTo - 1] ?? position.targets[target.moveStopTo - 1]?.pricePaise);
     if (level !== undefined) stopPaise = Math.max(stopPaise, level);
     if (target.moveStopTo === 0) breakevenActivated = true;
   }
@@ -37,7 +37,7 @@ export function advanceStop(position: PaperPosition, risk: Risk, pricePaise: num
     trailingActivated = true; highWaterPaise = Math.max(highWaterPaise ?? pricePaise, pricePaise);
     stopPaise = Math.max(stopPaise, Math.round(pricePaise * (1 - risk.stopPercent / 100)));
   }
-  return { stopPaise, highWaterPaise, breakevenActivated, trailingActivated };
+  return { stopPaise:position.exitControl?.stopOverridden?position.stopPaise:stopPaise, highWaterPaise, breakevenActivated, trailingActivated, ...(position.exitControl?{exitControl:{...position.exitControl,strategyStopPaise:stopPaise}}:{}) };
 }
 export function exceedsStopLimit(risk: Pick<Risk, 'maxStopPercent'>, entryPaise: number, distancePaise: number) {
   return risk.maxStopPercent !== undefined && distancePaise * 100 - entryPaise * risk.maxStopPercent > 1e-7;

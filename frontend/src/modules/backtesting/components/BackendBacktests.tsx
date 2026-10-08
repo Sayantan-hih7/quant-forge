@@ -1,3 +1,4 @@
+import { defaultBacktestSelection, BACKTEST_STOCK_LIMIT } from '../../strategies/utils/backtestSelection';
 import { BacktestSelectionAudit } from './BacktestSelectionAudit';
 import { useExchangePreference, exchangeOptions } from '../../qualification/hooks/useExchangePreference';
 import { BacktestStockSuitability } from './BacktestStockSuitability';
@@ -37,10 +38,10 @@ export function BackendBacktests({ strategies, selected, initialRunId, onReportC
   useEffect(()=>{
     if(scope.loading||scope.error||initializedScope.current===scopeKey)return;
     initializedScope.current=scopeKey;
-    form.setValue('ids',scope.stocks.map(s=>s._id),{shouldValidate:false});
-  },[scope.loading,scope.error,scope.stocks,scopeKey,form]);
+    form.setValue('ids',defaultBacktestSelection(scope.stocks,strategy?.entry.horizon,values.universe==='historical'),{shouldValidate:false});
+  },[scope.loading,scope.error,scope.stocks,scopeKey,form,strategy?.entry.horizon,values.universe]);
   const eligible = new Set(scope.stocks.map(s => s._id));
-  const validScope = !scope.loading && !scope.error && values.ids.length > 0 && values.ids.every(id => eligible.has(id));
+  const validScope = !scope.loading && !scope.error && values.ids.length > 0 && values.ids.length <= BACKTEST_STOCK_LIMIT && values.ids.every(id => eligible.has(id));
   const refresh = useCallback(() => apiClient.get<BackendBacktest[]>('/backtests', { params: { strategyId: selected } }).then(response => {
     setRuns(response.data.filter(run => run.strategy._id === selected)); setError(undefined);
     setPending(current => response.data.some(run => run._id === current && ['completed', 'failed'].includes(run.status)) ? undefined : current);
@@ -64,7 +65,7 @@ export function BackendBacktests({ strategies, selected, initialRunId, onReportC
     <div className="bt-setup-heading"><div><strong>{strategy.name}</strong><span>Revision {strategy.revision} · {strategy.entry.horizon} · Historical simulation</span></div></div>
     <Collapse className="bt-strategy-context" ghost items={[{key:'strategy',label:'View saved rules, risk & costs',children:<StrategySummaryStrip strategy={strategy} revision={strategy.revision}/>}]} />
     <Tabs activeKey={strategy.archivedAt ? 'history' : workspaceTab} onChange={setWorkspaceTab} items={[...(!strategy.archivedAt ? [{key:'setup',label:'New backtest'}] : []),{key:'history',label:`Run history (${runs.length})`}]} />
-    {(activeRun || pending) && workspaceTab === 'setup' && <Alert showIcon type="info" title={activeRun?.stage === 'preparing' ? 'Preparing price history' : 'Backtest in progress'} action={<Button size="small" onClick={() => setWorkspaceTab('history')}>View progress</Button>}/>}
+    {(activeRun || pending) && workspaceTab === 'setup' && <Alert showIcon type="info" title={activeRun?.stage === 'preparing' ? 'Preparing price history' : 'Backtest in progress'} description={activeRun?.message} action={<Button size="small" onClick={() => setWorkspaceTab('history')}>View progress</Button>}/>}
     <div hidden={workspaceTab !== 'setup' || !!strategy.archivedAt}>
     {!strategy.archivedAt&&<Card title="Set up a backtest" extra={<Tag>Historical replay</Tag>}>
       <Form layout="vertical" requiredMark={false} onFinish={form.handleSubmit(async input => {
@@ -78,10 +79,10 @@ export function BackendBacktests({ strategies, selected, initialRunId, onReportC
           <Row gutter={16}><Col xs={24} sm={12}><RhfInput control={form.control} name="from" label="From" type="date" max={range(1).to} /></Col><Col xs={24} sm={12}><RhfInput control={form.control} name="to" label="Through" type="date" max={range(1).to} /></Col></Row>
           <RhfSelect control={form.control} name="universe" label="Which qualified list?" options={[{ value: 'current', label: 'Current list · research on past prices' }, { value: 'historical', label: 'Historical lists · as published at that time' }]} />
           {values.universe === 'current' ? <><p className="strategy-context-note">Today's stock selection uses information that was not available in the past. This tests trading behaviour; it does not validate historical stock selection.</p><Controller control={form.control} name="acknowledgeSelectionBias" render={({ field, fieldState }) => <Form.Item validateStatus={fieldState.error ? 'error' : undefined} help={fieldState.error?.message}><Checkbox checked={field.value} onChange={e => field.onChange(e.target.checked)}>I understand this uses today's list for research</Checkbox></Form.Item>} /></> : <p className="strategy-context-note">Only stocks recorded in published lists during this period are offered. Each stock becomes eligible from its recorded publication time.</p>}
-        </section><section><h3>2. Choose stocks to replay</h3><p>Qualified stocks from your chosen exchange are selected by default, including manual additions. Changing exchange resets the selection. Up to 200 stocks per run.</p>
+        </section><section><h3>2. Choose stocks to replay</h3><p>Up to 200 qualified stocks from your chosen exchange are selected by default, including manual additions. Changing exchange resets the selection.</p>
           <Select aria-label="Backtest exchange" value={exchange} onChange={setExchange} options={exchangeOptions} style={{width:180,marginBottom:16}} />
           <Controller control={form.control} name="includeManual" render={({ field }) => <Checkbox className="mb-5" checked={field.value} onChange={e => field.onChange(e.target.checked)}>Include manually added stocks</Checkbox>} />
-          <Controller control={form.control} name="ids" render={({ field, fieldState }) => <QualifiedStockPicker {...scope} horizon={strategy.entry.horizon} historical={values.universe==='historical'} value={field.value} onChange={field.onChange} validationError={fieldState.error?.message} onRetry={scope.retry} />} />
+          <Controller control={form.control} name="ids" render={({ field, fieldState }) => <QualifiedStockPicker {...scope} maxStocks={BACKTEST_STOCK_LIMIT} horizon={strategy.entry.horizon} historical={values.universe==='historical'} value={field.value} onChange={field.onChange} validationError={fieldState.error?.message} onRetry={scope.retry} />} />
           <BacktestStockSuitability stocks={scope.stocks} value={values.ids} horizon={strategy.entry.horizon} historical={values.universe==='historical'} loading={scope.loading} onChange={ids=>form.setValue('ids',ids,{shouldValidate:true})} />
           <RhfSelect control={form.control} name="dataPolicy" label="Data readiness" options={[{value:'ready',label:'Test data-ready stocks (recommended)'},{value:'all',label:'Include all selected stocks - research'}]}/>
           <p className="muted">Downloads are retried first. Data-ready mode requires complete recorded sessions and strategy inputs at the first decision candle. New listings may need a later start date. Every exclusion is recorded; selecting by data coverage can bias results.</p>
@@ -100,7 +101,7 @@ export function BackendBacktests({ strategies, selected, initialRunId, onReportC
       <Table<BackendBacktest> size="small" rowKey="_id" dataSource={runs} pagination={{ pageSize: 5 }} locale={{ emptyText: 'No backtests yet. Open New backtest to choose dates and stocks.' }} scroll={{ x: 850 }} columns={[
         { title: 'Test period', render: (_, r) => <div>{date(r.config.from)} – {date(new Date(Date.parse(r.config.to) - 1).toISOString())}<div className="muted">{r.config.ids.length} stocks · {r.strategy.revision === strategy.revision ? 'Current saved rules' : `Earlier rules · revision ${r.strategy.revision}`}<div><StrategyHistoryButton strategy={r.strategy} context="This backtest" /></div></div></div> },
         { title: 'Status', render: (_, r) => <Tag color={r.status === 'completed' ? 'green' : r.status === 'failed' ? 'red' : 'blue'}>{r.status === 'running' ? r.stage === 'preparing' ? 'Preparing history' : 'Replaying candles' : r.status}</Tag> },
-        { title: 'Progress / details', render: (_, r) => <div style={{ maxWidth: 380 }}>{r.status === 'running' && r.progress && <Progress percent={r.progress.total ? Math.min(100, Math.round(r.progress.processed / r.progress.total * 100)) : 0} size="small" />}<small>{r.message ?? (r.status === 'completed' ? 'Report ready' : 'Waiting for worker')}</small></div> },
+        { title: 'Progress / details', render: (_, r) => <div style={{ maxWidth: 380 }}>{r.status === 'running' && r.stage === 'preparing' && r.progress && <Progress percent={r.progress.total ? Math.min(100, Math.round(r.progress.processed / r.progress.total * 100)) : 0} size="small" />}<small>{r.message ?? (r.status === 'completed' ? 'Report ready' : 'Waiting for worker')}</small></div> },
         { title: 'Report', render: (_, r) => <Button disabled={r.status !== 'completed' && !r.selectionAudit} loading={reportLoading === r._id} onClick={() => {setReportLoading(r._id);void openReport(r._id);}}>View report</Button> },
       ]} />
     </Card>

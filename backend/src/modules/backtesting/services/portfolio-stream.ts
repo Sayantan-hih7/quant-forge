@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import { engineClient, engineInstruments } from '../../engine/services/engine.service.js';
+import { readCalculation, type CalculationProgress } from './engine-progress.js';
 import { invariant } from '../../../shared/errors.js';
 import type { BacktestRun } from '../models/backtest.model.js';
 import type { HistoryPlan } from './history-plan.js';
@@ -35,11 +36,18 @@ export async function* backtestStream(run: Pick<BacktestRun, 'strategy' | 'confi
   yield line({ end: true, instruments: run.config.ids.length, candles });
 }
 
-export async function portfolioBacktest(run: Pick<BacktestRun, 'strategy' | 'config' | 'snapshots'>, plan: HistoryPlan, replayInstrumentId?: string) {
+export async function portfolioBacktest(run: Pick<BacktestRun, 'strategy' | 'config' | 'snapshots'>, plan: HistoryPlan, replayInstrumentId?: string, progress?: (value:CalculationProgress)=>Promise<void>) {
   const qualities=new Map<string,IntradayHistoryQuality>();
   let quality: IntradayHistoryQuality = { ...emptyQuality(), affected: [] };
   let producerError: unknown;
-  const input = backtestStream(run, async id => (await engineInstruments([id], run.config.to, false, plan, false, 500000))[0], stock => {
+  let transferred=0;
+  let benchmarks:Instrument['benchmarks']|undefined;
+  const input = backtestStream(run, async id => {
+    await progress?.({phase:'transferring',processed:transferred++,total:run.config.ids.length});
+    const stock=(await engineInstruments([id], run.config.to, false, benchmarks?{...plan,benchmarks:[]}:plan, false, 500000))[0];
+    benchmarks??=stock.benchmarks;
+    return {...stock,benchmarks};
+  }, stock => {
     if (plan.replay !== '1m') return;
     const item = intradayHistoryQuality([stock], run.config, run.strategy.risk.overnight);
     qualities.set(stock.id,item);
@@ -50,9 +58,12 @@ export async function portfolioBacktest(run: Pick<BacktestRun, 'strategy' | 'con
     try { yield* input; } catch (error) { producerError = error; throw error; }
   })(), { objectMode: false, highWaterMark: 64 * 1024 });
   try {
-    const { data } = await engineClient.post<Record<string, unknown>>('/backtest-stream', stream, {
-      headers: { 'Content-Type': 'application/x-ndjson' }, maxBodyLength: BACKTEST_STREAM_BYTES, timeout: 600000,
+    const response = await engineClient.post<Readable>('/backtest-stream', stream, {
+      headers: { 'Content-Type': 'application/x-ndjson', Accept:'application/x-ndjson' }, maxBodyLength: BACKTEST_STREAM_BYTES, timeout: 600000, responseType:'stream',
     });
+    if(!String(response.headers['content-type']).includes('application/x-ndjson'))response.data.destroy();
+    invariant(String(response.headers['content-type']).includes('application/x-ndjson'),'Restart the calculation engine to enable progress reporting before retrying.');
+    const data=await readCalculation(response.data,progress);
     const audit=data.selectionAudit as {policy:string;includedIds:string[]}|undefined;
     if(audit?.policy==='ready'){
       quality={...emptyQuality(),affected:[]};

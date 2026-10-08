@@ -1,3 +1,4 @@
+import {attachmentsSchema} from '../validations/attachment.validation.js';
 import {sourceReportSchema} from './report-tables.js';
 import mongoose,{Schema} from 'mongoose';
 import {z} from 'zod';
@@ -6,11 +7,11 @@ import {isDeepStrictEqual} from 'node:util';
 import {AppError} from '../../../shared/errors.js';
 import {aiQuestionsSchema} from '../validations/ai.validation.js';
 export const conversationSnapshotSchema=z.object({
- messages:z.array(z.object({role:z.enum(['user','assistant']),text:z.string().max(4000),questions:aiQuestionsSchema.optional(),activity:z.array(z.object({tool:z.enum(['backtests','paper','qualification','connections']),status:z.enum(['completed','unavailable']),checkedAt:z.string(),summary:z.string().max(600),report:sourceReportSchema.optional()})).max(4).optional()}).strict()).min(1).max(1000),
+ messages:z.array(z.object({presentation:z.record(z.unknown()).optional(),attachments:attachmentsSchema.optional(),role:z.enum(['user','assistant']),text:z.string().max(4000),questions:aiQuestionsSchema.optional(),activity:z.array(z.object({tool:z.enum(['backtests','paper','qualification','connections']),status:z.enum(['completed','unavailable']),checkedAt:z.string(),summary:z.string().max(600),report:sourceReportSchema.optional()})).max(4).optional()}).strict()).max(1000),
  task:z.object({scope:z.enum(['strategy','monthly']),id:z.string().max(80),revision:z.number().int().min(0)}).strict().optional(),
- resume:z.object({reply:z.record(z.unknown()).optional(),reviewOpen:z.boolean(),prompt:z.string().max(1200),questionState:z.object({active:z.string().max(5),answers:z.record(z.string().max(250)),custom:z.record(z.boolean())}).optional()}).optional(),
+ resume:z.object({error:z.string().max(4000).optional(),qualificationState:z.object({resultsId:z.string().optional(),publishRunId:z.string().optional(),confirmPublish:z.boolean(),acknowledged:z.boolean()}).optional(),workflow:z.object({kind:z.enum(['backtest','paper','qualification']),revision:z.number().int().min(0),strategyId:z.string().optional(),name:z.string().optional(),cadence:z.string().optional(),horizon:z.enum(['intraday','swing','long-term']).optional(),capital:z.number().optional(),sourceReportId:z.string().optional()}).optional(),backtestState:z.object({from:z.string(),to:z.string(),exchange:z.enum(['NSE','BSE','all']),universe:z.enum(['current','historical']),ack:z.boolean(),ids:z.array(z.string()).max(200),reportId:z.string().optional(),mode:z.enum(['signals','confirmation','automatic']),started:z.boolean()}).optional(),attachments:attachmentsSchema.optional(),savedMessage:z.string().max(4000).optional(),reply:z.record(z.unknown()).optional(),reviewOpen:z.boolean(),prompt:z.string().max(1200),questionState:z.object({active:z.string().max(5),answers:z.record(z.string().max(250)),custom:z.record(z.boolean())}).optional()}).optional(),
  currentDraft:z.record(z.unknown()).optional()
-}).strict().refine(value=>JSON.stringify(value).length<=1000000,'Conversation is too large. Start a new chat.');
+}).strict().refine(value=>Buffer.byteLength(JSON.stringify(value))<=8*1024*1024,'Conversation is too large. Start a new chat.');
 const schema=new Schema({_id:{type:String,required:true},title:{type:String,required:true},snapshot:{type:Schema.Types.Mixed,required:true},revision:{type:Number,required:true},memory:{type:Schema.Types.Mixed},updatedAt:{type:String,required:true}},{versionKey:false});
 schema.index({updatedAt:-1});
 export const ConversationModel=mongoose.model('AssistantConversation',schema);
@@ -38,7 +39,7 @@ conversationRouter.put('/:id',async(req,res)=>{const id=idSchema.parse(req.param
   if(existing&&existing.revision!==input.expectedRevision){if(isDeepStrictEqual(existing.snapshot,input.snapshot))return {revision:existing.revision};throw new AppError(409,'CHAT_CHANGED','This chat changed elsewhere. Reopen it before continuing.');}
   if(!existing&&input.expectedRevision!==0)throw new AppError(409,'CHAT_CHANGED','This chat changed elsewhere or was deleted. Reopen it before continuing.');
   const revision=(existing?.revision??0)+1;
-  await ConversationModel.updateOne({_id:id},{$set:{snapshot:input.snapshot,revision,updatedAt:new Date().toISOString()},$setOnInsert:{title:(input.snapshot.messages.find(m=>m.role==='user')?.text??'Conversation').replace(/\s+/g,' ').slice(0,80)}},{session,upsert:true});
+  await ConversationModel.updateOne({_id:id},{$set:{snapshot:input.snapshot,revision,updatedAt:new Date().toISOString()},$setOnInsert:{title:(input.snapshot.messages.find(m=>m.role==='user')?.text??input.snapshot.resume?.prompt??'Conversation').replace(/\s+/g,' ').trim().slice(0,80)||'Conversation'}},{session,upsert:true});
   const rows=await ConversationModel.aggregate<StorageRow>([{$project:{updatedAt:1,bytes:{$bsonSize:'$$ROOT'}}},{$sort:{updatedAt:1,_id:1}}]).session(session);
   const remove=cleanupCandidates(rows,id);
   if(remove.length){await ConversationModel.deleteMany({_id:{$in:remove}},{session});await ChatStorageModel.updateOne({_id:'workspace'},{$set:{lastCleanupAt:new Date().toISOString(),lastRemovedCount:remove.length},$inc:{totalRemoved:remove.length}},{session});}

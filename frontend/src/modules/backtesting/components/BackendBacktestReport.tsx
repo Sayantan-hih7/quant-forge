@@ -1,3 +1,4 @@
+import {BacktestPaperEligibility} from './BacktestPaperEligibility';
 import { BacktestSelectionAudit } from './BacktestSelectionAudit';
 import { StrategyHistoryButton } from '../../strategies/components/StrategyHistoryButton';
 import { fieldLabel } from '../../qualification/config/ruleFields';
@@ -9,7 +10,6 @@ import { backtestStockResults } from '../utils/stockResults';
 import { ReportPnl } from './ReportPnl';
 import '../../../styles/backtest-report.css';
 import { Alert, Button, Card, Collapse, Col, Descriptions, Empty, Select, Row, Space, Statistic, Table, Tabs, Tag } from 'antd';
-import { useNavigate } from 'react-router-dom';
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ProfitTargetSummary } from '../../strategies/components/ProfitTargetSummary';
 import { StopManagementSummary } from '../../strategies/components/StopManagementSummary';
@@ -18,7 +18,7 @@ const researchMoney = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFr
 const date = (value: string) => new Date(value).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
 const time = (value: string) => new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 export function BackendBacktestReport({ run }: { run: BackendBacktest }) {
-  const navigate = useNavigate(), result = run.result;
+  const result = run.result;
   const [chartStock, setChartStock] = useState<string>();
   const [tab, setTab] = useState('summary');
   const inspectStock = (id: string) => { setChartStock(id); setTab('chart'); };
@@ -29,7 +29,7 @@ export function BackendBacktestReport({ run }: { run: BackendBacktest }) {
   if (!result) return null;
   const incomplete=!!(run.config.dataPolicy&&!run.selectionAudit)||!!(result.historyQuality?.missingMinutes||result.historyQuality?.missingExitSessions||Math.max(0,result.unavailableDecisions-(result.warmupDecisions??0))||result.unreadyInstruments?.length);
   const symbol = (id: string) => run.symbols?.[id] ?? id;
-  return <Card className="backend-backtest-report" title={<Space wrap>{run.strategy.name}<Tag color={incomplete?"gold":"green"}>{incomplete?"Completed - data incomplete":"Completed"}</Tag></Space>} extra={<Button disabled={incomplete} title={incomplete?"Resolve the data gaps and rerun before using this report for paper trading":undefined} onClick={() => navigate(`/signal-runner?strategy=${run.strategy._id}&backtest=${run._id}&setup=1`)}>Use for paper trading</Button>}>
+  return <Card className="backend-backtest-report" title={<Space wrap>{run.strategy.name}<Tag color={incomplete?"gold":"green"}>{incomplete?"Completed - data incomplete":"Completed"}</Tag></Space>} extra={<Button disabled={incomplete} title={incomplete?"Resolve the data gaps and rerun before using this report for paper trading":undefined} onClick={() => setTab('eligibility')}>Use for paper trading</Button>}>
     <p className="muted">{date(run.config.from)} – {date(new Date(Date.parse(run.config.to) - 1).toISOString())} · {run.config.ids.length} stocks · Saved strategy revision {run.strategy.revision}</p><StrategyHistoryButton strategy={run.strategy} context="This backtest report" />
     <Alert className="bt-data-status" showIcon type={incomplete || !!run.selectionAudit?.excluded.length || run.config.universe === 'current' ? 'warning' : 'info'}
       title={incomplete ? 'Data incomplete - research only. Paper-trading handoff unavailable.' : run.selectionAudit?.policy === 'ready' && run.selectionAudit.excluded.length ? `${run.selectionAudit.excluded.length} stocks excluded before replay - results cover ${run.config.ids.length} tested stocks. Review selection limitations.` : run.config.universe === 'current' ? "Research using today's stock list - historical selection bias applies." : 'Historical simulation - review data and execution assumptions.'}
@@ -70,6 +70,7 @@ export function BackendBacktestReport({ run }: { run: BackendBacktest }) {
         </div>
         {selectedStock ? <BacktestStockChart embedded key={selectedStock.instrumentId} run={run} stock={selectedStock} onClose={() => setTab('stocks')}/> : <Empty description="No stock results available"/>}
       </> },
+      { key:'eligibility',label:'Paper eligibility',children:<BacktestPaperEligibility key={run._id} run={run}/> },
       { key: 'data', label: 'Data & settings', children: <>
         <BacktestSelectionAudit run={run}/>
         <Collapse className="bt-diagnostic-groups" defaultActiveKey={incomplete ? ['quality'] : []} items={[

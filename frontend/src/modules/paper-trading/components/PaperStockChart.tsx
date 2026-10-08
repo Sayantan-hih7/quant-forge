@@ -53,7 +53,7 @@ export function PaperStockChart({ selection, data, onClose, onChange }: {
     </div>
     {current?.mark && <p className="stock-chart-note">P&L marked at {stockTime(current.mark.at)} · {current.mark.fresh ? 'Fresh execution quote' : 'Last received execution quote'}. Includes entry fees; open P&L excludes future exit fees.</p>}
     {!!levels.length && <div className="stock-trade-levels">{levels.map(l => <Tag key={l.id} color={l.kind === 'stop' ? 'red' : l.kind === 'target' ? 'green' : 'blue'}>{l.label} {stockMoney(l.price)}</Tag>)}</div>}
-    {position && <p className="stock-chart-note">{position.breakevenActivated ? 'Stop moved to entry or higher. ' : ''}{position.trailingActivated ? 'Trailing stop is active. ' : ''}Levels show the current open position. Previous stop movements are not reconstructed.</p>}
+    {position && <p className="stock-chart-note">{position.breakevenActivated && !position.exitControl?.stopOverridden ? 'Stop moved to entry or higher. ' : ''}{position.trailingActivated && !position.exitControl?.stopOverridden ? 'Trailing stop is active. ' : ''}{position.exitControl?.stopOverridden ? 'Manual stop override is active. ' : ''}Levels show the current open position. Previous stop movements are not reconstructed.</p>}
     {chosen && <Alert className="stock-event-detail" showIcon type="info" title={`${chosen.side} ${chosen.kind === 'signal' ? 'signal · not a fill' : `paper fill · ${chosen.quantity} shares at ${stockMoney(chosen.price)}`}`} description={<>
       <p>{stockTime(chosen.at)} · {chosen.label}</p>
       {chosenFill && <p>Fees {money(chosenFill.feePaise)} · {chosenFill.source === 'protection' ? 'Automatic protective exit' : chosenFill.source === 'manual' ? 'Manual paper order' : 'Strategy order'}</p>}

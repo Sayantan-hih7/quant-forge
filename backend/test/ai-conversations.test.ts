@@ -7,7 +7,7 @@ import type {AddressInfo} from 'node:net';
 import {once} from 'node:events';
 import {conversationRouter,conversationSnapshotSchema,cleanupCandidates,ConversationModel} from '../src/modules/ai/services/conversations.js';
 import {env} from '../src/config/env.js';
-test('conversation snapshots reject attachments, executable workflow and oversized content',()=>{
+test('conversation snapshots reject unknown top-level instructions and oversized messages',()=>{
  const snapshot={messages:[{role:'user',text:'Explain strategy'}]};assert.equal(conversationSnapshotSchema.safeParse(snapshot).success,true);
  assert.equal(conversationSnapshotSchema.safeParse({...snapshot,attachments:[]}).success,false);assert.equal(conversationSnapshotSchema.safeParse({...snapshot,workflow:{kind:'paper'}}).success,false);
  assert.equal(conversationSnapshotSchema.safeParse({messages:[{role:'user',text:'a'.repeat(4001)}]}).success,false);
@@ -41,4 +41,14 @@ test('cleanup is oldest first at either cap, protects the current chat, and igno
  assert.deepEqual(cleanupCandidates(rows,'current',{bytes:100,count:4,warningPercent:90}),['old']);
  assert.deepEqual(cleanupCandidates(rows,'current',{bytes:1000,count:3,warningPercent:90}),['old']);
  assert.deepEqual(cleanupCandidates([...rows].reverse(),'current',{bytes:40,count:3,warningPercent:90}),['old','new']);
+});
+
+
+test('history retains presentation, bounded files, pending controls and unsent drafts',()=>{
+ const files=[{kind:'text',name:'rules.md',text:'- Completed candles only'}];
+ const value={messages:[{role:'assistant',text:'Review this',presentation:{proposal:{name:'Draft'},review:{blocked:false,issues:[]}}}],resume:{reviewOpen:true,prompt:'Next question',attachments:files,workflow:{kind:'backtest',revision:7,strategyId:'abc'},backtestState:{from:'2026-09-01',to:'2026-09-30',exchange:'NSE',universe:'current',ack:true,ids:['stock'],reportId:'report',mode:'signals',started:false}}};
+ assert.deepEqual(conversationSnapshotSchema.parse(value),value);
+ assert.equal(conversationSnapshotSchema.safeParse({messages:[],resume:{prompt:'Unsent message',reviewOpen:false}}).success,true);
+ assert.equal(conversationSnapshotSchema.safeParse({...value,resume:{...value.resume,backtestState:{...value.resume.backtestState,mode:'live'}}}).success,false);
+ assert.equal(conversationSnapshotSchema.safeParse({...value,resume:{...value.resume,attachments:[{kind:'text',name:'huge.txt',text:'a'.repeat(20001)}]}}).success,false);
 });

@@ -86,7 +86,7 @@ export async function processPaperQuote(quote:LiveQuote,sessionIds:string[],now=
         const risk=session.strategy.risk;
         const trigger=protectiveTrigger(position,risk,[quote],!risk.overnight && (sessionTime(now).minute>=squareOffMinute(quote.instrumentId,now) || position.openedAt.slice(0,10)<new Date(now).toISOString().slice(0,10)));
         const {highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt}=trigger.state;
-        await PaperPositionModel.updateOne({_id:position._id},{$max:{stopPaise:trigger.stop},$set:{highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt}},{session:transaction});
+        await PaperPositionModel.updateOne({_id:position._id},{$max:{stopPaise:trigger.stop},$set:{highWaterPaise,breakevenActivated,trailingActivated,lastProtectionAt,...(trigger.state.exitControl?{exitControl:trigger.state.exitControl}:{})}},{session:transaction});
         if(!trigger.reason)return;
         const active=await PaperOrderModel.findOne({sessionId,instrumentId:quote.instrumentId,status:{$in:['pending','confirmation']}}).session(transaction).lean();
         // A confirmed sell rule/manual exit should finish, not be replaced by

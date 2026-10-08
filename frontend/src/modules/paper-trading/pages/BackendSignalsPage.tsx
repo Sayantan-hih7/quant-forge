@@ -1,3 +1,4 @@
+import {WatchingStocks} from '../components/WatchingStocks';
 import { StrategyHistoryButton } from '../../strategies/components/StrategyHistoryButton';
 import {useEffect,useState} from 'react';
 import {Alert,App,Button,Card,Collapse,Drawer,Empty,Select,Space,Table,Tag} from 'antd';
@@ -32,6 +33,7 @@ export default function BackendSignalsPage(){
    {!!data?.safety?.notices?.length&&<details><summary>Paper execution hours and limitations</summary>{data.safety.notices.map(note=><p key={note}>{note}</p>)}</details>}
    {data?.safety?.warnings.map(w=><Alert key={w} type="error" showIcon title="Execution safety" description={w}/>)}
    <ExecutionReadiness data={data} ids={ids} monitoring={!!active.length} error={error}/>
+   {data&&<Card title="Watching stocks"><p className="muted">Every selected stock stays visible, even before a signal. Expand a row to see its latest rule checks.</p><WatchingStocks data={data} sessionId={selected} onChart={(sessionId,instrumentId)=>setChart({sessionId,instrumentId})}/></Card>}
    <Card title="Buy / sell signals" extra={<Select aria-label="Filter signals by strategy" style={{width:230,maxWidth:'100%'}} value={selected??'all'} onChange={v=>setSelected(v==='all'?undefined:v)} options={[{value:'all',label:'All strategies'},...(data?.sessions??[]).map(s=>({value:s._id,label:`${s.strategy.name} · r${s.strategy.revision}`+(s.active?'':' · Stopped')}))]}/> }>
     <p className="muted">Signals are listed across strategies by default. An expired signal remains in history and cannot be confirmed. Sell rules are for held shares; the app does not short stocks.</p>
     {data?<SignalTable data={data} sessionId={selected} onConfirm={id=>void action(`/paper/orders/${id}/confirm`)} onSettings={setEditing} onChart={s=>setChart({sessionId:s.sessionId,instrumentId:s.instrumentId,eventId:`signal:${s._id}`})}/>:<Empty description="Loading signals"/>}

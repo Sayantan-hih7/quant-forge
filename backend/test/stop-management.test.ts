@@ -1,3 +1,5 @@
+import {protectiveTrigger} from '../src/modules/paper-trading/services/protection.js';
+import type {LiveQuote} from '../src/modules/market-feed/types/feed.types.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { riskSchema, type Risk } from '../src/modules/strategies/validations/strategy.validation.js';
@@ -76,4 +78,27 @@ test('stop and order validation reject impossible activation settings',()=>{
     {...risk,breakevenAfterTarget1:true}, {...risk,stopMode:'trailing'},
     {...risk,exitTargets:risk.exitTargets!.map((t,i)=>({...t,value:i?25:2}))},
   ])assert.equal(riskSchema.safeParse(value).success,false);
+});
+
+test('manual stop stays fixed while the strategy stop advances for restoration',()=>{
+ let p=position();p.stopPaise=9500;p.exitControl={strategyStopPaise:9600,strategyTargetPrices:[10800,11600,12000],stopOverridden:true,targetOverrides:[false,false,false],revision:1,changedAt:p.openedAt};
+ p={...p,...advanceStop(p,risk,10400)};assert.equal(p.stopPaise,9500);assert.equal(p.exitControl!.strategyStopPaise,10000);
+ p.targets![0]={...p.targets![0],completed:true,filledQuantity:30};
+ p={...p,...advanceStop(p,risk,11200)};assert.equal(p.stopPaise,9500);assert.equal(p.exitControl!.strategyStopPaise,10800);
+ p.stopPaise=p.exitControl!.strategyStopPaise;p.exitControl!.stopOverridden=false;
+ p={...p,...advanceStop(p,risk,11400)};assert.equal(p.stopPaise,11000);
+});
+test('target overrides do not rewrite strategy stop-step reference prices',()=>{
+ const p=position();p.targets![0].pricePaise=11000;p.targets![1].filledQuantity=30;
+ p.exitControl={strategyStopPaise:9600,strategyTargetPrices:[10800,11600,12000],stopOverridden:false,targetOverrides:[true,false,false],revision:1,changedAt:p.openedAt};
+ const settings={...risk,stopManagement:undefined,exitTargets:risk.exitTargets!.map((t,i)=>({...t,...(i===1?{moveStopTo:1}:{})}))};
+ assert.equal(advanceStop(p,settings,11700).stopPaise,10800);
+});
+
+test('edited exits ignore previously received quotes but still honour square-off',()=>{
+ const p=position();p.exitControl={strategyStopPaise:9600,strategyTargetPrices:[10800,11600,12000],stopOverridden:true,targetOverrides:[false,false,false],revision:1,changedAt:'2026-09-25T05:01:00Z'};
+ const q:LiveQuote={instrumentId:'NSE:1',symbol:'TEST',exchange:'NSE',price:94,cumulativeVolume:100,at:'2026-09-25T05:00:59Z',receivedAt:'2026-09-25T05:00:59Z',source:'dhan',session:'test'};
+ assert.equal(protectiveTrigger(p,risk,[q],false).reason,undefined);
+ assert.ok(protectiveTrigger(p,risk,[q],true).reason);
+ assert.equal(protectiveTrigger(p,risk,[{...q,at:'2026-09-25T05:01:01Z',receivedAt:'2026-09-25T05:01:01Z'}],false).reason,'Stop loss');
 });

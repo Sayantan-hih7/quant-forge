@@ -1,3 +1,4 @@
+import {positionExitDetails,modifyPositionExits} from '../services/position-exits.service.js';
 import { setEmergencyHalt } from '../services/execution-safety.js';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -27,3 +28,6 @@ paperRouter.post('/positions/:id/exit',async(req,res)=>{res.status(202).json(awa
 paperRouter.patch('/sessions/:id/configuration',async(req,res)=>{await configurePaperSession(z.string().uuid().parse(req.params.id),req.body);res.json({ok:true});});
 
 paperRouter.get('/orders',async(req,res)=>{const input=z.object({sessionId:z.string().uuid().optional(),beforeAt:z.string().datetime().optional(),beforeId:z.string().optional(),filledOnly:z.enum(['true','false']).optional().transform(v=>v==='true'),exitsOnly:z.enum(['true','false']).optional().transform(v=>v==='true')}).parse(req.query);res.json(await paperOrderHistory(input));});
+
+paperRouter.get('/positions/:id/exits',async(req,res)=>{res.json(await positionExitDetails(z.string().min(1).max(150).parse(req.params.id)));});
+paperRouter.patch('/positions/:id/exits',async(req,res)=>{res.json(await modifyPositionExits(z.string().min(1).max(150).parse(req.params.id),req.body));});

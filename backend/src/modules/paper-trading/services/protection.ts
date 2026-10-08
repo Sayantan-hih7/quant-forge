@@ -7,6 +7,7 @@ export function protectiveTrigger(position:PaperPosition,risk:Risk,quotes:LiveQu
   let state={...position};
   for(const quote of quotes){
     if(quote.instrumentId!==position.instrumentId || quote.at<position.openedAt || (state.lastProtectionAt && quote.at<state.lastProtectionAt))continue;
+    if(state.exitControl && (Date.parse(quote.at)<=Date.parse(state.exitControl.changedAt)||Date.parse(quote.receivedAt)<=Date.parse(state.exitControl.changedAt)) && !sessionExit)continue;
     const price=Math.round(quote.price*100);
     const index=nextTarget(position), target=index>=0?position.targets![index]:undefined;
     const forced=price<=state.stopPaise?'Stop loss':sessionExit?'Session close':undefined;

@@ -36,7 +36,7 @@ def portfolio_events(streams):
         yield at, rows
 
 
-def run_backtest(body, prepared=None):
+def run_backtest(body, prepared=None, progress=None):
     strategy, config = body["strategy"], body["config"]
     risk = strategy["risk"]
     validate_entry_safety(risk)
@@ -131,6 +131,8 @@ def run_backtest(body, prepared=None):
         pending.pop(ident, None)
 
     for at, rows in portfolio_events(streams):
+        if progress:
+            progress({"phase": "replaying", "through": at.isoformat()})
         intrabar_entries = set()
         tradable_rows = [(ident, row) for ident, row in rows if row.volume > 0 and (frame == '1d' or at.tz_convert(IST).hour*60+at.tz_convert(IST).minute < execution_close(ident,at))]
         zero_volume_bars += sum(row.volume <= 0 for _, row in rows)

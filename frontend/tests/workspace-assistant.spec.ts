@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/ai/conversations**',async route=>{const req=route.request(),id=new URL(req.url()).pathname.split('/')[4];
     if(id==='storage')return route.fulfill({json:{usedBytes:1000,count:chats.size,maxBytes:104857600,maxCount:500,percent:chats.size/5,warningPercent:90,lastRemovedCount:0}});
     if(!id)return route.fulfill({json:[...chats.values()]});
-    if(req.method()==='PUT'){const body=req.postDataJSON();const row={_id:id,title:chats.get(id)?.title??body.snapshot.messages[0].text,revision:(Number(chats.get(id)?.revision)||0)+1,updatedAt:new Date().toISOString(),snapshot:body.snapshot};chats.set(id,row);return route.fulfill({json:{revision:row.revision}});}
+    if(req.method()==='PUT'){const body=req.postDataJSON();const row={_id:id,title:chats.get(id)?.title??(body.snapshot.messages[0]?.text??body.snapshot.resume?.prompt??'Conversation'),revision:(Number(chats.get(id)?.revision)||0)+1,updatedAt:new Date().toISOString(),snapshot:body.snapshot};chats.set(id,row);return route.fulfill({json:{revision:row.revision}});}
     if(req.method()==='PATCH'){chats.set(id,{...chats.get(id),title:req.postDataJSON().title});return route.fulfill({json:{ok:true}});}
     if(req.method()==='DELETE'){chats.delete(id);return route.fulfill({json:{ok:true}});}
     return route.fulfill({json:chats.get(id)});
@@ -424,7 +424,7 @@ test('failed request removes stale questions and assumptions but preserves the c
  await send(page,'Use my filter');
  await expect(page.getByText('Relative strength cannot use 5m. Choose daily candles.',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Proceed',exact:true})).toHaveCount(0);
- await expect(page.getByText('Old filter assumption',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('Old filter assumption',{exact:true})).not.toBeVisible();
  await expect(page.getByRole('log')).toContainText('Use my filter');
 });
 
@@ -458,4 +458,47 @@ test('history restores partial question answers and pending strategy review',asy
  await expect(page.getByRole('button',{name:'Review and save',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Review and save',exact:true}).click();
  await expect(page.getByRole('button',{name:'Save these rules',exact:true})).toBeVisible();
+});
+
+
+test('composer continues lists, previews Markdown and pastes clipboard tables safely',async({page})=>{
+ let calls=0;await page.route('**/api/ai/chat',r=>{calls++;return r.fulfill({json:{...empty,text:'Received.',task:null}});});
+ await open(page);const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
+ await input.fill('trend');await input.press('Control+a');await page.getByRole('button',{name:'Format',exact:true}).click();await page.getByRole('button',{name:'Bold',exact:true}).click();await expect(input).toHaveValue('**trend**');await page.getByRole('button',{name:'Format',exact:true}).click();
+ await input.fill('1. First point');await input.press('Enter');await expect(input).toHaveValue('1. First point\n2. ');expect(calls).toBe(0);
+ await input.press('Enter');await expect(input).toHaveValue('1. First point\n');
+ await input.fill('- [x] Check data');await input.press('Enter');await expect(input).toHaveValue('- [x] Check data\n- [ ] ');
+ await input.fill('');await input.evaluate(el=>{const data=new DataTransfer();data.setData('text/plain','Stock\tReason\nABC\tLiquid');data.setData('text/html','<table><tr><th>Stock</th><th>Reason</th></tr><tr><td>ABC</td><td>Liquid<script>window.badPaste=true</script></td></tr></table>');el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+ await expect(input).toHaveValue('| Stock | Reason |\n| --- | --- |\n| ABC | Liquid |');
+ await page.getByRole('button',{name:'Preview',exact:true}).click();await expect(page.locator('.assistant-compose-preview table')).toContainText('ABC');expect(await page.evaluate(()=>('badPaste' in window))).toBe(false);
+ await page.getByRole('button',{name:'Edit text',exact:true}).click();await input.press('Control+Enter');await expect(page.getByRole('log')).toContainText('Received.');expect(calls).toBe(1);
+ await expect(page.locator('.assistant-message.user table')).toBeVisible();
+});
+
+test('refresh restores current chat with attachments and earlier proposal details',async({page})=>{
+ let calls=0;await page.route('**/api/ai/chat',r=>{calls++;return r.fulfill({json:calls===1?{...empty,text:'First proposed plan.',task:{scope:'strategy',id,revision:0},proposal:sampleTradingPlan('swing'),review}:{...empty,text:'We can discuss it further.',task:null}});});
+ await open(page);await page.locator('input[type=file]').setInputFiles({name:'rules.md',mimeType:'text/plain',buffer:Buffer.from('- Review the risks')});
+ await send(page,'Create a plan for review');await expect(page.getByRole('log')).toContainText('First proposed plan.');
+ await send(page,'Explain the risk settings');await expect(page.getByRole('log')).toContainText('We can discuss it further.');
+ await page.getByRole('textbox',{name:'Message QuantForge assistant'}).fill('My unfinished next question');
+ await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('quantforge-active-chat'))).not.toBeNull();
+ await page.waitForTimeout(1000);await page.reload();await expect(page.getByRole('log')).toContainText('We can discuss it further.');await expect(page.getByRole('textbox',{name:'Message QuantForge assistant'})).toHaveValue('My unfinished next question');
+ await page.getByText('Proposal & review at this point',{exact:true}).first().click();await expect(page.getByRole('log')).toContainText('Historical snapshot.');
+ await page.getByText('Attachments (1)',{exact:true}).first().click();await expect(page.getByRole('log')).toContainText('- Review the risks');expect(calls).toBe(2);
+});
+
+
+test('backtest selection and report resume without replaying an action',async({page})=>{
+ let runs=0;
+ await page.route('**/api/ai/chat',route=>route.fulfill({json:{...empty,text:'Choose stocks.',task:null,workflow:{kind:'backtest',strategyId:id,revision:7,name:'Intraday plan',cadence:'5m',horizon:'intraday'}}}));
+ await page.route('**/api/backtests/universe?*',route=>route.fulfill({json:{stocks:[1,2].map(n=>({_id:`NSE:${n}`,symbol:`STOCK${n}`,exchange:'NSE',source:'scan',suitability:{profiles:[{horizon:'intraday',status:'matched',checks:[]}]}}))}}));
+ await page.route('**/api/backtests',route=>{runs++;expect(route.request().postDataJSON().ids).toEqual(['NSE:2']);return route.fulfill({json:{id:'retained-report'}});});
+ await page.route('**/api/backtests/retained-report',route=>route.fulfill({json:{_id:'retained-report',status:'running',stage:'calculating'}}));
+ await open(page);await send(page,'Prepare an intraday backtest');const panel=page.getByRole('region',{name:'Assistant backtest workflow'});
+ await expect(panel).toContainText('2 selected / 2 available');
+ await panel.getByRole('combobox',{name:'Stocks to backtest'}).click();await page.locator('.ant-select-dropdown').getByText('STOCK1 / NSE',{exact:true}).click();await page.keyboard.press('Escape');
+ await panel.getByRole('checkbox').check();await expect(panel).toContainText('1 selected / 2 available');
+ await page.getByRole('link',{name:'Algo Strategies',exact:true}).click();await page.getByRole('link',{name:'AI assistant',exact:true}).click();await expect(panel).toContainText('1 selected / 2 available');
+ await page.waitForTimeout(1000);await page.reload();await expect(panel).toContainText('1 selected / 2 available');await expect(panel.getByRole('checkbox')).toBeChecked();expect(runs).toBe(0);
+ await panel.getByRole('button',{name:'Run backtest',exact:true}).click();await expect(panel).toContainText('calculating');await page.waitForTimeout(1000);await page.reload();await expect(panel).toContainText('calculating');expect(runs).toBe(1);
 });

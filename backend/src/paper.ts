@@ -41,9 +41,11 @@ async function cycle(){
   if(stopping)return;
   if(Date.now()-lastClockCheck>30000||Date.now()<lastClockCheck){clockSafe=false;const clock=await refreshClockHealth();lastClockCheck=Date.now();clockSafe=clock.state==='ok';}
   await redis.set(PAPER_HEARTBEAT,new Date().toISOString(),'EX',10);
+  await redis.set('quantforge:paper:exit-controls','1','EX',10);
   if(!checkingProtection&&Date.now()-lastProtectionCheck>15000){checkingProtection=true;lastProtectionCheck=Date.now();void checkProtectionAlerts(clockSafe).catch(()=>console.error('Paper protection alert check unavailable.')).finally(()=>{checkingProtection=false;});}
   if(!canContinue())return;
   await processPaperOrders(canContinue);if(!canContinue())return;await redis.set(PAPER_HEARTBEAT,new Date().toISOString(),'EX',10);
+  await redis.set('quantforge:paper:exit-controls','1','EX',10);
   if(!evaluating && Date.now()-lastEvaluation>10000){evaluating=true;lastEvaluation=Date.now();void evaluatePaperStrategies(Date.now(),canContinue).catch(()=>{}).finally(()=>{evaluating=false;});}
   if(!refreshing && Date.now()-lastRefresh>30000){refreshing=true;lastRefresh=Date.now();void refreshPaperHistory(()=>stopping).catch(async()=>{await redis.set(PAPER_HISTORY_STATUS,JSON.stringify({state:'error',message:'History refresh unavailable. Existing data is retained; missing candles will be retried.',updatedAt:new Date().toISOString()})).catch(()=>{});}).finally(()=>{refreshing=false;});}
 }

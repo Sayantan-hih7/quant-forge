@@ -3,20 +3,24 @@ from .market import stamp, IST
 from .rules import evaluate_observations
 
 
-def assess_scope(body, prepared):
+def assess_scope(body, prepared, progress=None):
     strategy, config = body['strategy'], body['config']
     start, end = stamp(config['from']), stamp(config['to'])
     replay = '1d' if strategy['entry']['cadence'] == 'daily' and strategy['risk']['timeframe'] == '1d' else '1m'
     signal = '1d' if strategy['entry']['cadence'] == 'daily' else strategy['entry']['cadence']
     sessions = set(config.get('sessionDates', []))
+    observed = set()
     for obs in prepared.values():
         bars = obs.bars(replay)
         if len(bars):
-            sessions.update(at.tz_convert(IST).strftime('%Y-%m-%d') for at in bars.index if start <= at < end)
-    observed = {at.tz_convert(IST).strftime('%Y-%m-%d') for obs in prepared.values() for at in obs.bars(replay).index if start <= at < end}
+            selected_index = bars.index[(bars.index >= start) & (bars.index < end)]
+            observed.update(selected_index.tz_convert(IST).normalize().unique().strftime('%Y-%m-%d'))
+    sessions.update(observed)
     absent_market = set(config.get('sessionDates', [])) - observed
     included, excluded = [], []
     for ident, obs in prepared.items():
+        if progress:
+            progress({"phase": "readiness", "processed": len(included)+len(excluded), "total": len(prepared)})
         reasons = list(config.get('preparationIssues', {}).get(ident, []))
         if absent_market:
             reasons.append('Calendar/provider mismatch: no selected stock has candles on ' + ', '.join(sorted(absent_market)[:10]) + '. Verify exchange calendar or retry the provider; absence alone does not prove a holiday.')
@@ -25,18 +29,20 @@ def assess_scope(body, prepared):
         if selected.empty:
             reasons.append('No completed price history inside this test period. Choose a later period for a new listing or retry history.')
         else:
-            dates = {at.tz_convert(IST).strftime('%Y-%m-%d') for at in selected.index}
+            local = selected.index.tz_convert(IST)
+            dates = set(local.normalize().unique().strftime('%Y-%m-%d'))
             missing_days = sessions - dates
             if missing_days:
                 reasons.append(f'{len(missing_days)} market sessions lack candles in this period (new listing, suspension or missing history).')
             if replay == '1m':
-                counts = selected.groupby(selected.index.tz_convert(IST).strftime('%Y-%m-%d')).size()
+                counts = selected.groupby(local.normalize()).size()
                 missing = sum(max(0, 375-int(n)) for n in counts)
                 if missing:
                     reasons.append(f'{missing} minute observations missing against the regular-session template. For NSE stocks after 2026-08-03, verify closing-auction eligibility; 15:15-15:30 may be outside continuous trading. This scope stays excluded until its dated session is verified.')
                 if not strategy['risk']['overnight']:
                     traded = selected.loc[selected.volume > 0]
-                    exit_days = {at.tz_convert(IST).strftime('%Y-%m-%d') for at in traded.index if at.tz_convert(IST).hour*60+at.tz_convert(IST).minute >= 915}
+                    traded_local = traded.index.tz_convert(IST)
+                    exit_days = set(traded_local[traded_local.hour*60+traded_local.minute >= 915].normalize().unique().strftime('%Y-%m-%d'))
                     if dates - exit_days:
                         reasons.append(f'{len(dates-exit_days)} sessions lack traded candles at or after the intraday exit time.')
             if not (selected.volume > 0).any():

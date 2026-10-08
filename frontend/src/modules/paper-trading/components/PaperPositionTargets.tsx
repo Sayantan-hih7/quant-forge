@@ -9,6 +9,6 @@ export function PaperPositionTargets({ position }: { position: PaperPosition }) 
     const shares = target.completed ? 0 : index === targets.length - 1 ? remaining : Math.min(remaining, target.quantity);
     const status = target.completed ? target.filledQuantity ? `${target.filledQuantity} sold` : 'Rounded to later target'
       : `${shares} shares${index === targets.length - 1 ? ' · remainder' : ''}`;
-    return <span key={index}><Tag color={target.completed ? 'green' : 'default'}>T{index + 1}</Tag>{money(target.pricePaise)} · {status}</span>;
+    return <span key={index}><Tag color={target.completed ? 'green' : 'default'}>T{index + 1}</Tag>{money(target.pricePaise)}{position.exitControl?.targetOverrides[index]&&!target.completed&&<Tag color="gold">Manual</Tag>} · {status}</span>;
   })}</Space>;
 }

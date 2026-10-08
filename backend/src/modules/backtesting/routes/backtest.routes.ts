@@ -1,3 +1,4 @@
+import {assessPaperEligibility,eligibilitySettingsSchema} from '../services/paper-eligibility.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { BacktestRunModel } from '../models/backtest.model.js';
@@ -17,5 +18,7 @@ backtestRouter.get('/:id/stocks/:instrumentId/chart', async (req, res) => {
   const frame = z.enum(['1m', '5m', '15m', '1h', '4h', '1d', '1w', '1mo']).default('1d').parse(req.query.timeframe);
   res.json(await backtestStockChart(id, instrumentId, frame));
 });
+backtestRouter.post('/:id/paper-eligibility',async(req,res)=>{res.json(await assessPaperEligibility(z.string().uuid().parse(req.params.id),req.body));});
+backtestRouter.put('/:id/paper-eligibility',async(req,res)=>{const id=z.string().uuid().parse(req.params.id),settings=eligibilitySettingsSchema.parse(req.body);const preview=await assessPaperEligibility(id,settings);await BacktestRunModel.updateOne({_id:id},{$set:{paperEligibilitySettings:settings}});res.json(preview);});
 backtestRouter.get('/:id', async (req,res) => { res.json(await BacktestRunModel.findById(z.string().uuid().parse(req.params.id)).select('-snapshots -result.replay').lean()); });
 backtestRouter.post('/',async(req,res)=>{res.status(202).json(await queueBacktest(req.body));});

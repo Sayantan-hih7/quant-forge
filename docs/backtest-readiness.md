@@ -24,3 +24,18 @@ Coverage filtering inspects the test period and can introduce selection bias. It
 Known regular-session calendar dates are combined with observed peer-stock session dates. Unknown-year calendars, special sessions, corporate-action adjustments and historical instrument classifications remain separate data capabilities; readiness is not a certification that all prices or assumptions are correct. Trading suitability is a heuristic, distinct from these strategy/date-specific checks. Runtime quote freshness, clock checks, capital limits and stops still apply in paper trading.
 
 Sources: https://www.quantconnect.com/docs/v2/writing-algorithms/historical-data/warm-up-periods ; https://www.tradingview.com/pine-script-docs/concepts/strategies/ ; https://www.nseindia.com/static/market-data/legend-of-series
+
+
+### Long calculation progress and recovery
+
+The worker checks engine availability, progress-protocol compatibility and entry-rule validation before preparing history. Backtest uploads reuse benchmark history across stocks. Calculation responses use NDJSON heartbeats and report loading, readiness and replay dates; the UI no longer presents history's 100% as overall completion. Only a complete final result can become a report.
+
+A missing heartbeat fails after 60 seconds; an active calculation can continue beyond the former 10-minute response limit, up to a two-hour safety bound. Upload/connection establishment retains a 10-minute bound. Engine disconnect, timeout, busy, authentication and validation failures have distinct messages. Downloaded candles remain in storage for retries. There is no automatic resubmission that could launch duplicate calculations. Restart the Python engine and worker together when deploying this protocol update. Existing reports are unchanged.
+
+## Stock eligibility for paper trading
+
+A completed backtest now has a **Paper eligibility** tab. Configurable filters cover minimum closed-position win rate, minimum closed trades, positive closed net profit and optional maximum closed-trade drawdown in rupees. Defaults (55%, 10 trades, positive profit) are exploratory starting points, not calibrated performance claims. Partial exit fills are combined by entry; still-open positions never count as wins. Closed drawdown excludes intratrade/unrealized losses.
+
+A separate, later, non-overlapping report of the same strategy revision may be required for validation. The same thresholds apply there. Without this, the UI explicitly identifies selection of historical winners as exploratory. Eligibility is not a prediction or an entry signal.
+
+Filters persist with the report and session. Server checks reject incomplete reports, old strategy revisions, inactive/unqualified stocks, failed thresholds and invalid validation periods. Applying a shortlist keeps its IDs fixed until explicitly updated. Existing same-revision sessions retain cash, mode and position protection; removed stocks lose pending buys but held exits remain managed. A different active revision must be stopped without open positions before starting the tested revision. Live market freshness, candle-close signals and execution risk checks still control all paper fills. No live brokerage orders are enabled.

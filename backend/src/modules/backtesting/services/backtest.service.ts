@@ -1,3 +1,4 @@
+import { engineClient } from '../../engine/services/engine.service.js';
 import { reviewStrategy } from '../../strategies/services/rule-review.service.js';
 import { backtestDataIssues } from './data-quality.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -34,8 +35,22 @@ export async function runBacktest(id: string) {
   const run = await BacktestRunModel.findOneAndUpdate({ _id:id, status:{$in:['queued','running']} }, {$set:{status:'running'}}, {returnDocument:'after'}).lean();
   if (!run) return;
   try {
+    await BacktestRunModel.updateOne({_id:id},{$set:{message:'Checking calculation engine before preparing history'}});
+    const {data:health}=await engineClient.get('/health',{timeout:10_000});
+    invariant(health.backtestProgressVersion===1,'Restart the calculation engine to enable progress reporting, then retry. Stored history is retained.');
+    if(health.backtestBusy)throw new AppError(503,'ENGINE_BUSY','Another portfolio calculation is already running. Retry after it finishes; no history preparation was started.');
+    await engineClient.post('/validate-rule',run.strategy.entry,{timeout:10_000});
     const plan = await prepareBacktest(run);
-    const data = await portfolioBacktest(run, plan);
+    await BacktestRunModel.updateOne({_id:id},{$set:{calculationStartedAt:new Date().toISOString()}});
+    let lastProgress=0;
+    const data = await portfolioBacktest(run, plan, undefined, async progress=>{
+      if(Date.now()-lastProgress<5000)return;
+      lastProgress=Date.now();
+      const message=progress.phase==='replaying'?`Replaying candles through ${progress.through?new Date(progress.through).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'the selected period'} IST`:
+        progress.phase==='readiness'?`Checking data readiness: ${progress.processed??0} / ${progress.total??run.config.ids.length} stocks`:
+        `Loading calculation history: ${progress.processed??0} / ${progress.total??run.config.ids.length} stocks`;
+      await BacktestRunModel.updateOne({_id:id},{$set:{message,engineProgressAt:new Date().toISOString()}});
+    });
     const selectionAudit=data.selectionAudit as import('../models/backtest.model.js').SelectionAudit|undefined;
     invariant(!run.config.dataPolicy || selectionAudit, 'The calculation engine does not support data readiness yet. Restart the engine and worker, then retry.');
     if(selectionAudit) {
@@ -50,7 +65,7 @@ export async function runBacktest(id: string) {
     const issues=backtestDataIssues(data);data.dataQuality={status:issues.length?'incomplete':'checked',issues};
     await BacktestRunModel.updateOne({_id:id},{$set:{status:'completed',stage:'complete',result:data,finishedAt:new Date().toISOString()},$unset:{message:1}});
   } catch(e) {
-    await BacktestRunModel.updateOne({_id:id},{$set:{status:'failed',message:e instanceof AppError?e.message:'Backtest failed without a report',finishedAt:new Date().toISOString()}});
+    await BacktestRunModel.updateOne({_id:id},{$set:{status:'failed',failureCode:e instanceof AppError?e.code:'BACKTEST_FAILED',message:e instanceof AppError?e.message:'Backtest failed without a report',finishedAt:new Date().toISOString()}});
     throw e;
   } finally { await announce('backtest.changed',{id}); }
 }

@@ -10,10 +10,15 @@ import { monthlyHistoryRequirements } from '../../qualification/services/history
 export const engineClient = axios.create({ baseURL: env.ENGINE_URL, timeout: 120_000, maxContentLength: 32_000_000, maxBodyLength: 32_000_000 });
 engineClient.interceptors.request.use(config => { config.headers.set('X-Engine-Token', env.ENGINE_TOKEN); return config; });
 engineClient.interceptors.response.use(response => response, (error: unknown) => {
-  const validation = axios.isAxiosError(error) && error.response?.status === 422;
-  const detail = validation && error.response?.data?.detail;
-  return Promise.reject(new AppError(validation ? 422 : 503, validation ? 'ENGINE_VALIDATION' : 'ENGINE_UNAVAILABLE',
-    typeof detail === 'string' ? detail.slice(0, 1500) : 'The calculation engine is unavailable'));
+  const transport = axios.isAxiosError(error) ? error : undefined;
+  const status = transport?.response?.status;
+  const detail = transport?.response?.data?.detail;
+  transport?.response?.data?.destroy?.();
+  if (status === 422) return Promise.reject(new AppError(422, 'ENGINE_VALIDATION', typeof detail === 'string' ? detail.slice(0,1500) : 'The engine rejected these calculation inputs.'));
+  if (transport?.code === 'ECONNABORTED' || transport?.code === 'ETIMEDOUT') return Promise.reject(new AppError(504, 'ENGINE_TIMEOUT', 'The calculation engine exceeded its response time limit. Downloaded history is retained; retry uses stored data.'));
+  if (status === 401 || status === 403) return Promise.reject(new AppError(503, 'ENGINE_AUTH', 'The calculation engine connection key does not match. Restart app services with matching configuration.'));
+  if (status === 503) return Promise.reject(new AppError(503, 'ENGINE_BUSY', 'The calculation engine is busy. Wait for the current calculation to finish, then retry; stored history is retained.'));
+  return Promise.reject(new AppError(503, 'ENGINE_UNAVAILABLE', status ? `The calculation engine returned an error (HTTP ${status}). Stored history is retained; check the engine logs before retrying.` : 'The calculation engine connection was lost or could not be opened. Keep engine services running. Stored history is retained for retry.'));
 });
 export interface EvaluationResult { id: string; matched: boolean | null; status: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history'; checks: { matched: boolean | null; field: string; eventKey?: string; missingField?: string; reason?: string; code?: string; availableMonths?: number; requiredMonths?: number; left?: number; right?: number }[] }
 export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { benchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false, candleLimit = 150000) {

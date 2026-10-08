@@ -105,7 +105,7 @@ test('history accounting, price edits, direct exits and clock-based square-off k
   for(const sid of [intraday,swing]){const b=await order(sid,'BUY',10,0);await fill(b._id,100,1);}
   await PaperSessionModel.updateOne({_id:intraday},{$set:{entriesPaused:true}});
   const partial=await order(intraday,'SELL',2,5,{status:'confirmation',limitPaise:15000,expiresAt:'2026-09-28T10:00:00.000Z'});
-  const cutoff=Date.parse('2026-09-28T09:45:00.000Z');
+  const cutoff=Date.parse('2026-09-28T09:40:00.000Z');
   await queueIntradaySquareOff(cutoff-1000);assert.equal((await PaperOrderModel.findById(partial._id))?.status,'confirmation');
   await queueIntradaySquareOff(cutoff);await queueIntradaySquareOff(cutoff+100);
   const square=(await PaperOrderModel.findOne({sessionId:intraday,reason:'Session close'}).lean())!;

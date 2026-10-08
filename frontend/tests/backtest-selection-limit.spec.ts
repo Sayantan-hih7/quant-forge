@@ -1,0 +1,34 @@
+import {test,expect} from '@playwright/test';
+import {defaultBacktestSelection} from '../src/modules/strategies/utils/backtestSelection';
+import type {ScopedStock} from '../src/modules/strategies/hooks/useQualifiedStockScope';
+import {reportStrategy} from './fixtures/backtestReport';
+const stocks:ScopedStock[]=Array.from({length:270},(_,i)=>({_id:`NSE:${i}`,symbol:`STOCK${String(i).padStart(3,'0')}`,exchange:'NSE',source:'scan',suitability:{version:'test',assessedAt:'2026-10-08T03:00:00Z',profiles:[{horizon:reportStrategy.entry.horizon,label:'Profile',status:i>=200?'matched':'not-matched',checks:[]}]}}));
+test('default scope caps at 200 and prioritises profile matches without applying present suitability to historical lists',()=>{
+ const chosen=defaultBacktestSelection(stocks,reportStrategy.entry.horizon);
+ expect(chosen).toHaveLength(200);expect(chosen[0]).toBe('NSE:200');expect(chosen).toContain('NSE:269');expect(chosen).not.toContain('NSE:199');
+ expect(defaultBacktestSelection([...stocks].reverse(),reportStrategy.entry.horizon)).toEqual(chosen);
+ expect(defaultBacktestSelection(stocks,reportStrategy.entry.horizon,true)).toEqual(stocks.slice(0,200).map(s=>s._id));
+ expect(defaultBacktestSelection(stocks.slice(0,3),reportStrategy.entry.horizon)).toHaveLength(3);
+});
+test('270 qualified stocks default to 200 and bulk actions respect the limit',async({page})=>{
+ test.setTimeout(60000);
+ await page.route(url=>url.pathname.startsWith('/api/'),route=>route.fulfill({json:route.request().url().endsWith('/session')?{authenticated:true,mode:'local'}:{}}));
+ await page.route('**/api/strategies',route=>route.fulfill({json:[reportStrategy]}));
+ await page.route('**/api/backtests**',route=>route.fulfill({json:new URL(route.request().url()).pathname.endsWith('/universe')?{stocks,listCount:1}:[]}));
+ await page.goto(`/strategies?tab=backtests&rule=${reportStrategy._id}`);
+ await expect(page.getByText('200 selected / 270 available',{exact:true})).toBeVisible({timeout:20000});
+ await expect(page.getByText(/Limit reached: remove a selected stock/)).toBeVisible();
+ await page.getByRole('button',{name:'Select matching stocks (70)',exact:true}).click();
+ await expect(page.getByText('70 selected / 270 available',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Select up to 200',exact:true}).click();
+ await expect(page.getByText('200 selected / 270 available',{exact:true})).toBeVisible({timeout:20000});
+ await page.locator('#qualified-stock-selection').click();
+ await page.locator('#qualified-stock-selection').fill('STOCK199');
+ await expect(page.getByText('200 selected / 270 available',{exact:true})).toBeVisible();
+ await page.keyboard.press('Escape');
+ await page.locator('.qualified-stock-picker .ant-select-selection-item-remove').first().click();
+ await expect(page.getByText('199 selected / 270 available',{exact:true})).toBeVisible();
+ await page.locator('#qualified-stock-selection').fill('STOCK199');
+ await page.locator('.ant-select-item-option').filter({hasText:'STOCK199'}).click();
+ await expect(page.getByText('200 selected / 270 available',{exact:true})).toBeVisible();
+});

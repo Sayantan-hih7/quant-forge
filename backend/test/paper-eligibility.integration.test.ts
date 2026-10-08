@@ -1,0 +1,40 @@
+import {test,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import mongoose from 'mongoose';
+import {env} from '../src/config/env.js';
+import {jobs,redis} from '../src/shared/redis.js';
+import {assessPaperEligibility} from '../src/modules/backtesting/services/paper-eligibility.js';
+import {configurePaperSession} from '../src/modules/paper-trading/services/paper.service.js';
+import {BacktestRunModel} from '../src/modules/backtesting/models/backtest.model.js';
+import {StrategyModel} from '../src/modules/strategies/models/strategy.model.js';
+import {PaperSessionModel} from '../src/modules/paper-trading/models/paper.model.js';
+import {MonthlyUniverseModel} from '../src/modules/qualification/models/qualification.model.js';
+import {currentMonth} from '../src/modules/qualification/services/universe.service.js';
+import {instruments} from '../src/modules/market-data/repository.js';
+after(async()=>{await jobs.waitUntilReady();await jobs.close();await redis.quit();});
+test('eligibility enforces revision, qualification, validation periods and session scope on the server',{skip:process.env.RUN_DB_TESTS!=='1'},async()=>{
+ const uri=new URL(env.MONGODB_URI),name=`quantforge_test_${randomUUID().replaceAll('-','')}`;uri.pathname=`/${name}`;
+ await mongoose.connect(uri.toString());
+ try{
+  const strategy={_id:randomUUID(),revision:1},id=randomUUID(),validationId=randomUUID(),sessionId=randomUUID();
+  const raw=(name:string)=>mongoose.connection.collection<{_id:string;[key:string]:unknown}>(name);
+  const config={ids:['NSE:1','NSE:2'],from:'2026-01-01T00:00:00Z',to:'2026-02-01T00:00:00Z'};
+  const result={trades:[{instrumentId:'NSE:1',entryAt:'2026-01-02T00:00:00Z',exitAt:'2026-01-03T00:00:00Z',pnl:100,remainingQuantity:0}]};
+  await raw(StrategyModel.collection.name).insertOne(strategy);
+  await raw(BacktestRunModel.collection.name).insertOne({_id:id,strategy,config,result,status:'completed'});
+  await raw(MonthlyUniverseModel.collection.name).insertOne({_id:currentMonth(),members:[{instrumentId:'NSE:1'},{instrumentId:'NSE:2'}]});
+  await raw(instruments.collection.name).insertMany([{_id:'NSE:1',active:true},{_id:'NSE:2',active:true}]);
+  const settings={criteria:{minWinRate:55,minClosedTrades:1,minNetPnl:0}};
+  assert.deepEqual((await assessPaperEligibility(id,settings)).eligibleIds,['NSE:1']);
+  await raw(PaperSessionModel.collection.name).insertOne({_id:sessionId,strategyId:strategy._id,strategy,active:true,ids:['NSE:1'],eligibility:settings,sourceBacktestId:id});
+  await assert.rejects(configurePaperSession(sessionId,{ids:['NSE:2']}),/do not pass/);
+  assert.deepEqual((await PaperSessionModel.findById(sessionId).lean())?.ids,['NSE:1']);
+  await raw(BacktestRunModel.collection.name).insertOne({_id:validationId,strategy,config,result,status:'completed'});
+  await assert.rejects(assessPaperEligibility(id,{...settings,validationReportId:validationId}),/without overlap/);
+  await BacktestRunModel.updateOne({_id:validationId},{$set:{'config.from':config.to,'config.to':'2026-03-01T00:00:00Z','result.trades':[]}});
+  const validation=await assessPaperEligibility(id,{...settings,validationReportId:validationId});assert.equal(validation.eligibleIds.length,0);assert.ok(validation.rows[0].reasons.some(r=>r.startsWith('Validation:')));
+  await instruments.updateOne({_id:'NSE:1'},{$set:{active:false}});assert.equal((await assessPaperEligibility(id,settings)).eligibleIds.length,0);
+  await StrategyModel.updateOne({_id:strategy._id},{$set:{revision:2}});assert.ok((await assessPaperEligibility(id,settings)).blockers.some(r=>r.includes('current saved')));
+ }finally{assert.ok(mongoose.connection.name.startsWith('quantforge_test_'));await mongoose.connection.dropDatabase();await mongoose.disconnect();}
+});
