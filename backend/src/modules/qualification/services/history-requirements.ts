@@ -24,7 +24,7 @@ export function monthlyHistoryRequirements(rule: Record<string, unknown>, month:
   }
   const minimum = Math.max(0, ...requirements.values());
   // Additional warm-up reduces EMA/RSI seed effects. Never use the forming month.
-  const months = Math.max(0, ...[...requirements].map(([field, count]) => /^(dema|connorsRsi|ema|rsi|macd|atr|adx|diPlus|diMinus|supertrend|keltner|stochRsi|bodyAboveEma|bodyBelowEma)/.test(field) ? Math.max(count * 3, 36) : count));
+  const months = Math.max(0, ...[...requirements].map(([field, count]) => /^(benchmarkEma|dema|connorsRsi|ema|rsi|macd|atr|adx|diPlus|diMinus|supertrend|keltner|stochRsi|bodyAboveEma|bodyBelowEma)/.test(field) ? Math.max(count * 3, 36) : count));
   const [year, number] = month.split('-').map(Number);
   return { minimum, months, from: new Date(Date.UTC(year, number - 1 - months, 1)).toISOString().slice(0, 10), to: `${month}-01`, fields: Object.fromEntries(requirements) };
 }

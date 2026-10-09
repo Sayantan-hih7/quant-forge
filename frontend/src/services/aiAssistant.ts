@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 export const sourceReportSchema=z.object({title:z.string().max(160),scope:z.string().max(400),tables:z.array(z.object({name:z.string().max(100),columns:z.array(z.string().max(100)).max(20),rows:z.array(z.array(z.union([z.string().max(1000),z.number().finite(),z.null()])).max(20)).max(100)})).max(6)});
 export type SourceReport=z.infer<typeof sourceReportSchema>;
-export interface AgentActivity {tool:'backtests'|'paper'|'qualification'|'connections';status:'completed'|'unavailable';checkedAt:string;summary:string;report?:SourceReport}
-export const agentActivitySchema=z.array(z.object({tool:z.enum(['backtests','paper','qualification','connections']),status:z.enum(['completed','unavailable']),checkedAt:z.string(),summary:z.string().max(600),report:sourceReportSchema.optional()})).max(4);
-export interface AiMessage { presentation?: Record<string,unknown>; attachments?: import('./assistantAttachments').AssistantAttachment[]; role: 'user' | 'assistant'; text: string; questions?: AiQuestion[]; activity?: AgentActivity[] }
+export interface AgentActivity {durationMs?:number;tool:'backtests'|'paper'|'qualification'|'connections';status:'completed'|'unavailable';checkedAt:string;summary:string;report?:SourceReport}
+export const agentActivitySchema=z.array(z.object({tool:z.enum(['backtests','paper','qualification','connections']),status:z.enum(['completed','unavailable']),checkedAt:z.string(),durationMs:z.number().finite().nonnegative().optional(),summary:z.string().max(600),report:sourceReportSchema.optional()})).max(4);
+export interface AiMessage { id?:string;createdAt?:string;durationMs?:number;status?:'completed'|'failed'|'stopped';replyTo?:string; presentation?: Record<string,unknown>; attachments?: import('./assistantAttachments').AssistantAttachment[]; role: 'user' | 'assistant'; text: string; questions?: AiQuestion[]; activity?: AgentActivity[] }
 export interface AiStatus { configured: boolean; provider: string; model: string }
 const questionSchema = z.object({ id: z.string().regex(/^[a-z0-9_]{1,40}$/), question: z.string().min(1).max(300), reason: z.string().max(300), options: z.array(z.string().min(1).max(120)).max(4), recommendedOption:z.string().max(120).nullable().optional(),recommendationReason:z.string().max(300).optional(),allowRecommendedDefault:z.boolean().optional() }).superRefine((q,ctx)=>{
   if(q.recommendedOption&&!q.options.includes(q.recommendedOption)||q.allowRecommendedDefault&&(!q.recommendedOption||!q.recommendationReason))ctx.addIssue({code:'custom',message:'Invalid recommendation'});

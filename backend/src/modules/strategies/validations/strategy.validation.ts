@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { exitTargetSchema, validateExitTargets } from './exit-targets.js';
 import { stopManagementSchema, validateStopSettings } from './stop-settings.js';
 export const riskSchema = z.object({
+  signalRanking:z.enum(['instrumentId','turnover','relativeVolume']).optional(),
   reentryCooldownMinutes:z.number().int().min(0).max(10080).optional(),
   maxEntriesPerStockPerDay:z.number().int().min(0).max(100).optional(),
   dailyLossLimitPercent:z.number().min(0.1).max(10).optional(),

@@ -6,7 +6,7 @@ import { stockListings } from '../services/listings.service.js';
 import { stockHistory } from '../services/history.service.js';
 import { selectedInstruments, stockQuotes } from '../services/quotes.service.js';
 import { stockQuoteStream } from '../services/stream.service.js';
-import { benchmarkHistory } from '../services/benchmark-history.service.js';
+import { benchmarkHistory, names } from '../services/benchmark-history.service.js';
 import { stockResearchFeed } from '../services/research-feeds.service.js';
 import { stockFinancials } from '../services/financials.service.js';
 import { stockDepth } from '../services/depth.service.js';
@@ -14,8 +14,8 @@ import { relatedStocks } from '../services/related-stocks.service.js';
 
 export const stockDetailsRouter = Router();
 stockDetailsRouter.get('/benchmarks/:name/chart',async(req,res)=>{
-  const name=z.enum(['NIFTY 50','NIFTY BANK','SENSEX']).parse(req.params.name);
-  const timeframe=z.enum(['1d','1w','1mo']).default('1d').parse(req.query.timeframe);
+  const name=z.enum(names).parse(req.params.name);
+  const timeframe=z.enum(['1m','5m','15m','1h','4h','1d','1w','1mo']).default('1d').parse(req.query.timeframe);
   const at=z.string().datetime().refine(v=>Date.parse(v)<=Date.now()+86400000&&Date.parse(v)>=Date.UTC(2000,0)).optional().parse(req.query.at);
   const from=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v&&Date.parse(v)>=Date.UTC(1990,0)&&Date.parse(v)<(at?Date.parse(at):Date.now())).parse(req.query.from);
   res.json(await benchmarkHistory(name,timeframe,from,at));

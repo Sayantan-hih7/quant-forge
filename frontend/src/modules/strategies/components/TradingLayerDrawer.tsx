@@ -1,4 +1,5 @@
-import { Alert, App, Button, Drawer, Form } from 'antd';
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { App, Button, Drawer, Form } from 'antd';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RhfInput, RhfSelect } from '../../../components/forms';
@@ -49,7 +50,7 @@ export function TradingLayerDrawer({ base, layer, onClose, onSave }: {
       <RhfTextArea name="entryRule" control={control} label="Entry signal" rows={2} maxLength={300} />
       <RhfTextArea name="exitRule" control={control} label="Exit signal" rows={2} maxLength={300} />
       <RhfSelect name="mode" control={control} label="Execution mode" options={[{ value: 'PAPER', label: 'Paper trading' }, { value: 'LIVE', label: 'Live · simulated' }]} />
-      <Alert showIcon type="info" title="Independent qualification and signals" description="Refresh watchlist applies the horizon rules; Check signals uses only that saved watchlist. Frequency is a design setting; this demo runs manually with synthetic results and places no orders." />
+      <GuidanceNote showIcon type="info" title="Independent qualification and signals" description="Refresh watchlist applies the horizon rules; Check signals uses only that saved watchlist. Frequency is a design setting; this demo runs manually with synthetic results and places no orders." />
     </Form>
   </Drawer>;
 }

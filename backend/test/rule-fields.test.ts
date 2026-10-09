@@ -56,3 +56,24 @@ test('history plans cover independent operands, rolling windows and prior candle
   assert.ok(parameterError('marketCap', undefined, 1));
   assert.equal(parameterError('ema', 9, 1), undefined);
 });
+
+
+test('benchmark operands and ranking survive AI parsing and request only required history frames', () => {
+  const preset = researchPresets.find(p => p.draft.entry.horizon === 'intraday')!.draft;
+  const c = {...condition,left:'benchmarkClose',leftFrame:'5m',leftPeriod:undefined,leftOffset:0,leftSettings:{benchmark:'NIFTY IT'},operator:'gt',right:'benchmarkEma',rightFrame:'5m',rightPeriod:20,rightOffset:0,rightSettings:{benchmark:'NIFTY IT'}};
+  const draft = tradingDraft({name:'Sector confirmation',horizon:'intraday',cadence:'5m',risk:{...preset.risk,signalRanking:'relativeVolume'},
+    entry:{logic:'AND',groups:[{logic:'AND',conditions:[c]}]},exit:{enabled:false,logic:'AND',groups:[]}},capabilities);
+  assert.equal(draft.entry.groups[0].conditions[0].leftSettings?.benchmark,'NIFTY IT');
+  assert.equal(draft.risk.signalRanking,'relativeVolume');
+  const plan = strategyHistoryPlan(draft,'2026-09-28','2026-09-29');
+  assert.deepEqual(plan.benchmarks,['NIFTY IT']);
+  assert.deepEqual(plan.intradayBenchmarks,['NIFTY IT']);
+  assert.deepEqual(plan.dailyBenchmarks,[]);
+  assert.ok(plan.intradayFrom!<'2026-09-28');
+  draft.entry.groups[0].conditions[0] = {...draft.entry.groups[0].conditions[0],left:'relativeStrength',leftPeriod:20,leftFrame:'1d',rightType:'value'};
+  const daily = strategyHistoryPlan(draft,'2026-09-28','2026-09-29');
+  assert.deepEqual(daily.intradayBenchmarks,[]);
+  assert.deepEqual(daily.dailyBenchmarks,['NIFTY IT']);
+  assert.equal(parameterError('openingRangeHigh',15),undefined);
+  assert.ok(parameterError('openingRangeHigh',61));
+});

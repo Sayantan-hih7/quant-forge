@@ -297,7 +297,7 @@
     "lines": [
       "VWAP"
     ],
-    "description": "Volume-weighted candle prices. Session resets on each Indian trading date. Custom anchor may start within a session. Daily session VWAP using HLC3 equals that daily candle’s typical price; it is not tick VWAP."
+    "description": "Volume-weighted candle prices. Session resets on each Indian trading date. Custom anchor may start within a session. Daily session VWAP using HLC3 equals that daily candle\u2019s typical price; it is not tick VWAP."
   },
   "sar": {
     "label": "Parabolic SAR",
@@ -506,7 +506,7 @@
       "Middle",
       "Lower"
     ],
-    "description": "Chosen candle price plus/minus Wilder ATR × multiplier. Middle line is the chosen price, not a moving average."
+    "description": "Chosen candle price plus/minus Wilder ATR \u00d7 multiplier. Middle line is the chosen price, not a moving average."
   },
   "volumeSma": {
     "label": "Volume SMA",
@@ -705,7 +705,7 @@
     "lines": [
       "ADX",
       "+DI",
-      "−DI"
+      "\u2212DI"
     ],
     "description": "Period controls directional movement; ADX smoothing controls the strength line."
   },
@@ -729,7 +729,7 @@
     "description": "Period controls directional movement; ADX smoothing controls the strength line."
   },
   "diMinus": {
-    "label": "−DI",
+    "label": "\u2212DI",
     "pane": "study",
     "period": 14,
     "settings": {
@@ -743,7 +743,7 @@
       }
     },
     "lines": [
-      "−DI"
+      "\u2212DI"
     ],
     "description": "Period controls directional movement; ADX smoothing controls the strength line."
   },
@@ -935,14 +935,25 @@
         "options": [
           "NIFTY 50",
           "NIFTY BANK",
-          "SENSEX"
+          "SENSEX",
+          "NIFTY IT",
+          "NIFTY AUTO",
+          "NIFTY FMCG",
+          "NIFTY PHARMA",
+          "NIFTY METAL",
+          "NIFTY REALTY",
+          "NIFTY ENERGY",
+          "NIFTY FIN SERVICE",
+          "NIFTY PSU BANK",
+          "NIFTY PVT BANK",
+          "NIFTY HEALTHCARE"
         ]
       }
     },
     "lines": [
       "Relative strength"
     ],
-    "description": "Stock return relative to benchmark return over N matching daily/weekly/monthly candles, in %. 0 means equal performance. Missing dates are not forward-filled."
+    "description": "Change in the stock/benchmark price ratio over matching completed candles. Missing benchmark candles never use a forward-filled price."
   },
   "dema": {
     "label": "Double EMA (DEMA)",
@@ -1087,5 +1098,69 @@
       "Slow MA"
     ],
     "description": "Two moving averages with optional crossover markers on completed candles. Above means fast crossed above slow; below means fast crossed below slow. Chart markers are observations, not orders. Use the rule builder to trade these conditions."
+  },
+  "benchmarkClose": {
+    "label": "Benchmark close",
+    "pane": "study",
+    "period": null,
+    "settings": {
+      "benchmark": {
+        "label": "Benchmark",
+        "type": "select",
+        "default": "NIFTY 50",
+        "options": [
+          "NIFTY 50",
+          "NIFTY BANK",
+          "SENSEX",
+          "NIFTY IT",
+          "NIFTY AUTO",
+          "NIFTY FMCG",
+          "NIFTY PHARMA",
+          "NIFTY METAL",
+          "NIFTY REALTY",
+          "NIFTY ENERGY",
+          "NIFTY FIN SERVICE",
+          "NIFTY PSU BANK",
+          "NIFTY PVT BANK",
+          "NIFTY HEALTHCARE"
+        ]
+      }
+    },
+    "lines": [
+      "Benchmark close"
+    ],
+    "description": "The selected index itself, on completed matching candles. Choose a sector index explicitly; no automatic sector mapping."
+  },
+  "benchmarkEma": {
+    "label": "Benchmark EMA",
+    "pane": "study",
+    "period": 20,
+    "settings": {
+      "benchmark": {
+        "label": "Benchmark",
+        "type": "select",
+        "default": "NIFTY 50",
+        "options": [
+          "NIFTY 50",
+          "NIFTY BANK",
+          "SENSEX",
+          "NIFTY IT",
+          "NIFTY AUTO",
+          "NIFTY FMCG",
+          "NIFTY PHARMA",
+          "NIFTY METAL",
+          "NIFTY REALTY",
+          "NIFTY ENERGY",
+          "NIFTY FIN SERVICE",
+          "NIFTY PSU BANK",
+          "NIFTY PVT BANK",
+          "NIFTY HEALTHCARE"
+        ]
+      }
+    },
+    "lines": [
+      "Benchmark EMA"
+    ],
+    "description": "The selected index itself, on completed matching candles. Choose a sector index explicitly; no automatic sector mapping."
   }
 }

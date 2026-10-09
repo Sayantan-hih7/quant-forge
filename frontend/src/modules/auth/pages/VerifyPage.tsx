@@ -1,6 +1,7 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Alert, App, Button, Divider, Form } from 'antd';
+import { App, Button, Divider, Form } from 'antd';
 import { ArrowLeftOutlined, SafetyCertificateOutlined, KeyOutlined } from '@ant-design/icons';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +38,6 @@ export default function VerifyPage() {
       <Button block type="primary" htmlType="submit">{mobile ? 'Verify mobile' : 'Verify and sign in'}</Button>
     </Form>
     {mobile ? <Button type="link" className="resend-code" disabled={resent} onClick={() => { setResent(true); message.info('Demo code reissued: 123456. No SMS was sent.'); }}>{resent ? 'Demo code reissued' : 'Resend demo code'}</Button> : <><Divider plain>or use another method</Divider><Button block icon={<KeyOutlined />} onClick={passkey}>Use a passkey</Button></>}
-    <Alert className="auth-demo-note" type="info" showIcon title={`Demo code: ${mobile ? '123456' : '654321'}`} description="Verification is simulated for design review. No real SMS, authenticator, or passkey service is connected." />
+    <GuidanceNote className="auth-demo-note" type="info" showIcon title={`Demo code: ${mobile ? '123456' : '654321'}`} description="Verification is simulated for design review. No real SMS, authenticator, or passkey service is connected." />
   </AuthLayout>;
 }

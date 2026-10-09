@@ -1,3 +1,4 @@
+import { intradayContinuation } from './intraday-continuation.js';
 import {assessPaperEligibility} from '../../backtesting/services/paper-eligibility.js';
 import {executionOpen,executionCloseMinute} from './execution-session.js';
 import {entryCutoffMinute} from './entry-safety.js';
@@ -62,7 +63,7 @@ export async function paperState() {
   const emergency=await PaperSafetyModel.findById('global').lean();
   if(emergency?.halted)warnings.push('Emergency entry halt is active. All new buys are blocked; exits remain enabled.');
   for(const session of sessions)if(session.lossLimitDate===sessionTime().date)warnings.push(session.strategy.name+': daily loss limit reached; new buys blocked for today.');
-  return {safety:{clock,warnings,notices,halted:!!emergency?.halted},sessions:scopedSessions,symbols:Object.fromEntries(stocks.map(stock=>[stock._id,stock.symbol])),positions:markedPositions,orders:estimatedOrders,signals,observations,workerRunning:!!worker,execution:'paper-only',feed:{state:feed.state,message:feed.message,provider:feed.provider,enabled:feed.enabled,automation:feed.automation,workerRunning:feed.workerRunning,subscribedIds:feed.instruments?.map(stock=>stock.id)??[],freshIds:feed.quotes.filter(q=>q.fresh).map(q=>q.instrumentId)},history:history?JSON.parse(history):null,marketOpen:sessionTime().open};
+  return {safety:{clock,warnings,notices,halted:!!emergency?.halted},sessions:scopedSessions.map(s=>({...s,intraday:intradayContinuation(s,positions.filter(p=>p.sessionId===s._id),s.scope.eligibleIds)})),symbols:Object.fromEntries(stocks.map(stock=>[stock._id,stock.symbol])),positions:markedPositions,orders:estimatedOrders,signals,observations,workerRunning:!!worker,execution:'paper-only',feed:{state:feed.state,message:feed.message,provider:feed.provider,enabled:feed.enabled,automation:feed.automation,workerRunning:feed.workerRunning,subscribedIds:feed.instruments?.map(stock=>stock.id)??[],freshIds:feed.quotes.filter(q=>q.fresh).map(q=>q.instrumentId)},history:history?JSON.parse(history):null,marketOpen:sessionTime().open};
 }
 export async function createPaperSession(raw:unknown) {
   const input=sessionSchema.parse(raw), strategy=await StrategyModel.findById(input.strategyId).lean();

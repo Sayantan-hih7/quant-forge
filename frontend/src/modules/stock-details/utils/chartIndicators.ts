@@ -21,7 +21,7 @@ export const indicatorFrame = (i: ChartIndicator, frame: StockTimeframe): StockT
   return i.kind === 'vwap' && ['1w', '1mo'].includes(selected) ? '1d' : selected;
 };
 export const indicatorLabel = (i: ChartIndicator, frame: StockTimeframe) => {
-  const settings = i.kind === 'maCross' ? ` ${(i.maType ?? 'ema').toUpperCase()} ${i.fastPeriod ?? 9}/${i.slowPeriod ?? 21}` : i.kind === 'connorsRsi' ? ` ${i.period}/${i.streakPeriod ?? 2}/${i.rankPeriod ?? 100}` : i.kind === 'averagePrice' ? ` ? ${(i.source ?? 'ohlc4').toUpperCase()}` : i.kind === 'macd' ? ` ${i.fastPeriod ?? 12}/${i.slowPeriod ?? 26}/${i.signalPeriod ?? 9}` : i.kind === 'vwap' ? ` · ${i.anchor === 'custom' ? `from ${i.anchorDate}` : i.anchor ?? 'session'}` : i.kind === 'supertrend' ? ` ${i.period}/${i.multiplier ?? 3}` : i.kind === 'relativeStrength' ? ` ${i.period} vs ${i.benchmark ?? 'NIFTY 50'}` : i.kind === 'pivots' ? ` ? ${i.pivotType ?? 'traditional'} ${i.pivotFrame ?? '1mo'}` : indicatorCatalog[i.kind].period === null ? '' : ` ${i.period}`;
+  const settings = i.kind === 'maCross' ? ` ${(i.maType ?? 'ema').toUpperCase()} ${i.fastPeriod ?? 9}/${i.slowPeriod ?? 21}` : i.kind === 'connorsRsi' ? ` ${i.period}/${i.streakPeriod ?? 2}/${i.rankPeriod ?? 100}` : i.kind === 'averagePrice' ? ` ? ${(i.source ?? 'ohlc4').toUpperCase()}` : i.kind === 'macd' ? ` ${i.fastPeriod ?? 12}/${i.slowPeriod ?? 26}/${i.signalPeriod ?? 9}` : i.kind === 'vwap' ? ` · ${i.anchor === 'custom' ? `from ${i.anchorDate}` : i.anchor ?? 'session'}` : i.kind === 'supertrend' ? ` ${i.period}/${i.multiplier ?? 3}` : i.kind === 'relativeStrength' ? ` ${i.period} vs ${i.benchmark ?? 'NIFTY 50'}` : i.kind === 'benchmarkClose' || i.kind === 'benchmarkEma' ? ` ${i.kind === 'benchmarkEma' ? i.period : ''} ${i.benchmark ?? 'NIFTY 50'}` : i.kind === 'pivots' ? ` ? ${i.pivotType ?? 'traditional'} ${i.pivotFrame ?? '1mo'}` : indicatorCatalog[i.kind].period === null ? '' : ` ${i.period}`;
   return `${indicatorName(i.kind)}${settings} · ${indicatorFrame(i, frame)}${i.kind !== 'averagePrice' && i.source && usesPriceSource(i.kind) ? ` · ${i.source.toUpperCase()}` : ''}${i.offset ? ` · ${i.offset} candles earlier` : ''}${i.strategy ? ' · Strategy' : ''}`;
 };
 export const defaultIndicators: ChartIndicator[] = [5, 21].map((period, n) => ({ id: `default-${period}`, kind: 'ema', period, timeframe: 'chart', color: indicatorColors[n] }));
@@ -146,10 +146,17 @@ export function plotIndicator(config: ChartIndicator, source: ChartBar[], target
   const effective = config.strategy ? {...config.strategySettings,period:config.period} : config;
   let calculated = indicatorValues(bars, config.kind, config.period, effective);
   if (config.kind === 'relativeStrength') {
-    if (!benchmark || !['1d','1w','1mo'].includes(sourceFrame)) return [];
+    if (!benchmark) return [];
     const comparison=new Map(benchmark.filter(b=>barEnd(b.time,sourceFrame)<=now).map(b=>[bucketTime(Date.parse(b.time),sourceFrame),b.close]));
     const ratios=bars.map(b=>{const close=comparison.get(bucketTime(Date.parse(b.time),sourceFrame));return close&&close>0?b.close/close:null;});
     calculated=[ratios.map((v,i)=>i<config.period||v===null||ratios.slice(i-config.period,i+1).some(x=>x===null)?null:(v/ratios[i-config.period]!-1)*100)];
+  }
+  if (config.kind === 'benchmarkClose' || config.kind === 'benchmarkEma') {
+    if (!benchmark) return [];
+    const closed = benchmark.filter(b => barEnd(b.time, sourceFrame) <= now);
+    const raw = config.kind === 'benchmarkClose' ? closed.map(b => b.close) : indicatorValues(closed, 'ema', config.period, {})[0];
+    const byTime = new Map(closed.map((b,i) => [bucketTime(Date.parse(b.time),sourceFrame),raw[i]]));
+    calculated = [bars.map(b => byTime.get(bucketTime(Date.parse(b.time),sourceFrame)) ?? null)];
   }
   const values = calculated.map(series => config.offset ? series.map((_,i) => i >= config.offset! ? series[i-config.offset!] : null) : series);
   const overlay = indicatorCatalog[config.kind].pane === 'price';

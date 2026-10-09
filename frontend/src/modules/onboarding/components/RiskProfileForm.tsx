@@ -1,4 +1,5 @@
-import { Alert, Button, Form } from "antd";
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { Button, Form } from "antd";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RhfInputNumber } from "../../../components/forms";
@@ -46,7 +47,7 @@ export function RiskProfileForm({
           label="Risk multiplier"
           control={control}
         />
-        <Alert
+        <GuidanceNote
           type="info"
           showIcon
           title="You stay in control"

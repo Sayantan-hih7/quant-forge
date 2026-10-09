@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { Alert, Collapse, Popover, Table, Tag } from 'antd';
 import type { ScopedStock } from '../../strategies/hooks/useQualifiedStockScope';
 import type { Horizon } from '../../qualification/types';
@@ -9,7 +10,7 @@ export function BacktestStockSuitability({stocks,value,horizon,historical,loadin
  const selected=stocks.filter(s=>value.includes(s._id));
  const outside=selected.filter(s=>profile(s)?.status==='not-matched');
  const unknown=selected.filter(s=>!profile(s)||profile(s)?.status==='unavailable');
- if(historical)return <Alert className="mb-5" type="info" showIcon title="Historical suitability is assessed during replay" description="Today's research profiles are not applied to past published lists. The report will identify missing history and execution constraints for the selected dates." />;
+ if(historical)return <GuidanceNote className="mb-5" type="info" showIcon title="Historical suitability is assessed during replay" description="Today's research profiles are not applied to past published lists. The report will identify missing history and execution constraints for the selected dates." />;
  if(loading)return null;
  return <div className="mb-5">
    <Alert type={outside.length||unknown.length?'warning':'info'} showIcon title={`${label} screening: ${selected.length-outside.length-unknown.length} selected matches, ${outside.length} outside profile, ${unknown.length} need data`}

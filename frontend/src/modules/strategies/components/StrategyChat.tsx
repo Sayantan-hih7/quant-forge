@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Form, Tag } from 'antd';
 import { ArrowUpOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
@@ -41,7 +42,7 @@ export function StrategyChat({ messages, draft, onUpdate, onBusyChange, active =
   };
   return <section className="strategy-chat" aria-label="Strategy assistant"><header className="strategy-chat-header"><span className="strategy-assistant-icon"><RobotOutlined /></span><div><h2>{focus === 'risk' ? 'Set risk in your own words' : 'Build with AI'}</h2><p>{focus === 'risk' ? 'Describe an example. We’ll map it to the controls.' : 'Describe your idea. Shape both sides of the trade.'}</p></div><Tag>{assistant.status?.provider ?? "AI"}</Tag></header>
     {assistant.status?.configured === false && <Alert type="warning" showIcon title="AI is not configured" description="Ask the workspace owner to connect the AI service. You can continue using the manual builder." />}
-    {assistant.error && <Alert type="error" showIcon title="AI request failed" description={assistant.error} />}
+    {assistant.error && <RequestFeedback type="error" showIcon title="AI request failed" description={assistant.error} />}
     {(retained || assistant.error) && <p className="strategy-demo-note">Your existing draft and any previous suggestion are preserved.</p>}
     <div className="strategy-chat-log" role="log" aria-label="Strategy conversation" aria-live="polite" ref={log}>
       <div className="strategy-chat-welcome"><span className="strategy-eyebrow">DESCRIBE → CLARIFY → REVIEW → APPLY</span><h3>{focus === 'risk' ? 'How would you manage this trade?' : 'What should your strategy do?'}</h3><p>{focus === 'risk' ? 'For example: “If I buy at ₹100, protect me at ₹96. Sell half at twice that risk, then the rest at four times. Move my stop to entry after the first sale.” Tell us whether prices are examples or actual limits.' : 'Explain when you buy and sell, or describe a trade you already understand. The assistant will ask only for details needed to express it in supported rules.'}</p><div className="strategy-demo-note">{focus === 'risk' ? 'Only risk settings are proposed here. Your buy and sell conditions stay in the manual builder.' : 'You can describe the idea without indicator names. Missing decisions are clarified before a suggestion is ready.'}</div></div>

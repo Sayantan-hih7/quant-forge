@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useEffect, useState } from "react";
 import { Alert, Button, Divider, Form, Modal } from "antd";
 import { ApiOutlined, CheckCircleOutlined } from "@ant-design/icons";
@@ -190,7 +191,7 @@ export function BrokerAuthorization({
           onAuthorized({ clientId: "DEMO-OAUTH-1234", method: "oauth" });
         }}
       >
-        <Alert
+        <GuidanceNote
           type="info"
           title="Simulated broker authorization"
           description="This is a local preview of the consent step. No broker sign-in or permissions are requested."

@@ -9,7 +9,7 @@ import { clockHealth } from '../../../shared/clock-health.js';
 
 export const agentToolSchema=z.object({name:z.enum(['backtests','paper','qualification','connections']),id:z.string().uuid().nullable().optional()}).strict();
 export type AgentToolCall=z.infer<typeof agentToolSchema>;
-export interface AgentActivity {tool:AgentToolCall['name'];status:'completed'|'unavailable';checkedAt:string;checkedAtIst?:string;summary:string;data:unknown;report?:SourceReport}
+export interface AgentActivity {durationMs?:number;tool:AgentToolCall['name'];status:'completed'|'unavailable';checkedAt:string;checkedAtIst?:string;summary:string;data:unknown;report?:SourceReport}
 export const agentToolsDescription=`Read-only application tools (never code execution, URLs or broker orders):
 backtests: id omitted lists latest 5 report summaries; id set reads one report. Includes stored strategy revision, metrics, data quality and limited trade sample. Start with the list to discover report IDs.
 paper: latest sessions, recent orders and rule observations; id optionally limits to a known session. Paise values are explicitly named; divide by 100 for rupees. Samples are not lifetime totals.

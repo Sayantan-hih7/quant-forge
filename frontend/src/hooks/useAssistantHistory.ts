@@ -14,17 +14,17 @@ export function useAssistantHistory(snapshot:ChatSnapshot){
  // This effect starts an asynchronous database read; state updates occur after the request.
  // eslint-disable-next-line react-hooks/set-state-in-effect
  useEffect(()=>{void refresh();},[refresh]);
- const flush=useCallback(()=>{
-  const value=current.current,key=JSON.stringify(value),meta=metadata.current.get(id)??{revision:0,saved:''};metadata.current.set(id,meta);if(!value.messages.length&&!value.resume?.prompt.trim()&&!value.resume?.attachments?.length)return Promise.resolve();
+ const flush=useCallback((sentMessages?:AiMessage[])=>{
+  const value=sentMessages?{...current.current,messages:sentMessages,resume:current.current.resume?{...current.current.resume,prompt:''}:undefined}:current.current,key=JSON.stringify(value),meta=metadata.current.get(id)??{revision:0,saved:''};metadata.current.set(id,meta);if(!value.messages.length)return Promise.resolve();
   const operation=chain.current.catch(()=>{}).then(async()=>{if(meta.deleted||meta.saved===key)return;const {data}=await apiClient.put<{revision:number}>(`/ai/conversations/${id}`,{snapshot:value,expectedRevision:meta.revision});meta.revision=data.revision;meta.saved=key;try{sessionStorage.setItem('quantforge-active-chat',id);}catch{/* Browser storage is optional. */}setError('');await refresh();});
   chain.current=operation;return operation.catch(e=>{setError(e instanceof Error?e.message:'Chat was not saved');throw e;});
  },[id,refresh]);
- useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if((current.current.messages.length||current.current.resume?.prompt||current.current.resume?.attachments?.length)&&metadata.current.get(id)?.saved!==JSON.stringify(current.current)){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[id]);
+ useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(current.current.messages.length&&metadata.current.get(id)?.saved!==JSON.stringify(current.current)){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[id]);
  const encoded=JSON.stringify(snapshot);
- useEffect(()=>{if((!snapshot.messages.length&&!snapshot.resume?.prompt.trim()&&!snapshot.resume?.attachments?.length)||loading)return;timer.current=setTimeout(()=>{void flush().catch(()=>{});},600);return()=>clearTimeout(timer.current);},[encoded,flush,snapshot.messages.length,snapshot.resume?.prompt,snapshot.resume?.attachments?.length,loading]);
+ useEffect(()=>{if(!snapshot.messages.length||loading)return;timer.current=setTimeout(()=>{void flush().catch(()=>{});},600);return()=>clearTimeout(timer.current);},[encoded,flush,snapshot.messages.length,snapshot.resume?.prompt,snapshot.resume?.attachments?.length,loading]);
  const open=async(next:string)=>{clearTimeout(timer.current);setLoading(true);try{await flush();const {data}=await apiClient.get<ChatSummary&{snapshot:ChatSnapshot}>(`/ai/conversations/${next}`);metadata.current.set(next,{revision:data.revision,saved:JSON.stringify(data.snapshot)});current.current=data.snapshot;setId(next);try{sessionStorage.setItem('quantforge-active-chat',next);}catch{/* Optional. */}setError('');return data.snapshot;}finally{setLoading(false);}};
  const fresh=async()=>{clearTimeout(timer.current);setLoading(true);try{await flush();current.current={messages:[]};try{sessionStorage.removeItem('quantforge-active-chat');}catch{/* Optional. */}setId(crypto.randomUUID());}finally{setLoading(false);}};
  const rename=async(target:string,title:string)=>{await apiClient.patch(`/ai/conversations/${target}`,{title});await refresh();};
  const remove=async(target:string)=>{if(target===id)clearTimeout(timer.current);const meta=metadata.current.get(target);await chain.current.catch(()=>{});await apiClient.delete(`/ai/conversations/${target}`);if(meta)meta.deleted=true;if(target===id){current.current={messages:[]};try{sessionStorage.removeItem('quantforge-active-chat');}catch{/* Optional. */}setId(crypto.randomUUID());}await refresh();};
- return {items,id,storage,error,loading,hasMore,refresh,flush,open,fresh,rename,remove};
+ return {items,id,storage,error,clearError:()=>setError(''),loading,hasMore,refresh,flush,open,fresh,rename,remove};
 }

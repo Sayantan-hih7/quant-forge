@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useState } from "react";
 import { Alert, Button, Segmented, Switch, Tabs, Tag } from "antd";
 import {
@@ -144,7 +145,7 @@ function IndicesWorkspace({ exchange, state }: { exchange: IndexExchange; state:
           </div>
         </div>
       </div>
-      {error && <Alert showIcon type="warning" title={error} description="Saved values retain their original timestamps. Refresh to retry." />}
+      {error && <RequestFeedback showIcon type="warning" title={error} description="Saved values retain their original timestamps. Refresh to retry." />}
       {sources.find(s => s.exchange === exchange)?.warning && <Alert showIcon type="warning" title={sources.find(s => s.exchange === exchange)?.warning} />}
       <div className="indices-update-note" role="status">
         <span>{market && !market.open ? `${market.reason} · showing saved snapshots${autoUpdate && market.nextOpenAt ? ` · resumes ${indexTime(market.nextOpenAt)}` : ''}` : autoUpdate ? 'Auto-update on · checks every 15 seconds during market hours' : 'Auto-update paused · use Refresh for the latest values'}</span>

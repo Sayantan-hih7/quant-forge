@@ -34,3 +34,14 @@ export function continueList(value:string, start:number, end:number){
   const insert='\n'+match[1]+marker;
   return {value:value.slice(0,start)+insert+value.slice(end),caret:start+insert.length};
 }
+
+// Measure a textarea selection without replacing the native, accessible input.
+export function selectionBubblePosition(el:HTMLTextAreaElement){
+ const mirror=document.createElement('div'),style=getComputedStyle(el);
+ for(const name of ['font','line-height','letter-spacing','padding','border','box-sizing','word-spacing','tab-size'])mirror.style.setProperty(name,style.getPropertyValue(name));
+ Object.assign(mirror.style,{position:'fixed',visibility:'hidden',pointerEvents:'none',whiteSpace:'pre-wrap',overflowWrap:'break-word',width:`${el.clientWidth}px`});
+ mirror.textContent=el.value.slice(0,el.selectionStart);const marker=document.createElement('span');marker.textContent=el.value.slice(el.selectionStart,el.selectionEnd)||'.';mirror.append(marker);document.body.append(mirror);
+ const box=mirror.getBoundingClientRect(),rect=marker.getBoundingClientRect();
+ const left=Math.max(0,Math.min(rect.left-box.left-el.scrollLeft,el.clientWidth-250));
+ const top=Math.max(-44,Math.min(rect.top-box.top-el.scrollTop-44,el.clientHeight-44));mirror.remove();return {left,top};
+}

@@ -4,6 +4,8 @@ from .market import stamp, IST
 
 
 def validate_entry_safety(risk):
+    if risk.get('signalRanking', 'instrumentId') not in ('instrumentId', 'turnover', 'relativeVolume'):
+        raise ValueError('Unsupported signal ranking')
     for key, low, high, integer in [('reentryCooldownMinutes', 0, 10080, True), ('maxEntriesPerStockPerDay', 0, 100, True), ('dailyLossLimitPercent', .1, 10, False), ('maxEntryDeviationPercent', .1, 10, False)]:
         value = risk.get(key)
         if key in risk and (value is None or isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not low <= value <= high or integer and int(value) != value):

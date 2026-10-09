@@ -37,6 +37,7 @@ function describe(issue: ZodIssue) {
 export function invalidProposalError(error: ZodError | AppError) {
   const details = error instanceof ZodError ? [...new Set(error.issues.map(describe))].slice(0, 3).join(' ')
     : error.code === 'AI_RULE_CONSTRAINT' ? error.message
+    : error.code === 'AI_DELEGATED_CHOICE' ? 'The assistant kept asking for technical choices you already delegated instead of producing a valid draft. Retry asking for a concrete draft with its assumptions explained.'
     : error.code === 'AI_MISSING_SETTING' ? 'A requested partial exit or stop adjustment was missing from the generated settings.'
     : error.code === 'AI_CHANGED_SETTING' ? 'The generated settings changed an exit or stop adjustment you asked to keep.'
     : 'A generated rule used an unsupported field, timeframe or comparison.';

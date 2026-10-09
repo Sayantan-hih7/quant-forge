@@ -1,4 +1,5 @@
-import { Alert, App, Button, Drawer, Form } from "antd";
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { App, Button, Drawer, Form } from "antd";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -120,7 +121,7 @@ export function CreateStrategyDrawer({
           step={10000}
           required
         />
-        <Alert
+        <GuidanceNote
           type="info"
           showIcon
           title="UI preview only"

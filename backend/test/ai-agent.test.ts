@@ -13,7 +13,7 @@ test('agent discovers report then reads it and answers with server evidence',asy
  });assert.equal(generations,3);assert.equal(calls.length,2);assert.equal(result.activity.length,2);assert.equal(result.proposal,null);assert.equal(result.destination,'/strategies?tab=backtests');
 });
 test('repeated tool requests are bounded and cannot silently loop',async()=>{
- let reads=0;const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Check connection'}),undefined,{...deps,generate:async()=>({text:'check',action:'explain',tools:[{name:'connections'}]}),readTool:async call=>{reads++;return {tool:call.name,status:'completed',checkedAt:new Date().toISOString(),summary:'checked',data:{}};}});assert.equal(reads,1);assert.match(result.text,/check limit/);
+ let reads=0;const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Check connection'}),undefined,{...deps,generate:async()=>({text:'check',action:'explain',tools:[{name:'connections'}]}),readTool:async call=>{reads++;return {tool:call.name,status:'completed',checkedAt:new Date().toISOString(),summary:'checked',data:{}};}});assert.equal(reads,1);assert.match(result.text,/check limit/);assert.equal(typeof result.activity?.[0]?.durationMs,'number');assert.ok((result.activity?.[0]?.durationMs??-1)>=0);
 });
 test('unknown commands and tool arguments are rejected; failures redact details',async()=>{
  assert.equal(agentToolSchema.safeParse({name:'execute-order',id:null}).success,false);assert.equal(agentToolSchema.safeParse({name:'connections',url:'http://localhost'}).success,false);

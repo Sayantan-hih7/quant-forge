@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { RestoreStrategyButton } from '../components/RestoreStrategyButton';
 import { StrategyDraftPreview } from '../components/StrategyDraftPreview';
 import type { Horizon } from '../../qualification/types';
@@ -44,7 +45,7 @@ export default function BackendStrategiesPage() {
   return <div className="strategy-page page-enter">
     {selected && <Button type="text" className="strategy-back-link" icon={<ArrowLeftOutlined aria-hidden />} onClick={() => { setDirty(false); setParams({}); }}>All strategies</Button>}
     <div className="page-heading"><div><h1>{selected ? saved?.name ?? 'New strategy' : 'Algo strategies'}</h1><p>{selected ? 'Build a buy and sell plan, then test its saved rules.' : 'Create a strategy, test it on past prices, then inspect its signals.'}</p></div><Space wrap>{saved&&!saved.archivedAt&&tab==='rules'&&<Button type={editing?'default':'primary'} onClick={()=>editing?viewSaved():edit(saved._id)}>{editing?'View mode':'Edit strategy'}</Button>}{saved && <StrategyHistoryButton strategy={saved} history label="Version history" />}{!selected && <Button type="primary" icon={<PlusOutlined aria-hidden />} disabled={!availableHorizons.length} onClick={() => startNew(availableHorizons[0])}>New strategy</Button>}<Button onClick={() => navigate('/signal-runner' + (saved ? `?strategy=${saved._id}` : ''))}>Signal runner</Button></Space></div>
-    {error && <Alert className="mb-5" type="error" showIcon title={error} action={<Button onClick={() => void refresh()}>Retry</Button>} />}
+    {error && <RequestFeedback className="mb-5" type="error" showIcon title={error} action={<Button onClick={() => void refresh()}>Retry</Button>} />}
     {loading ? <Skeleton active /> : !selected ? <>
       <StrategyLibrary strategies={strategies} onNew={startNew} onView={open} onEdit={edit} onTest={rule => open(rule, 'backtests')} onArchive={async strategy=>{try{await apiClient.post(`/strategies/${strategy._id}/archive`,{expectedRevision:strategy.revision});await refresh();message.success('Strategy archived. You can restore it from Archived strategies or create a replacement.');}catch(e){message.error((e as Error).message);}}} />
       {!!localDrafts.length && <section className="strategy-local-drafts"><h3>Unfinished drafts on this device</h3>{localDrafts.map(([key, value]) => <div key={key}><span>{value.draft?.name || 'Untitled strategy'}</span><Space><Button onClick={() => {

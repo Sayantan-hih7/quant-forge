@@ -1,5 +1,6 @@
-﻿import {useEffect,useRef,useState} from 'react';
-import {Alert,App,Button,Form,Space} from 'antd';
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import {useEffect,useRef,useState} from 'react';
+import {App,Button,Form,Space} from 'antd';
 import {useForm,useWatch} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {z} from 'zod';
@@ -28,7 +29,7 @@ export function ManualPaperOrder({sessionId,allowedIds,entryLimitPrice,positions
    message.success('Order queued. New automatic buys are paused.');setRequestId(crypto.randomUUID());await refresh();onSubmitted?.();
   }catch(e){message.error((e as Error).message);}
  })}>
- <Space orientation="vertical" size={16} style={{width:'100%'}}><Alert type="info" showIcon title="Manual paper order" description="Market orders wait for the next fresh quote and expire after 60 seconds. Limit orders wait until your price is reached or the session cutoff. Cash, held shares and risk limits still apply."/>
+ <Space orientation="vertical" size={16} style={{width:'100%'}}><GuidanceNote type="info" showIcon title="Manual paper order" description="Market orders wait for the next fresh quote and expire after 60 seconds. Limit orders wait until your price is reached or the session cutoff. Cash, held shares and risk limits still apply."/>
  {lockedStock?<div><strong>{lockedStock.label}</strong><p>Quantity and price apply to this listing.</p></div>:<RhfSelect control={form.control} name="instrumentId" label={values.side==='SELL'?'Held stock':'Qualified stock'} showSearch optionFilterProp="label" options={stocks.filter(s=>(!allowedIds||allowedIds.includes(s._id))&&(values.side!=='SELL'||positions.some(p=>p.instrumentId===s._id))).map(s=>({value:s._id,label:`${s.symbol} · ${s.exchange}`}))}/>}
  {!lockedStock&&<RhfSelect control={form.control} name="side" label="Side" options={[{value:'BUY',label:'Buy · enter'},{value:'SELL',label:'Sell · held shares only'}]}/>}
  <RhfInputNumber control={form.control} name="quantity" label={values.side==='SELL'?`Shares to sell${held?` · ${held.quantity} held`:''}`:'Shares to buy'} min={1} max={values.side==='SELL'?held?.quantity:1000000} precision={0}/>

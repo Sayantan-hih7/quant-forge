@@ -1,5 +1,6 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, App, Button, Drawer, Form, Tag } from 'antd';
+import { App, Button, Drawer, Form, Tag } from 'antd';
 import { FileTextOutlined, PlayCircleOutlined, SaveOutlined } from '@ant-design/icons';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,7 +33,7 @@ export function MonthlyRuleBuilder({ workspace, owner, month, onQueued, onDirtyC
   };
   return <div className="monthly-rule-builder">
     <div className="q-section-heading"><div><h2>Monthly qualification rules</h2><p>Edit conditions, then save your rule or save and start a scan.</p></div><Tag color={dirty ? 'orange' : 'blue'}>{dirty ? 'Unsaved changes' : 'Saved rules'}</Tag></div>
-    <Alert className="monthly-data-note" type="info" showIcon title="Monthly data only" description="Technical filters use completed monthly candles. Fundamentals, news, ownership and other filters use the month-end snapshot. Daily, weekly and intraday rules are unavailable here." />
+    <GuidanceNote className="monthly-data-note" type="info" showIcon title="Monthly data only" description="Technical filters use completed monthly candles. Fundamentals, news, ownership and other filters use the month-end snapshot. Daily, weekly and intraday rules are unavailable here." />
     <FormProvider {...form}><Form layout="vertical" requiredMark={false} onFinish={form.handleSubmit((definition) => submit(definition, false))}>
       <MonthlyConditionEditor />
       <div className="q-editor-actions"><Button icon={<FileTextOutlined aria-hidden />} onClick={form.handleSubmit((definition) => setSummary(structuredClone(definition)))}>Preview rule</Button><div><Button htmlType="submit" disabled={!dirty && workspace.monthlyRuleSaved} icon={<SaveOutlined aria-hidden />}>Save rule</Button><Button type="primary" disabled={pending || !changedFromPublished} icon={<PlayCircleOutlined aria-hidden />} onClick={form.handleSubmit((definition) => submit(definition, true))}>Save and run</Button></div></div>

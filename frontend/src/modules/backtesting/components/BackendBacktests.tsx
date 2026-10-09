@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { defaultBacktestSelection, BACKTEST_STOCK_LIMIT } from '../../strategies/utils/backtestSelection';
 import { BacktestSelectionAudit } from './BacktestSelectionAudit';
 import { useExchangePreference, exchangeOptions } from '../../qualification/hooks/useExchangePreference';
@@ -97,7 +98,7 @@ export function BackendBacktests({ strategies, selected, initialRunId, onReportC
     </div>
     <div hidden={!strategy.archivedAt && workspaceTab !== 'history'}>
     <Card title="Runs for this strategy" extra={<Button onClick={() => void refresh()}>Refresh runs</Button>}>
-      {error && <Alert className="mb-5" type="error" showIcon title="Runs could not be loaded" description={error} />}
+      {error && <RequestFeedback className="mb-5" type="error" showIcon title="Runs could not be loaded" description={error} />}
       <Table<BackendBacktest> size="small" rowKey="_id" dataSource={runs} pagination={{ pageSize: 5 }} locale={{ emptyText: 'No backtests yet. Open New backtest to choose dates and stocks.' }} scroll={{ x: 850 }} columns={[
         { title: 'Test period', render: (_, r) => <div>{date(r.config.from)} – {date(new Date(Date.parse(r.config.to) - 1).toISOString())}<div className="muted">{r.config.ids.length} stocks · {r.strategy.revision === strategy.revision ? 'Current saved rules' : `Earlier rules · revision ${r.strategy.revision}`}<div><StrategyHistoryButton strategy={r.strategy} context="This backtest" /></div></div></div> },
         { title: 'Status', render: (_, r) => <Tag color={r.status === 'completed' ? 'green' : r.status === 'failed' ? 'red' : 'blue'}>{r.status === 'running' ? r.stage === 'preparing' ? 'Preparing history' : 'Replaying candles' : r.status}</Tag> },

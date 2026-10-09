@@ -21,7 +21,7 @@ engineClient.interceptors.response.use(response => response, (error: unknown) =>
   return Promise.reject(new AppError(503, 'ENGINE_UNAVAILABLE', status ? `The calculation engine returned an error (HTTP ${status}). Stored history is retained; check the engine logs before retrying.` : 'The calculation engine connection was lost or could not be opened. Keep engine services running. Stored history is retained for retry.'));
 });
 export interface EvaluationResult { id: string; matched: boolean | null; status: 'qualified' | 'rejected' | 'unavailable' | 'awaiting_history'; checks: { matched: boolean | null; field: string; eventKey?: string; missingField?: string; reason?: string; code?: string; availableMonths?: number; requiredMonths?: number; left?: number; right?: number }[] }
-export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { benchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false, candleLimit = 150000) {
+export async function engineInstruments(ids: string[], cutoff: string, monthly = false, window?: { benchmarks?: BenchmarkName[]; dailyBenchmarks?: BenchmarkName[]; intradayBenchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; reportsFrom?: string }, factsOnly = false, candleLimit = 150000) {
   const [prices, observations, reports] = await Promise.all([
     factsOnly ? Promise.resolve([]) : storedCandles.find({ instrumentId: { $in: ids }, time: { $lt: cutoff }, ...(monthly ? { interval: '1d' } : {}), ...(window ? { $or: [
       ...(window.dailyFrom ? [{ interval: '1d' as const, time: { $gte: `${window.dailyFrom}T00:00:00.000Z`, $lt: cutoff } }] : []),
@@ -40,8 +40,8 @@ export async function engineInstruments(ids: string[], cutoff: string, monthly =
   }
   const reportsByStock = new Map<string, typeof reports>();
   for (const report of reports) { const rows = reportsByStock.get(report.instrumentId) ?? []; rows.push(report); reportsByStock.set(report.instrumentId, rows); }
-  const benchmarks:Record<string,unknown[]>={};
-  if(!factsOnly)for(const name of window?.benchmarks??[]) { const from=window?.dailyFrom??new Date(Date.parse(cutoff)-2196*86400000).toISOString().slice(0,10);const history=await benchmarkHistory(name,'1d',from,cutoff);benchmarks[name]=history.bars; }
+  const benchmarks:Record<string,{daily:unknown[];intraday:unknown[]}>={};
+  if(!factsOnly)for(const name of window?.benchmarks??[]) { const from=window?.dailyFrom??new Date(Date.parse(cutoff)-2196*86400000).toISOString().slice(0,10);const history=(!window?.dailyBenchmarks||window.dailyBenchmarks.includes(name))?await benchmarkHistory(name,'1d',from,cutoff):undefined;const intraday=window?.intradayFrom&&window.intradayBenchmarks?.includes(name)?await benchmarkHistory(name,'1m',window.intradayFrom,cutoff):undefined;benchmarks[name]={daily:history?.bars??[],intraday:intraday?.bars??[]}; }
   return ids.map(id => ({ id, benchmarks, reports: reportsByStock.get(id) ?? [],
     daily: (byStock.get(id)??[]).filter(x=>x.interval==='1d'),
     intraday: (byStock.get(id)??[]).filter(x=>x.interval==='1m'),

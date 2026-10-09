@@ -133,3 +133,15 @@ test('monthly builder exposes only monthly measurements and saves EMA body param
   await expect.poll(() => saved?.groups[0].conditions[0].period).toBe(34);
   expect(saved?.groups[0].conditions[0].offset).toBe(1);
 });
+
+
+test('benchmark and opening-range rules retain distinct meanings in the editor schema', () => {
+  const draft=sampleTradingPlan('intraday');
+  const original=draft.entry.groups[0].conditions[0];
+  draft.risk.signalRanking='relativeVolume';
+  const condition={...original,left:'benchmarkClose' as const,leftFrame:'5m' as const,leftSettings:{benchmark:'NIFTY IT' as const},leftPeriod:undefined,right:'benchmarkEma' as const,rightType:'indicator' as const,rightFrame:'5m' as const,rightSettings:{benchmark:'NIFTY IT' as const},rightPeriod:20,operator:'gt' as const};
+  draft.entry.groups=[{logic:'AND',conditions:[condition]}];
+  expect(tradingPlanSchema.safeParse(draft).success).toBe(true);
+  expect(summarizeCondition(condition)).toContain('NIFTY IT');
+  expect(summarizeCondition({...condition,left:'openingRangeHigh',leftPeriod:15,leftSettings:undefined})).toContain('15 minutes');
+});

@@ -40,3 +40,13 @@ test('new scope policy is versioned and report replay cannot reselect stocks',as
  assert.equal(replayHeader.config.dataPolicy,undefined);assert.equal(replayHeader.readinessVersion,undefined);
  assert.deepEqual(replayHeader.config.ids,run.config.ids);await replay.return(undefined);
 });
+
+
+test('shared index histories are sent once rather than repeated for every stock',async()=>{
+  const benchmarks={ 'NIFTY 50': {daily:stock('index').daily,intraday:[]} };
+  const records=[];
+  for await(const bytes of backtestStream(run,async id=>({...stock(id),benchmarks})))records.push(JSON.parse(bytes.toString()));
+  assert.deepEqual(records[1].benchmarks,benchmarks);
+  assert.equal(records[2].benchmarks,undefined);
+  assert.equal(records[2].benchmarksRef,'NSE:1');
+});

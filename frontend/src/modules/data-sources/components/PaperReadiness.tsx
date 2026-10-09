@@ -1,5 +1,6 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useState } from 'react';
-import { Alert, Button, Card, List, Tag } from 'antd';
+import { Button, Card, List, Tag } from 'antd';
 import { apiClient } from '../../../services/apiClient';
 interface Check { id: string; label: string; state: 'ready' | 'attention'; message: string }
 export function PaperReadiness() {
@@ -10,7 +11,7 @@ export function PaperReadiness() {
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }}>Check readiness</Button>}>
     <p className="muted">Check connections and workers before a market session or deployment. This check does not start monitoring or place orders.</p>
-    {error && <Alert type="error" title={error} />}
+    {error && <RequestFeedback type="error" title={error} />}
     {checks && <List dataSource={checks} renderItem={check => <List.Item extra={<Tag color={check.state === 'ready' ? 'green' : 'gold'}>{check.state === 'ready' ? 'Ready' : 'Check'}</Tag>}><List.Item.Meta title={check.label} description={check.message} /></List.Item>} />}
   </Card>;
 }

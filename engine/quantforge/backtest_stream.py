@@ -37,7 +37,12 @@ def run_stream(handle, progress=None):
         total += len(stock.get("daily", [])) + len(stock.get("intraday", []))
         if total > MAX_CANDLES:
             raise ValueError("Backtest exceeds 8 million candles including indicator warm-up")
+        reference = stock.get('benchmarksRef')
+        if reference is not None and (not isinstance(reference, str) or reference not in prepared or 'benchmarks' in stock):
+            raise ValueError('Invalid benchmark history reference')
         prepared[ident] = ReplayObservations(stock, body["config"]["to"])
+        if reference is not None:
+            prepared[ident].benchmarks = prepared[reference].benchmarks
         # Release the decoded JSON before loading the next stock.
         del stock
     end = record()

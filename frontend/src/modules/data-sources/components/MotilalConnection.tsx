@@ -1,5 +1,6 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Card, Form, Space, Table, Tag } from 'antd';
+import { App, Button, Card, Form, Space, Table, Tag } from 'antd';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,7 +48,7 @@ export function MotilalConnection() {
     ...stocks.map(s => [s._id, { value: s._id, label: `${s.symbol} · ${s.exchange} · ${s.name}`, disabled: selectedProvider === 'motilal' && s.motilalCode === undefined }] as const),
   ]).values()];
   return <Card title="Live cash-equity feed" extra={<Tag color={feed?.state === 'live' ? 'green' : feed?.state === 'error' ? 'red' : 'orange'}>{feed?.state ?? 'Checking service'}</Tag>}>
-    {error && <Alert type="error" title={error} className="mb-5" />}
+    {error && <RequestFeedback type="error" title={error} className="mb-5" />}
     <p className="muted">{feed?.message ?? 'Checking the market-feed worker.'}</p>
     {Object.entries(feed?.connections ?? {}).map(([provider, connection]) => <Tag key={provider}>{provider === 'motilal' ? 'Motilal' : 'Dhan'} · {connection.ids.length} stocks · {connection.state}</Tag>)}
     {feed?.retryAt && <p className="muted">Retry at {new Date(feed.retryAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</p>}

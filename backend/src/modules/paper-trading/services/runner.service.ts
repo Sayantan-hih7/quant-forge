@@ -22,7 +22,7 @@ import type {LiveBook} from '../../market-feed/types/feed.types.js';
 import type {LiveQuote} from '../../market-feed/types/feed.types.js';
 import {protectiveTrigger} from './protection.js';
 import { queueIntradaySquareOff } from './square-off.service.js';
-interface Decision {id:string;entry:EvaluationResult;exit:EvaluationResult;barEnd:string|null;atr:number|null;signalLow?:number|null;referencePrice?:number|null}
+interface Decision {id:string;rankingScore?:number|null;entry:EvaluationResult;exit:EvaluationResult;barEnd:string|null;atr:number|null;signalLow?:number|null;referencePrice?:number|null}
 let lastTickId:string|undefined;
 async function recentTicks(){
   // Restart from current time. Missed ticks must never become retrospective fills.
@@ -141,7 +141,7 @@ export async function evaluatePaperStrategies(now = Date.now(), canContinue = ()
       const observedEntry = (result:Decision) => freshEntry(session.strategy.entry,result.entry,new Set(priorEvents.filter(row=>row.instrumentId===result.id).map(row=>row.eventKey!))).evaluation;
       if(data.results.length)await PaperObservationModel.bulkWrite(data.results.map(result=>({updateOne:{filter:{_id:`${session._id}:${result.id}`},update:{$set:{sessionId:session._id,instrumentId:result.id,barEnd:result.barEnd,checkedAt:new Date(now).toISOString(),current:!!result.barEnd&&Date.parse(result.barEnd)===Date.parse(window.barEnd),entry:observedEntry(result),exit:result.exit,referencePrice:result.referencePrice??null}},upsert:true}})));
       let unavailable=0,signals=0;
-      for(const result of data.results.sort((a,b)=>a.id.localeCompare(b.id))){
+      for(const result of data.results.sort((a,b)=>(b.rankingScore??-Infinity)-(a.rankingScore??-Infinity)||a.id.localeCompare(b.id))){
         const decisionTime=now+Date.now()-startedAt;
         if(!canContinue())return;
         if(decisionTime>=Date.parse(window.expiresAt)){unavailable++;continue;}
@@ -204,6 +204,11 @@ export async function evaluatePaperStrategies(now = Date.now(), canContinue = ()
           const fresh = freshEntry(session.strategy.entry,result.entry,new Set(consumed.map(x=>x.eventKey!)));
           if(!selling && fresh.evaluation.matched===null){unavailable++;return;}
           if(!selling && !fresh.evaluation.matched || selling && !evaluation.matched){await PaperEvaluationModel.create([{_id:signalId,processedAt:new Date(now)}],{session:transaction});return;}
+          if(!selling && current.strategy.risk.signalRanking && current.strategy.risk.signalRanking!=='instrumentId' && (result.rankingScore==null || !Number.isFinite(result.rankingScore))){
+            unavailable++;
+            await PaperObservationModel.updateOne({_id:`${session._id}:${result.id}`},{$set:{'entry.matched':null},$push:{'entry.checks':{field:'Signal ranking',matched:null,reason:'Ranking history unavailable; no buy order created'}}},{session:transaction});
+            return;
+          }
           const active=await PaperOrderModel.exists({sessionId:session._id,instrumentId:result.id,status:{$in:['pending','confirmation']}}).session(transaction);
           const atrMissing=!selling && (session.strategy.risk.stopMode==='ATR' && !result.atr || session.strategy.risk.stopMode==='candleLow' && !(result.signalLow && result.signalLow>0));
           // Missing stop data can arrive during a later refresh: do not consume this candle yet.

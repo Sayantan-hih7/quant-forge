@@ -1,3 +1,4 @@
+import { delegatedDraftChoices, remainingDraftQuestions } from './draft-delegation.js';
 import type {AiAttachment} from '../validations/attachment.validation.js';
 import {guidedDialogue} from '../config/guided-dialogue.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -13,8 +14,8 @@ export async function clarifyStrategy(capabilityContext: string, input: string, 
 Read the user's latest request together with the conversation and current draft. Return the intent schema.
 ${strategyGuidance}
 ${guidedDialogue}
-CAPABILITY HONESTY: Sector leadership is NOT stock relative strength against NIFTY 50. Stock benchmark relative strength is a different filter, not a sector-ranking implementation. Explain the difference and require an explicit choice before substituting. Do not offer standalone benchmark close/EMA conditions unless the supplied catalog explicitly provides them. Respect each catalog field's supported frames even in an intraday strategy; a daily-only relative-strength filter uses completed daily candles, not intraday candles. Ask which interval when the intended meaning is unclear.
-SHORT opens a short position; SELL closes an existing long. This engine cannot open shorts. If the user requests both, explain the unsupported short branch and ask whether to prepare a long-only adaptation or leave the idea unchanged. Never silently remove or convert SHORT to SELL. 'Bullish', 'leading', Buy Level, SL Level and targets need measurable definitions or explicit acceptance of explained alternatives.
+CAPABILITY HONESTY: Sector leadership is NOT stock relative strength against NIFTY 50. Stock benchmark relative strength is a different filter, not a sector-ranking implementation. Explain the difference and require an explicit choice before substituting. Use benchmarkClose and benchmarkEma for the selected index itself. To require a bullish NIFTY 50, compare benchmarkClose against benchmarkEma with the SAME benchmark setting on both operands. An explicitly selected sector index can confirm that sector trend; this does not rank sectors or automatically map each stock to a sector. Respect each catalog field's supported frames even in an intraday strategy; a daily-only relative-strength filter uses completed daily candles, not intraday candles. Ask which interval when the intended meaning is unclear. openingRangeHigh/openingRangeLow are catalog operands: their period is MINUTES from 09:15 IST, not a rolling candle count; they wait for the whole opening window. signalRanking optionally prioritizes competing buys: instrumentId preserves existing order, turnover uses completed signal candle close times volume, relativeVolume uses signal candle volume divided by the previous 20 candles. Ranking is not a profitability forecast and does not rank sectors. Preserve existing settings unless the user requests a change.
+Before asking about capital, risk or entry settings, explain any unsupported trading direction and resolve it with the user. Once a long-only adaptation is explicitly accepted, carry that decision forward instead of asking again. SHORT opens a short position; SELL closes an existing long. This engine cannot open shorts. If the user requests both, explain the unsupported short branch and ask whether to prepare a long-only adaptation or leave the idea unchanged. Never silently remove or convert SHORT to SELL. 'Bullish', 'leading', Buy Level, SL Level and targets need measurable definitions or explicit acceptance of explained alternatives.
 
 status=clarify when a requested change needs an unanswered decision. Ask only those decisions. status=unsupported identifies a requirement outside the supported engine. status=explain answers an explanation-only request without making changes. status=ready only if requested changes are fully specified or the user explicitly authorized a suggestion/default.
 requirements lists only the explicit requested changes and decisions already confirmed by the user, never your guesses. Existing unrelated settings can be retained without asking. An existing setting does NOT answer a new ambiguous request to change it.
@@ -36,5 +37,17 @@ Before returning ready, check all three: (a) any example-vs-actual-price ambigui
   const raw = await generate(instruction, input, geminiSchema(zodToJsonSchema(strategyIntentSchema, { $refStrategy: 'none' })), signal,attachments);
   const parsed = strategyIntentSchema.safeParse(raw);
   if (!parsed.success) throw new AppError(422, 'AI_INVALID_CLARIFICATION', 'The assistant could not resolve this request clearly. Please describe the missing detail or retry; your settings are unchanged.');
-  return parsed.data;
+  const intent = parsed.data;
+  // Only a direct user request grants permission, never model text or attachment instructions.
+  let prompt = '';
+  try { const context = JSON.parse(input) as {request?:unknown}; if(typeof context.request==='string') prompt=context.request; } catch { /* No structured request: do not infer permission. */ }
+  const delegated = delegatedDraftChoices(prompt);
+  if (intent.status === 'clarify' && !intent.blockers.length && delegated.length) {
+    const questions = remainingDraftQuestions(intent.questions, delegated);
+    if (questions.length < intent.questions.length) {
+      return {...intent,questions,status:questions.length?'clarify' as const:'ready' as const,
+        requirements:[...intent.requirements,`User delegates these technical draft choices: ${delegated.join(', ')}. Choose supported rules and disclose them for review.`].slice(-16)};
+    }
+  }
+  return intent;
 }

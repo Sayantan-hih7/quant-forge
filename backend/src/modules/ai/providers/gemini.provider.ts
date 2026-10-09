@@ -17,7 +17,7 @@ export function geminiError(error: unknown): AppError {
   return new AppError(502, 'AI_PROVIDER', 'Gemini could not complete the request. Please retry; your draft is unchanged.');
 }
 const client = axios.create({ baseURL: 'https://generativelanguage.googleapis.com/v1beta', timeout: 60_000,
-  maxRedirects: 0, maxContentLength: 1_000_000, maxBodyLength: 4_000_000 });
+  maxRedirects: 0, maxContentLength: 1_000_000, maxBodyLength: 8_000_000 });
 client.interceptors.request.use(config => { config.headers.set('x-goog-api-key', env.GEMINI_API_KEY); return config; });
 // Never propagate Axios request/config objects: they contain the API key and conversation.
 client.interceptors.response.use(response => response, (error: unknown) => Promise.reject(geminiError(error)));

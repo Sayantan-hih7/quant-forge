@@ -1,6 +1,8 @@
+export const MAX_ASSISTANT_ATTACHMENTS=10;
+export const MAX_ASSISTANT_ATTACHMENT_BYTES=4*1024*1024;
 export type AssistantAttachment={kind:'image';name:string;mimeType:'image/png'|'image/jpeg'|'image/webp';data:string}|{kind:'text';name:string;text:string};
 export async function readAssistantAttachment(file:File):Promise<AssistantAttachment>{
- if(file.size>2*1024*1024)throw new Error('Choose a file up to 2 MB.');
+ if(file.size>MAX_ASSISTANT_ATTACHMENT_BYTES)throw new Error('Choose a file up to 4 MB.');
  const name=file.name.slice(0,120)||'Attachment';
  if(['image/png','image/jpeg','image/webp'].includes(file.type)){
   const url=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('The file could not be read.'));reader.readAsDataURL(file);});

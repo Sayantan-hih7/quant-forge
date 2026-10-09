@@ -23,6 +23,20 @@ test('paper cash ledger handles duplicate concurrent fills, stale ticks, oversel
     await MonthlyUniverseModel.create({_id:currentMonth(),month:currentMonth(),members:[{instrumentId:'NSE:1',isin:'INE000A01001',source:'scan',addedAt:at}]});
     const make=async(side:'BUY'|'SELL',quantity:number)=>PaperOrderModel.create({_id:randomUUID(),sessionId,instrumentId:'NSE:1',side,quantity,source:'manual',status:'pending',createdAt:new Date(now-2000).toISOString(),eligibleAfter:new Date(now-1000).toISOString(),expiresAt:new Date(now+60000).toISOString(),reason:'test'});
     const quote:LiveQuote={instrumentId:'NSE:1',symbol:'FIXTURE',exchange:'NSE',price:100,cumulativeVolume:1000,at,receivedAt:at,source:'motilal',session:'fixture'};
+    // An earlier day's intraday position blocks even a buy in a different stock.
+    await PaperPositionModel.create({_id:sessionId+':NSE:2',sessionId,instrumentId:'NSE:2',symbol:'CARRY',quantity:5,entryPaise:10000,costPaise:50000,stopPaise:9900,targetPaise:10200,openedAt:'2026-09-22T05:00:00.000Z'});
+    await PaperSessionModel.updateOne({_id:sessionId},{$set:{cashPaise:9950000}});
+    const rolloverBuy=await make('BUY',1);
+    await fillPaperOrder(rolloverBuy._id,quote,now);
+    assert.equal((await PaperOrderModel.findById(rolloverBuy._id))?.status,'rejected');
+    assert.match((await PaperOrderModel.findById(rolloverBuy._id))?.message??'',/Unresolved intraday/);
+    assert.equal((await PaperSessionModel.findById(sessionId))?.cashPaise,9950000);
+    const recoverySell=await make('SELL',5);
+    await PaperOrderModel.updateOne({_id:recoverySell._id},{$set:{instrumentId:'NSE:2',source:'protection'}});
+    await fillPaperOrder(recoverySell._id,{...quote,instrumentId:'NSE:2'},now);
+    assert.equal((await PaperOrderModel.findById(recoverySell._id))?.status,'filled');
+    assert.equal(await PaperPositionModel.countDocuments(),0);
+    assert.equal((await PaperSessionModel.findById(sessionId))?.cashPaise,10000000);
     const outside=await make('BUY',1);await PaperOrderModel.updateOne({_id:outside._id},{$set:{instrumentId:'NSE:2'}});
     await fillPaperOrder(outside._id,{...quote,instrumentId:'NSE:2'},now);
     assert.equal((await PaperOrderModel.findById(outside._id))?.message,'Stock is outside this paper session scope');

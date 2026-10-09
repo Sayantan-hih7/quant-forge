@@ -27,7 +27,7 @@ export function IndicatorSettingsModal({ indicator, onSave, onClose, adding = fa
       {definition.lines.length>1 && <fieldset className="indicator-line-settings"><legend>Visible lines & colours</legend>{definition.lines.map((label,index)=><div className="indicator-line-setting" key={label}><Checkbox checked={value.lineStyles?.[index]?.visible!==false} onChange={e=>setValue('lineStyles',{...value.lineStyles,[index]:{...value.lineStyles?.[index],visible:e.target.checked}})}>{label}</Checkbox><Input aria-label={`${label} colour`} type="color" value={value.lineStyles?.[index]?.color??(index===1?'#c58822':value.color)} onChange={e=>setValue('lineStyles',{...value.lineStyles,[index]:{...value.lineStyles?.[index],color:e.target.value}})}/></div>)}</fieldset>}
       {Object.keys(formState.errors).length>0 && <Alert type="error" showIcon title={Object.values(formState.errors).map(e=>e?.message).filter(Boolean).join(' · ')}/>}
       {definition.description && <p className="muted">{definition.description}</p>}
-      {indicator.kind==='relativeStrength'&&<p className="muted">Requires matching benchmark history. Available on daily, weekly and monthly candles.</p>}
+      {indicator.kind==='relativeStrength'&&<p className="muted">Requires matching benchmark history. Uses matching completed candles on the selected timeframe.</p>}
       <p className="muted">Other timeframes use completed candles. Missing history is reported rather than estimated.</p>
       <Button htmlType="submit" type="primary">{adding?'Add to chart':'Apply indicator settings'}</Button>
     </Form>

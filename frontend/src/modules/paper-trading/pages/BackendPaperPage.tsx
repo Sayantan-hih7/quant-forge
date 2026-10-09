@@ -1,9 +1,13 @@
+import { IntradayContinuation } from '../components/IntradayContinuation';
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { ExecutionStatus } from '../../../components/feedback/ExecutionStatus';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import {ManagePositionExits} from '../components/ManagePositionExits';
 import {WatchingStocks} from '../components/WatchingStocks';
 import { StrategyHistoryButton } from '../../strategies/components/StrategyHistoryButton';
 import {useBackendStrategies} from '../../strategies/hooks/useBackendStrategies';
 import {useEffect,useState} from 'react';
-import {Alert,App,Button,Card,Descriptions,Drawer,Empty,Select,Space,Table,Tabs,Tag} from 'antd';
+import {App,Button,Card,Descriptions,Drawer,Empty,Select,Space,Table,Tabs,Tag} from 'antd';
 import {useNavigate,useSearchParams} from 'react-router-dom';
 import {useBackendPaper,type PaperOrder,type PaperPosition} from '../hooks/useBackendPaper';
 import {PaperPositionTargets} from '../components/PaperPositionTargets';
@@ -34,14 +38,11 @@ export default function BackendPaperPage(){
  async function action(path:string){try{await apiClient.post(path);await refresh();}catch(e){message.error((e as Error).message);}}
  return <div className="page-enter"><div className="page-heading"><div><h1>Paper trading</h1><p>Open positions, orders awaiting action, and previous trades. All cash and fills are simulated.</p></div><Space wrap><Select aria-label="Filter paper trades by strategy" style={{width:230}} value={selected??'all'} onChange={v=>setSelected(v==='all'?undefined:v)} options={[{value:'all',label:'All paper strategies'},...sessions.map(s=>({value:s._id,label:`${s.strategy.name} · r${s.strategy.revision}`+(s.active?'':' · Stopped')}))]}/><Button onClick={()=>navigate('/signal-runner')}>View buy / sell signals</Button><Button danger type={data?.safety?.halted?'default':'primary'} onClick={()=>{void apiClient.post('/paper/safety',{halted:!data?.safety?.halted}).then(refresh).catch(e=>message.error(e.message));}}>{data?.safety?.halted?'Release entry halt':'Emergency: stop new buys'}</Button></Space></div>
   <Space orientation="vertical" size={20} style={{width:'100%'}}>
-   {error&&<Alert type="error" showIcon title={error}/>}
-   {data?.safety?.warnings.map(w=><Alert key={w} type="error" showIcon title="Execution safety" description={w}/>)}
-   {!!active.length&&(!data?.workerRunning||(data.marketOpen!==false&&data.feed?.state!=='live'))&&<Alert showIcon type="warning" title="Paper fills are waiting" description={!data?.workerRunning?'Paper worker is offline. Keep app services running.':data?.feed?.message??'Waiting for fresh live data.'}/>}
-   {data?.marketOpen===false&&<Alert showIcon type="info" title="Market closed" description="Paper fills are paused outside market hours. Saved sessions remain active for the next eligible session while app services are running. Prices shown are the last available quotes."/>}
-   {data?.marketOpen===false&&positions.some(p=>sessions.some(s=>s._id===p.sessionId&&!s.strategy.risk.overnight))&&<Alert showIcon type="warning" title="Intraday positions remain open after market close" description="These positions did not finish exiting. Check their orders and feed history; they cannot fill at stale closing prices. Review them before the next session."/>}
-   {!!data?.safety?.notices?.length&&<details><summary>Paper execution hours and limitations</summary>{data.safety.notices.map(note=><p key={note} className="muted">{note}</p>)}</details>}
+   <ExecutionStatus data={data} error={error} onRetry={()=>void refresh()}/>
+   <IntradayContinuation data={data} selected={selected} onRefresh={refresh} onSettings={setEditing} unavailable={!!error}/>
+   {error&&<RequestFeedback type="error" showIcon title={error}/>}
    {data&&<PaperPnlSummary sessions={sessions.filter(s=>!selected||s._id===selected)} positions={positions}/>}
-   {active.some(s=>!s.strategy.risk.overnight)&&<Alert type="info" showIcon title="Intraday auto square-off · NSE 3:10 PM / BSE 3:15 PM IST" description="New intraday buys stop and all remaining intraday shares are queued to sell, including in confirmation mode or when new buys are paused. Keep app services running with fresh market data; an offline app or missing quotes can delay exits. Swing and long-term positions may stay open overnight."/>}
+   {active.some(s=>!s.strategy.risk.overnight)&&<GuidanceNote type="info" showIcon title="Intraday auto square-off · NSE 3:10 PM / BSE 3:15 PM IST" description="New intraday buys stop and all remaining intraday shares are queued to sell, including in confirmation mode or when new buys are paused. Keep app services running with fresh market data; an offline app or missing quotes can delay exits. Swing and long-term positions may stay open overnight."/>}
    <Card title="Paper accounts"><Table rowKey="_id" dataSource={active} pagination={false} size="small" scroll={{x:700}} locale={{emptyText:<Empty description="No active paper trading"><Button type="primary" onClick={()=>navigate('/signal-runner?setup=1')}>Choose a strategy</Button></Empty>}} columns={[
     {title:'Strategy',render:(_,s)=><><strong>{s.strategy.name}</strong><div><StrategyHistoryButton strategy={s.strategy} context="This paper session" /></div>{s.eligibility&&<div><Tag color="cyan">{s.ids?.length??0} backtest-qualified stocks</Tag><small>Win rate {s.eligibility.criteria.minWinRate}%+, {s.eligibility.criteria.minClosedTrades}+ closed trades, positive net profit{s.eligibility.validationReportId?' / later-period validation':' / exploratory shortlist'}</small></div>}</>},{title:'Execution',render:(_,s)=><Tag color={s.entriesPaused?'gold':'blue'}>{s.entriesPaused?'New buys paused':s.mode==='automatic'?'Automatic':'Confirm each trade'}</Tag>},
     {title:'Available cash',render:(_,s)=>money(s.cashPaise)},{title:'Realized P&L',render:(_,s)=><span className={(s.bookedPnlPaise??0)<0?'negative':'positive'}>{money(s.bookedPnlPaise)}</span>},{title:'Holding',render:(_,s)=><Tag>{s.strategy.risk.overnight?'Overnight allowed':'Intraday auto exit'}</Tag>},{title:'Open positions',render:(_,s)=>data?.positions.filter(p=>p.sessionId===s._id).length??0},

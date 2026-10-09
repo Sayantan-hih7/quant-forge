@@ -28,6 +28,7 @@ export const backtestSchema = z
     includeManual: z.boolean(),
     initialCapital: z.number().min(1000, "Use at least ₹1,000.").max(100000000),
     riskPercent: z.number().min(0.1).max(5),
+    signalRanking: z.enum(['instrumentId','turnover','relativeVolume']).optional(),
     maxPositions: z.number().int().min(1).max(20),
     timeframe: z.enum(["1m", "5m", "15m", "1h", "1d"]),
     stopMode: z.enum(["ATR", "fixed", "trailing", "amount", "price", "candleLow"]),

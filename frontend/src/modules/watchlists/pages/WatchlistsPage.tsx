@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Alert, Button, Empty, Input, Select, Space, Table, Tabs, Tag } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -59,7 +60,7 @@ export default function WatchlistsPage() {
   return <div className="watchlists-page">
     <div className="workspace-page-heading"><div><span className="indices-eyebrow">MARKET DATA</span><h1>Stocks & watchlist</h1><p>Find any stock. Star it to follow, or add it to your monthly qualified list.</p></div><Link to="/qualification?tab=universe">View qualified stocks →</Link></div>
     <RecentlyViewedStocks onSelect={setSelected}/>
-    {error && <Alert type="warning" showIcon title="Stock actions unavailable" description={error} action={<Button onClick={() => void refresh()}>Retry</Button>} />}
+    {error && <RequestFeedback type="warning" showIcon title="Stock actions unavailable" description={error} action={<Button onClick={() => void refresh()}>Retry</Button>} />}
     <section className="watchlists-content" aria-label="Stock browser">
       <Tabs activeKey={watching ? 'watchlist' : 'all'} onChange={choose} items={[
         { key: 'all', label: `All stocks${watchlists ? ` (${watchlists.universeCount.toLocaleString()})` : ''}` },
@@ -67,7 +68,7 @@ export default function WatchlistsPage() {
       ]} tabBarExtraContent={<Button icon={<ReloadOutlined />} aria-label="Refresh stock list" onClick={() => { stocks.retry(); void refresh(); if (!watching) discovery.retry(); }} />} />
       {!watching && <DiscoveryGroups data={discovery.data} error={discovery.error} selected={groupId} onSelect={chooseGroup} onRefresh={discovery.retry} />}
       <div className="watchlists-toolbar"><Input aria-label="Search stock universe" prefix={<SearchOutlined />} allowClear placeholder={groupId ? `Search within ${group?.name ?? 'this group'}` : 'Symbol, company or ISIN'} value={query} onChange={e => setQuery(e.target.value)} /><Select aria-label="Stock exchange" allowClear placeholder="All exchanges" value={exchange} onChange={setExchange} options={['NSE', 'BSE'].map(value => ({ value, label: value }))} />{groupId && sort.field !== 'rank' && <Button size="small" onClick={() => setSort({ context: sortContext, field: 'rank', order: 'asc' })}>Restore group ranking</Button>}<StockFeedStatus status={status} /></div>
-      {stocks.error && <Alert type="warning" showIcon title={stocks.error} action={<Button onClick={stocks.retry}>Retry</Button>} />}
+      {stocks.error && <RequestFeedback type="warning" showIcon title={stocks.error} action={<Button onClick={stocks.retry}>Retry</Button>} />}
       {quoteError && !status.marketClosed && status.state !== 'streaming' && <Alert type="warning" showIcon title={quoteError} />}
       <Table<BrowseStock> size="small" rowKey="_id" loading={stocks.loading} dataSource={rows} scroll={{ x: 960 }}
         pagination={{ current: stocks.data?.page ?? page, pageSize: pagination.size, total: stocks.data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total, range) => `${total ? range[0] : 0}–${range[1]} of ${total.toLocaleString()} stocks` }}

@@ -70,22 +70,22 @@ export interface IndicatorHistoryStatus {
   benchmarkBars?: Pick<ChartBar, 'time' | 'close'>[];
 }
 export function indicatorUnavailable(i: ChartIndicator, frame: StockTimeframe, bars: { time: string }[] | undefined, now: number, partial = false, status: IndicatorHistoryStatus = {}) {
-  if (i.kind === 'relativeStrength') {
+  if (['relativeStrength','benchmarkClose','benchmarkEma'].includes(i.kind)) {
     const source = indicatorFrame(i, frame);
-    if (!['1d', '1w', '1mo'].includes(source)) return 'Choose daily, weekly or monthly candles for relative strength';
     if (status.stockLoading) return 'Loading stock history';
     if (!bars || !bars.length) return status.stockUnavailable || bars ? 'Stock history unavailable' : 'Loading stock history';
     const closed = bars.filter(b => barEnd(b.time, source) <= now);
-    const required = minimumCandles(i), interval = source === '1d' ? 'daily' : source === '1w' ? 'weekly' : 'monthly';
+    const required = minimumCandles(i), interval = source === '1d' ? 'daily' : source === '1w' ? 'weekly' : source === '1mo' ? 'monthly' : source;
     if (closed.length < required) return `Insufficient history: requires ${required} completed ${interval} candles · ${closed.length} available${bars.length > closed.length ? ' (forming candle excluded)' : ''}`;
     const benchmark = (i.strategy ? i.strategySettings?.benchmark : i.benchmark) ?? 'NIFTY 50';
     if (status.benchmarkLoading) return `Loading ${benchmark} history`;
     if (status.benchmarkUnavailable || !status.benchmarkBars?.length) return `${benchmark} history unavailable`;
     const dates = new Set(status.benchmarkBars.filter(b => barEnd(b.time, source) <= now && b.close > 0).map(b => bucketTime(Date.parse(b.time), source)));
     const offset = i.offset ?? 0, end = closed.length - offset;
-    const matched = closed.slice(end - i.period - 1, end).filter(b => dates.has(bucketTime(Date.parse(b.time), source))).length;
-    if (matched === i.period + 1) return 'No relative strength value for the displayed candles';
-    return `Matching history incomplete: ${matched} of ${i.period + 1} required ${interval} candles match ${benchmark}`;
+    const needed = i.kind === 'relativeStrength' ? i.period + 1 : i.kind === 'benchmarkClose' ? 1 : i.period;
+    const matched = closed.slice(Math.max(0,end - needed), end).filter(b => dates.has(bucketTime(Date.parse(b.time), source))).length;
+    if (matched === needed) return 'No benchmark indicator value for the displayed candles';
+    return `Matching history incomplete: ${matched} of ${needed} required ${interval} candles match ${benchmark}`;
   }
   if (!bars) return 'Loading history';
   const source = indicatorFrame(i, frame), closed = bars.filter(b => barEnd(b.time, source) <= now).length;

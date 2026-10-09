@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { StrategyHistoryButton } from '../../strategies/components/StrategyHistoryButton';
 import {useEffect,useRef,useState} from 'react';
 import {Alert,Button,Descriptions,Segmented,Space,Table,Tag,Tooltip} from 'antd';
@@ -33,7 +34,7 @@ function HistoryTable({sessionId,sessions,onChart,exitsOnly}:Props&{exitsOnly:bo
  },[sessionId,exitsOnly,pages,reload]);
  return <><Space wrap className="mb-5"><Button loading={busy} onClick={()=>{setBusy(true);setReload(r=>r+1);}}>Refresh history</Button><span className="muted">Updates every 5 seconds · Times in IST</span></Space>
  {data?.summary&&<div className="mb-5"><Space wrap size="large"><span>Realized P&L <strong className={(data.summary.realizedPnlPaise??0)<0?'negative':'positive'}>{money(data.summary.realizedPnlPaise)}</strong></span><span>Total fees <strong>{money(data.summary.feesPaise)}</strong></span><span>{data.summary.buys} buy fills · {data.summary.exits} exit fills</span></Space><p className="muted">Totals cover all history for your strategy filter, including earlier pages. Each partial exit has its own net P&L; entry costs are split across the shares sold.</p>{!!data.summary.missing&&<Alert type="warning" title={`${data.summary.missing} older exits lack a complete cost record. Total realized P&L is unavailable.`}/>}</div>}
- {error&&<Alert type="error" title={error}/>}
+ {error&&<RequestFeedback type="error" title={error}/>}
  <Table<PaperOrder> rowKey="_id" size="small" dataSource={data?.items??[]} pagination={false} loading={!data&&!error} scroll={{x:exitsOnly?1250:1400}} locale={{emptyText:exitsOnly?'No shares have been sold yet. Open positions show unrealized P&L above.':'No paper orders yet.'}} columns={[
   {title:'Stock',render:(_,o)=>onChart?<StockChartButton symbol={data?.symbols[o.instrumentId]??o.instrumentId} onClick={()=>onChart(o,data?.symbols[o.instrumentId]??o.instrumentId)}/>:data?.symbols[o.instrumentId]??o.instrumentId},
   {title:'Strategy',render:(_,o)=>{const session=sessions.find(s=>s._id===o.sessionId);return session?<>{session.strategy.name}<div><StrategyHistoryButton strategy={session.strategy} context="This paper trade / order" /></div></>:'Earlier strategy';}},

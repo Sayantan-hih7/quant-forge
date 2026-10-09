@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useState } from 'react';
 import { Alert, Button, Collapse, Descriptions, Table, Tag } from 'antd';
 import { StockDetailDrawer } from '../../stock-details/components/StockDetailDrawer';
@@ -44,7 +45,7 @@ export function PaperStockChart({ selection, data, onClose, onChange }: {
   const symbol = selection.symbol ?? data.symbols?.[instrumentId] ?? current?.symbol ?? instrumentId;
   const context = <section className="stock-trade-context" aria-label="Strategy and paper trades">
     <div className="stock-section-heading"><div><h3>{session?.strategy.name ?? 'Strategy activity'}</h3><p className="muted">{session ? `Revision ${session.strategy.revision} · ${session.active ? 'Monitoring' : 'Previous session'}` : 'Loading strategy…'} · Paper money</p></div><Tag color="blue">{session?.mode === 'signals' ? 'Signals only' : session?.mode === 'automatic' ? 'Automatic paper' : 'Confirm paper trades'}</Tag></div>
-    {resource.error && <Alert showIcon type="warning" title="Trade details could not refresh" description={resource.error} action={<Button size="small" onClick={resource.retry}>Retry</Button>}/>}
+    {resource.error && <RequestFeedback showIcon type="warning" title="Trade details could not refresh" description={resource.error} action={<Button size="small" onClick={resource.retry}>Retry</Button>}/>}
     <div className="stock-trade-metrics">
       <div><span>Shares remaining</span><strong>{position ? `${position.quantity} / ${position.initialQuantity ?? position.quantity}` : resource.loading ? 'Loading…' : 'No open position'}</strong></div>
       <div><span>Entry price</span><strong>{money(position?.entryPaise)}</strong></div>

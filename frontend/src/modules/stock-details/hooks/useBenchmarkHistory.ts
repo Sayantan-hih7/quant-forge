@@ -5,7 +5,7 @@ import type { StockChartData, StockTimeframe } from '../types';
 
 export const benchmarkKey = (i: ChartIndicator, frame: StockTimeframe) => `${(i.strategy ? i.strategySettings?.benchmark : i.benchmark) ?? 'NIFTY 50'}:${indicatorFrame(i, frame)}`;
 export function useBenchmarkHistory(configs: ChartIndicator[], frame: StockTimeframe, from?: string, at?: string) {
-  const requests = [...new Set(configs.filter(i => i.kind === 'relativeStrength').map(i => benchmarkKey(i, frame)))].sort();
+  const requests = [...new Set(configs.filter(i => ['relativeStrength','benchmarkClose','benchmarkEma'].includes(i.kind)).map(i => benchmarkKey(i, frame)))].sort();
   const identity = JSON.stringify([requests, from, at]);
   const [state, setState] = useState<{ identity: string; data: Record<string, StockChartData>; errors: string[]; errorsByKey: Record<string, string> }>();
   useEffect(() => {
@@ -18,7 +18,6 @@ export function useBenchmarkHistory(configs: ChartIndicator[], frame: StockTimef
       busy = true;
       const rows = await Promise.all(keys.map(async key => {
         const [name, timeframe] = key.split(':');
-        if (!['1d', '1w', '1mo'].includes(timeframe)) return { key, error: 'Relative strength needs a daily, weekly or monthly calculation timeframe' };
         try {
           const { data } = await apiClient.get<StockChartData>(`/stocks/benchmarks/${encodeURIComponent(name)}/chart`, { params: { timeframe, from, at }, signal: abort.signal, timeout: 120000 });
           return { key, data };

@@ -1,5 +1,6 @@
 """Causal indicator cache shared by historical replay and live decisions."""
 import math
+from .signal_ranking import signal_score
 import pandas as pd
 from .market import timeframe, stamp
 from .rules import Observations, FACTS, evaluate_observations, validate_rule, wilder
@@ -74,5 +75,6 @@ def decision(strategy, instrument, cutoff):
             "exit": evaluate_observations(strategy["exit"], instrument["id"], data),
             "barEnd": bars.end.iloc[-1].isoformat() if len(bars) else None,
             "referencePrice": float(bars.close.iloc[-1]) if len(bars) else None,
+            "rankingScore": signal_score(data, strategy["risk"], frame),
             "atr": data.atr(strategy["risk"]["timeframe"], strategy["risk"]["atrPeriod"]),
             "signalLow": data.signal_low(strategy['risk']['timeframe']) if strategy['risk']['stopMode'] == 'candleLow' else None}

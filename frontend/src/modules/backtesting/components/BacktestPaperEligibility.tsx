@@ -1,3 +1,5 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import {useEffect,useRef,useState} from 'react';
 import {Alert,Button,Checkbox,InputNumber,Select,Space,Table,Tag} from 'antd';
 import {useNavigate} from 'react-router-dom';
@@ -36,12 +38,12 @@ export function BacktestPaperEligibility({run}:{run:BackendBacktest}){
  <label>Separate later validation backtest<br/><Select aria-label="Validation backtest" allowClear disabled={busy} style={{width:450,maxWidth:'100%'}} placeholder="Optional: choose a later, non-overlapping report" value={settings.validationReportId} onChange={id=>{setSettings(s=>({...s,validationReportId:id}));setAck(false);}} options={reports.map(r=>({value:r._id,label:`${r.config.from.slice(0,10)} to ${new Date(Date.parse(r.config.to)-1).toLocaleDateString('en-IN')} - revision ${r.strategy.revision}`}))}/></label>
  <p>Validation applies the same thresholds to a later report of the same strategy revision. Run that period separately if none is listed. Avoid retuning against the validation results.</p>
  {!settings.validationReportId&&<Checkbox checked={ack} disabled={busy} onChange={e=>setAck(e.target.checked)}>I understand this selects historical winners from the same test period. This shortlist is exploratory and not independently validated.</Checkbox>}
- {error&&<Alert type="error" showIcon title="Eligibility could not be applied" description={error}/>}
+ {error&&<RequestFeedback type="error" showIcon title="Eligibility could not be applied" description={error}/>}
  {assessment&&<><p role="status">{fresh?`${assessment.eligibleIds.length} eligible / ${assessment.rows.length} tested stocks`:'Updating eligibility...'}</p>{assessment.blockers.map(b=><Alert key={b} type="warning" title={b}/>)}
  <Table size="small" rowKey="instrumentId" dataSource={[...assessment.rows].sort((a,b)=>Number(b.eligible)-Number(a.eligible)||b.closedTrades-a.closedTrades||a.symbol.localeCompare(b.symbol))} pagination={{pageSize:10}} scroll={{x:850}} columns={[
  {title:'Stock',dataIndex:'symbol'},{title:'Closed trades',dataIndex:'closedTrades'},{title:'Win rate',render:(_,r)=>r.winRate===null?'No closed trades':`${r.winRate.toFixed(1)}%`},{title:'Closed net P&L',render:(_,r)=>money(r.netPnl)},{title:'Closed drawdown',render:(_,r)=>money(r.closedDrawdown)},{title:'Eligibility',render:(_,r)=><><Tag color={r.eligible?'green':'default'}>{r.eligible?'Eligible':'Not eligible'}</Tag><div>{r.reasons.join('; ')}</div>{r.validation&&<small>Validation: {r.validation.closedTrades} trades, {r.validation.winRate?.toFixed(1)??'n/a'}% wins, {money(r.validation.netPnl)}</small>}</>}
  ]}/>
- {!assessment.eligibleIds.length&&fresh&&<Alert type="info" title="No stocks pass these filters" description="Inspect the reasons or test a longer period. Thresholds are never relaxed automatically to create trades."/>}
+ {!assessment.eligibleIds.length&&fresh&&<GuidanceNote type="info" title="No stocks pass these filters" description="Inspect the reasons or test a longer period. Thresholds are never relaxed automatically to create trades."/>}
  </>}
  <Space wrap style={{marginTop:16}}><Button disabled={busy||!fresh||!assessment} onClick={async()=>{setBusy(true);try{await apiClient.put(`/backtests/${run._id}/paper-eligibility`,settings);setNotice('Filters saved with this report.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>Save filters</Button>
  {!existing&&<Select aria-label="Eligible stocks paper mode" value={mode} onChange={setMode} disabled={busy} options={[{value:'confirmation',label:'Confirm each paper entry'},{value:'automatic',label:'Automatic paper trades'}]}/>}

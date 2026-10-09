@@ -111,6 +111,17 @@ test('real engine decisions: late daily history, durable deduplication, next-ses
     assert.equal(await PaperOrderModel.countDocuments({sessionId:'capacity'}),1,'Pending buys reserve the available position slot');
     assert.equal((await PaperOrderModel.findOne({sessionId:'capacity'}))?.instrumentId,'NSE:2','Deterministic instrument order, independent of scope order');
     assert.match((await PaperSignalModel.findOne({sessionId:'capacity',instrumentId:'NSE:3'}))?.message??'',/position slots/);
+    await PaperSessionModel.updateMany({},{$set:{active:false}});
+    await storedCandles.updateOne({instrumentId:'NSE:3',time:'2026-09-25T03:45:00.000Z'},{$set:{volume:2000}});
+    await PaperSessionModel.create({_id:'ranked',strategyId:'ranked',strategy:{...strategy,risk:{...strategy.risk,maxPositions:1,signalRanking:'turnover'}},ids:['NSE:2','NSE:3'],mode:'automatic',cashPaise:10000000,initialPaise:10000000,entriesPaused:false,active:true,createdAt:'2026-09-25T03:30:00Z',revision:1});
+    await evaluatePaperStrategies(at('2026-09-25','16:00:00'));
+    assert.equal((await PaperOrderModel.findOne({sessionId:'ranked'}))?.instrumentId,'NSE:3','Higher completed signal-candle turnover reserves the single slot');
+    assert.equal(await PaperOrderModel.countDocuments({sessionId:'ranked'}),1);
+    await PaperSessionModel.updateMany({},{$set:{active:false}});
+    await PaperSessionModel.create({_id:'rank-missing',strategyId:'rank-missing',strategy:{...strategy,risk:{...strategy.risk,maxPositions:1,signalRanking:'relativeVolume'}},ids:['NSE:2','NSE:3'],mode:'automatic',cashPaise:10000000,initialPaise:10000000,entriesPaused:false,active:true,createdAt:'2026-09-25T03:30:00Z',revision:1});
+    await evaluatePaperStrategies(at('2026-09-25','16:00:00'));
+    assert.equal(await PaperOrderModel.countDocuments({sessionId:'rank-missing'}),0,'Missing ranking warm-up must not fall back to arbitrary ordering');
+    assert.equal((await PaperObservationModel.findOne({sessionId:'rank-missing'}))?.entry.matched,null);
   } finally {
     mock.restoreAll();
     if (mongoose.connection.readyState === 1 && mongoose.connection.name === name && /^quantforge_test_[a-f0-9]{32}$/.test(name)) await mongoose.connection.dropDatabase();

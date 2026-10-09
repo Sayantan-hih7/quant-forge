@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useState } from 'react';
 import { Alert, Button, Drawer, Empty, Space, Spin, Tag } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, BarChartOutlined, ThunderboltOutlined, BankOutlined, ApartmentOutlined, BlockOutlined, SafetyOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -12,7 +13,7 @@ export function DiscoveryGroups({ data, error, selected, onSelect, onRefresh }: 
   const group = data?.groups?.find(item => item.id === selected);
   return <section className="stock-discovery" aria-label="Discover stocks">
     <div className="discovery-heading"><div><h2>Discover stocks</h2><p>Explore market moves and company filters. See the rules behind every group.</p></div><Button size="small" icon={<ReloadOutlined />} loading={data?.refreshing} onClick={onRefresh}>Refresh groups</Button></div>
-    {error && <Alert type="warning" showIcon title="Discovery groups could not load" description={error} />}
+    {error && <RequestFeedback type="warning" showIcon title="Discovery groups could not load" description={error} />}
     {!data && !error && <Spin size="small" />}
     {data?.groups?.length ? <>
       <div className="discovery-grid">{data.groups.map((item, i) => { const Icon = icons[i % icons.length]; return <button key={item.id} className={`discovery-card${selected === item.id ? ' is-selected' : ''}`} aria-label={item.name} aria-pressed={selected === item.id} onClick={() => onSelect(selected === item.id ? undefined : item.id)}>

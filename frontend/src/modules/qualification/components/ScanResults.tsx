@@ -1,3 +1,5 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useEffect, useState } from 'react';
 import { Alert, Button, Empty, Input, Select, Space, Table, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
@@ -36,10 +38,10 @@ export function ScanResults({ run, outsideUniverse = false, initialFilter, onCha
     <p className="muted mb-4">Scan from {new Date(run.cutoff).toLocaleString('en-IN')} · Rule revision {run.revision}{outsideUniverse ? ' · Stocks already in your published qualified list are excluded.' : ' · These are the original scan decisions; manual additions do not change them.'}</p>
     <Space wrap className="mb-5"><Input aria-label="Search scan results" prefix={<SearchOutlined />} placeholder="Symbol, company or ISIN" allowClear value={query} onChange={event => setQuery(event.target.value)} style={{ width: 250 }} />
       <Select aria-label="Filter scan results" value={filter} style={{ minWidth: 220 }} options={[{ value: 'all', label: outsideUniverse ? 'All non-qualified results' : 'All results' }, ...options]} onChange={setFilter} /></Space>
-    {(outsideUniverse || ['awaiting_history', 'unavailable'].includes(filter)) && <Alert className="mb-5" showIcon type="info" title="A failed rule and missing data mean different things"
+    {(outsideUniverse || ['awaiting_history', 'unavailable'].includes(filter)) && <GuidanceNote className="mb-5" showIcon type="info" title="A failed rule and missing data mean different things"
       description="Expand a row to see its checks. Missing inputs or insufficient monthly history leave a stock undecided. Add it to your watchlist to follow, or add it to qualification using your own research." />}
     {actionsError && <Alert className="mb-5" type="warning" title="Stock actions unavailable" description={actionsError} action={<Button onClick={() => void refresh()}>Retry</Button>} />}
-    {resource.error && <Alert className="mb-5" type="error" title={resource.error} action={<Button onClick={resource.retry}>Retry results</Button>} />}
+    {resource.error && <RequestFeedback className="mb-5" type="error" title={resource.error} action={<Button onClick={resource.retry}>Retry results</Button>} />}
     <Table<Result> size="small" rowKey="_id" loading={resource.loading} dataSource={resource.data?.rows ?? []} scroll={{ x: 780 }}
       locale={{ emptyText: <Empty description={search || filter !== 'all' ? 'No stocks match these filters' : outsideUniverse ? 'No non-qualified stocks remain outside your published list in this scan' : 'No results yet'} /> }}
       pagination={{ current: resource.data?.page ?? page, pageSize: pagination.size, total: resource.data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => `${total.toLocaleString()} stocks`, onChange: (current, size) => setPagination({ key, page: size !== pagination.size ? 1 : current, size }) }}

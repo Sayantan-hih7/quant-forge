@@ -148,7 +148,7 @@ test('assistant page offers starters and retains conversation across workspace n
   await expect(page.getByRole('heading', { name: 'What would you like to build?' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('assistant-page-desktop.png') });
   await page.getByRole('button', { name: 'Qualify stocks' }).click();
-  await expect(page.getByRole('textbox', { name: 'Message QuantForge assistant' })).toHaveValue('Help me set my monthly qualification rules.');
+  await expect(page.getByRole('textbox', { name: 'Message QuantForge assistant' })).toHaveText('Help me set my monthly qualification rules.');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('log')).toContainText('Qualification selects your stock universe.');
   await page.getByRole('link', { name: 'Algo Strategies', exact: true }).click();
@@ -182,13 +182,13 @@ test('guided questions preserve custom answers and fill only permitted defaults'
  await expect(page.getByRole('log')).toContainText('Answers received.');expect(calls).toBe(2);
 });
 
-test('required question cannot be skipped and failed request retains answers',async({page})=>{
+test('required question cannot be skipped and failed answers remain available to retry',async({page})=>{
  let calls=0;
  await page.route('**/api/ai/chat',r=>{calls++;return calls===1?r.fulfill({json:{...empty,text:'Choose the intended entry.',task:null,questions:[{id:'entry',question:'Actual buy limit or example?',reason:'Cannot guess entry intent.',options:['Example','Actual limit']}]}}):r.fulfill({status:503,json:{message:'Please retry'}});});
  await open(page);await send(page,'Buy at 100, is this an example');
  await page.getByRole('button',{name:'Proceed',exact:true}).click();await expect(page.getByRole('alert')).toContainText('needs your answer');expect(calls).toBe(1);
  await page.getByRole('radio',{name:'Example',exact:true}).check();await page.getByRole('button',{name:'Proceed',exact:true}).click();
- await expect(page.getByText('Please retry',{exact:true})).toBeVisible();await expect(page.getByRole('radio',{name:'Example',exact:true})).toBeChecked();
+ await expect(page.getByText('Please retry',{exact:true})).toBeVisible();await expect(page.getByRole('log')).toContainText('Example');await expect(page.getByRole('button',{name:'Edit and retry'})).toBeVisible();
 });
 
 test('attachments are visible, sent as bounded context, removable and reject unsupported files',async({page})=>{
@@ -209,7 +209,7 @@ test('dictation is reviewed before sending and microphone errors are actionable'
  await page.evaluate(()=>{(window as unknown as {speechMock:{onresult:(event:unknown)=>void}}).speechMock.onresult({results:[{0:{transcript:'Help me make a paper strategy'},isFinal:true}]});});
  await expect(page.getByRole('button',{name:'Send',exact:true})).toBeDisabled();expect(calls).toBe(0);
  await page.getByRole('button',{name:'Stop dictation'}).click();
- await expect(page.getByRole('textbox',{name:'Message QuantForge assistant'})).toHaveValue('Help me make a paper strategy');
+ await expect(page.getByRole('textbox',{name:'Message QuantForge assistant'})).toHaveText('Help me make a paper strategy');
  await page.getByRole('button',{name:'Send',exact:true}).click();await expect(page.getByRole('log')).toContainText('Let us build a plan.');
  await page.getByRole('button',{name:'Start dictation'}).click();await page.evaluate(()=>{(window as unknown as {speechMock:{onerror:(event:unknown)=>void}}).speechMock.onerror({error:'not-allowed'});});
  await expect(page.getByText(/Microphone access was denied/)).toBeVisible();expect(calls).toBe(1);
@@ -235,7 +235,7 @@ test('large paste becomes a previewable attachment without truncation or automat
  await page.route('**/api/ai/chat',r=>{calls++;expect(r.request().postDataJSON().attachments[0].text).toBe(pasted);return r.fulfill({json:{...empty,text:'Read your full note.',task:null}});});
  await open(page);const box=page.getByRole('textbox',{name:'Message QuantForge assistant'});await box.fill('Please explain this');
  await box.evaluate((element,text)=>{const data=new DataTransfer();data.setData('text/plain',text);element.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));},pasted);
- await expect(page.getByRole('button',{name:'Preview pasted-text.txt'})).toBeVisible();await expect(box).toHaveValue('Please explain this');expect(calls).toBe(0);
+ await expect(page.getByRole('button',{name:'Preview pasted-text.txt'})).toBeVisible();await expect(box).toHaveText('Please explain this');expect(calls).toBe(0);
  await page.getByRole('button',{name:'Preview pasted-text.txt'}).click();await expect(page.getByRole('textbox',{name:'Attached text preview'})).toHaveValue(pasted);await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
  await page.getByRole('button',{name:'Send',exact:true}).click();await expect(page.getByRole('log')).toContainText('Read your full note.');
  const oversized='x'.repeat(20001);
@@ -403,7 +403,7 @@ test('assistant loader shows pending state and disappears when stopped',async({p
  release();
 });
 
-test('no speech message auto dismisses while microphone permission errors remain actionable',async({page})=>{
+test('voice errors appear as dismissible toasts and auto clear',async({page})=>{
  await page.addInitScript(()=>{class SpeechMock {onerror?:(event:unknown)=>void;start(){Object.assign(window,{speechMock:this});}abort(){}stop(){}}Object.assign(window,{SpeechRecognition:SpeechMock});});
  await open(page);await page.getByRole('button',{name:'Start dictation'}).click();
  await page.evaluate(()=>(window as unknown as {speechMock:{onerror:(event:unknown)=>void}}).speechMock.onerror({error:'no-speech'}));
@@ -412,7 +412,7 @@ test('no speech message auto dismisses while microphone permission errors remain
  await page.getByRole('button',{name:'Start dictation'}).click();
  await page.evaluate(()=>(window as unknown as {speechMock:{onerror:(event:unknown)=>void}}).speechMock.onerror({error:'not-allowed'}));
  await expect(page.getByText('Microphone access was denied.',{exact:false})).toBeVisible();
- await page.getByRole('button',{name:'Dismiss voice message'}).click();
+ await page.locator('.ant-notification-notice').filter({hasText:'Microphone access was denied.'}).getByRole('button',{name:'Close',exact:true}).click();
  await expect(page.getByText('Microphone access was denied.',{exact:false})).toHaveCount(0);
 });
 
@@ -461,18 +461,17 @@ test('history restores partial question answers and pending strategy review',asy
 });
 
 
-test('composer continues lists, previews Markdown and pastes clipboard tables safely',async({page})=>{
- let calls=0;await page.route('**/api/ai/chat',r=>{calls++;return r.fulfill({json:{...empty,text:'Received.',task:null}});});
- await open(page);const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
- await input.fill('trend');await input.press('Control+a');await page.getByRole('button',{name:'Format',exact:true}).click();await page.getByRole('button',{name:'Bold',exact:true}).click();await expect(input).toHaveValue('**trend**');await page.getByRole('button',{name:'Format',exact:true}).click();
- await input.fill('1. First point');await input.press('Enter');await expect(input).toHaveValue('1. First point\n2. ');expect(calls).toBe(0);
- await input.press('Enter');await expect(input).toHaveValue('1. First point\n');
- await input.fill('- [x] Check data');await input.press('Enter');await expect(input).toHaveValue('- [x] Check data\n- [ ] ');
- await input.fill('');await input.evaluate(el=>{const data=new DataTransfer();data.setData('text/plain','Stock\tReason\nABC\tLiquid');data.setData('text/html','<table><tr><th>Stock</th><th>Reason</th></tr><tr><td>ABC</td><td>Liquid<script>window.badPaste=true</script></td></tr></table>');el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
- await expect(input).toHaveValue('| Stock | Reason |\n| --- | --- |\n| ABC | Liquid |');
- await page.getByRole('button',{name:'Preview',exact:true}).click();await expect(page.locator('.assistant-compose-preview table')).toContainText('ABC');expect(await page.evaluate(()=>('badPaste' in window))).toBe(false);
- await page.getByRole('button',{name:'Edit text',exact:true}).click();await input.press('Control+Enter');await expect(page.getByRole('log')).toContainText('Received.');expect(calls).toBe(1);
- await expect(page.locator('.assistant-message.user table')).toBeVisible();
+test('rich composer renders editable pasted tables and keeps Markdown through history',async({page},testInfo)=>{
+ let calls=0;let prompt='';await page.route('**/api/ai/chat',r=>{calls++;prompt=r.request().postDataJSON().prompt;return r.fulfill({json:{...empty,text:'Received.',task:null}});});
+ await open(page);await send(page,'Start table review');await expect(page.getByRole('log')).toContainText('Received.');calls=0;const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
+ await input.fill('trend');await input.press('Control+a');await page.getByRole('toolbar',{name:'Text formatting'}).getByRole('button',{name:'Bold',exact:true}).click();await expect(input.locator('strong')).toHaveText('trend');
+ await input.fill('');await input.pressSequentially('1. First point');await input.press('Enter');await input.pressSequentially('Second point');await expect(input.locator('ol li')).toHaveCount(2);expect(calls).toBe(0);
+ await input.fill('');await input.evaluate(el=>{const data=new DataTransfer();data.setData('text/plain','Stock\tReason\nABC\tLiquid');data.setData('text/html','<p>Check <strong>these stocks</strong></p><table><tr><th>Stock</th><th>Reason</th></tr><tr><td>ABC</td><td>Liquid<script>window.badPaste=true</script></td></tr></table><p>Explain the risks.</p>');el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+ await expect(input.locator('table')).toBeVisible();await expect(input.locator('th')).toHaveText(['Stock','Reason']);await expect(input).toContainText('Explain the risks.');expect(await page.evaluate(()=>('badPaste' in window))).toBe(false);
+ await input.locator('td').first().click();await page.keyboard.press('End');await page.keyboard.type(' Ltd');await expect(input.locator('td').first()).toContainText('ABC Ltd');
+ await page.screenshot({path:testInfo.outputPath('rich-table-composer.png')});
+ await page.waitForTimeout(1200);await page.reload();await expect(input.locator('table')).toBeVisible();await expect(input).toContainText('ABC Ltd');
+ await page.getByRole('button',{name:'Send',exact:true}).click();await expect(page.getByRole('log')).toContainText('Received.');await expect.poll(()=>calls).toBe(1);expect(prompt).toContain('ABC Ltd');expect(prompt).toContain('**these stocks**');expect(prompt).toContain('Explain the risks.');await expect(page.locator('.assistant-message.user table')).toBeVisible();
 });
 
 test('refresh restores current chat with attachments and earlier proposal details',async({page})=>{
@@ -482,7 +481,7 @@ test('refresh restores current chat with attachments and earlier proposal detail
  await send(page,'Explain the risk settings');await expect(page.getByRole('log')).toContainText('We can discuss it further.');
  await page.getByRole('textbox',{name:'Message QuantForge assistant'}).fill('My unfinished next question');
  await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('quantforge-active-chat'))).not.toBeNull();
- await page.waitForTimeout(1000);await page.reload();await expect(page.getByRole('log')).toContainText('We can discuss it further.');await expect(page.getByRole('textbox',{name:'Message QuantForge assistant'})).toHaveValue('My unfinished next question');
+ await page.waitForTimeout(1000);await page.reload();await expect(page.getByRole('log')).toContainText('We can discuss it further.');await expect(page.getByRole('textbox',{name:'Message QuantForge assistant'})).toHaveText('My unfinished next question');
  await page.getByText('Proposal & review at this point',{exact:true}).first().click();await expect(page.getByRole('log')).toContainText('Historical snapshot.');
  await page.getByText('Attachments (1)',{exact:true}).first().click();await expect(page.getByRole('log')).toContainText('- Review the risks');expect(calls).toBe(2);
 });
@@ -501,4 +500,105 @@ test('backtest selection and report resume without replaying an action',async({p
  await page.getByRole('link',{name:'Algo Strategies',exact:true}).click();await page.getByRole('link',{name:'AI assistant',exact:true}).click();await expect(panel).toContainText('1 selected / 2 available');
  await page.waitForTimeout(1000);await page.reload();await expect(panel).toContainText('1 selected / 2 available');await expect(panel.getByRole('checkbox')).toBeChecked();expect(runs).toBe(0);
  await panel.getByRole('button',{name:'Run backtest',exact:true}).click();await expect(panel).toContainText('calculating');await page.waitForTimeout(1000);await page.reload();await expect(panel).toContainText('calculating');expect(runs).toBe(1);
+});
+
+
+test('selection bubble adds a safe link and text style without a permanent toolbar',async({page},testInfo)=>{
+ await open(page);const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
+ await expect(page.getByRole('toolbar',{name:'Text formatting'})).toHaveCount(0);
+ await input.fill('My source');await input.press('Control+a');const bubble=page.getByRole('toolbar',{name:'Text formatting'});await expect(bubble).toBeVisible();await page.screenshot({path:testInfo.outputPath('selection-bubble.png')});
+ await bubble.getByRole('button',{name:'Add link',exact:true}).click();await page.getByRole('textbox',{name:'Link address'}).fill('javascript:alert(1)');await page.getByRole('button',{name:'Apply link',exact:true}).click();await expect(bubble.getByRole('alert')).toContainText('Enter an');
+ await page.getByRole('textbox',{name:'Link address'}).fill('https://example.com');await page.getByRole('button',{name:'Apply link',exact:true}).click();await expect(input.locator('a')).toHaveAttribute('href','https://example.com/');
+ await input.fill('Plan');await input.press('Control+a');await bubble.getByRole('button',{name:'Text style'}).click();await page.getByRole('menuitem',{name:'Heading 2',exact:true}).click();await expect(input.locator('h2')).toHaveText('Plan');
+ await input.press('Control+a');await expect(bubble).toBeVisible();await input.press('Escape');await expect(bubble).toHaveCount(0);await page.setViewportSize({width:390,height:844});await input.fill('Mobile selection');await input.press('Control+a');await expect(bubble).toBeVisible();expect(await bubble.evaluate(el=>el.getBoundingClientRect().right<=innerWidth)).toBe(true);await page.screenshot({path:testInfo.outputPath('selection-bubble-mobile.png')});
+});
+
+test('failed message can be copied and restored for editing; timings survive reload',async({page})=>{
+ let calls=0;await page.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{value:{writeText:async(text:string)=>{Object.assign(window,{copiedMessage:text});}},configurable:true});});
+ await page.route('**/api/ai/chat',route=>++calls===1?route.fulfill({status:503,json:{message:'Provider unavailable'}}):route.fulfill({json:{...empty,text:'## Result\n\n**Checked** records.\n\n| Check | Result |\n| --- | --- |\n| Feed | Connected |',task:null,activity:[{tool:'connections',status:'completed',checkedAt:'2026-10-09T04:00:00Z',durationMs:125,summary:'Connection checked.'}]}}));
+ await open(page);await send(page,'Check my connection');const user=page.locator('.assistant-message.user').first();await expect(user.getByRole('button',{name:'Edit and retry'})).toBeVisible();await expect(user.locator('time')).toContainText('IST');
+ await user.getByRole('button',{name:'Copy message'}).click();expect(await page.evaluate(()=>(window as unknown as {copiedMessage:string}).copiedMessage)).toBe('Check my connection');
+ await user.getByRole('button',{name:'Edit and retry'}).click();await expect(page.getByRole('textbox',{name:'Message QuantForge assistant'})).toHaveText('Check my connection');expect(calls).toBe(1);
+ await page.getByRole('button',{name:'Send',exact:true}).click();await expect(page.getByRole('heading',{name:'Result',exact:true})).toBeVisible();await expect(page.locator('.assistant-message.assistant').last()).toContainText(/s response/);await page.getByText('App records checked (1)',{exact:true}).click();await expect(page.getByRole('log')).toContainText('0.13 s');
+ await page.waitForTimeout(1000);await page.reload();await expect(page.locator('.assistant-message.user').first().getByRole('button',{name:'Edit and retry'})).toBeVisible();await expect(page.locator('.assistant-message.assistant').last()).toContainText(/s response/);expect(calls).toBe(2);
+});
+
+test('Markdown and spreadsheet paste render in the composer with undo and safe links',async({page})=>{
+ await open(page);const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
+ const paste=async(text:string)=>{await input.click();await input.evaluate((el,text)=>{const data=new DataTransfer();data.setData('text/plain',text);el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));},text);};
+ await paste('| Condition | Purpose |\n| --- | --- |\n| Win rate | Chosen threshold |');await expect(input.locator('table')).toBeVisible();await expect(input.locator('td').first()).toHaveText('Win rate');
+ await input.press('Control+z');await expect(input.locator('table')).toHaveCount(0);await input.press('Control+Shift+z');await expect(input.locator('table')).toBeVisible();
+ await input.press('Control+a');await input.press('Backspace');await paste('Stock\tReason\nABC\tLiquidity');await expect(input.locator('th')).toHaveText(['Stock','Reason']);await input.locator('td').first().click();await page.keyboard.press('Tab');expect(await input.locator('td').nth(1).evaluate(el=>el.contains(window.getSelection()?.anchorNode??null))).toBe(true);
+ await input.press('Control+a');await input.press('Backspace');await paste('- [x] Checked\n- [ ] Pending\n\n**Bold** and *italic*');await expect(input.locator('input[type=checkbox]')).toHaveCount(2);await expect(input.locator('strong')).toHaveText('Bold');await expect(input.locator('em')).toHaveText('italic');
+});
+
+
+test('unsent new-chat text and attachments never create history; Send starts history',async({page})=>{
+ let writes=0;page.on('request',request=>{if(request.method()==='PUT'&&request.url().includes('/ai/conversations/')){writes++;expect(request.postDataJSON().snapshot.messages.length).toBeGreaterThan(0);}});
+ await page.route('**/api/ai/chat',route=>route.fulfill({json:{...empty,task:null,text:'Hello back.'}}));
+ await open(page);await page.getByRole('textbox',{name:'Message QuantForge assistant'}).fill('hello');
+ await page.locator('input[type=file]').setInputFiles({name:'notes.txt',mimeType:'text/plain',buffer:Buffer.from('Review liquidity')});
+ await page.waitForTimeout(1000);expect(writes).toBe(0);
+ await page.getByRole('button',{name:'New conversation',exact:true}).click();expect(writes).toBe(0);
+ await page.getByRole('button',{name:'Chat history',exact:true}).click();await expect(page.getByRole('button',{name:'hello',exact:false})).toHaveCount(0);await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+ await send(page,'This message was sent');await expect(page.getByRole('log')).toContainText('Hello back.');await expect.poll(()=>writes).toBeGreaterThan(0);
+ await page.getByRole('button',{name:'Chat history',exact:true}).click();await expect(page.getByRole('button',{name:/^This message was sent/})).toBeVisible();
+});
+
+test('typed lists start on a fresh chat and after a new line; scrolling uses the page edge',async({page},testInfo)=>{
+ await open(page);const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
+ await input.click();await input.pressSequentially('1. First item');await expect(input.locator('ol li')).toHaveText(['First item']);await input.press('Enter');await input.pressSequentially('Second item');await expect(input.locator('ol li')).toHaveCount(2);
+ await input.press('Control+a');await input.press('Backspace');await input.pressSequentially('Please check these');await input.press('Shift+Enter');await input.pressSequentially('1. Liquidity');await expect(input.locator('ol li')).toHaveText(['Liquidity']);await input.press('Enter');await input.pressSequentially('Volume');await expect(input.locator('ol li')).toHaveCount(2);
+ await page.setViewportSize({width:1440,height:650});const surface=page.getByRole('region',{name:'QuantForge assistant',exact:true});await expect(surface).toHaveCSS('overflow-y','auto');await expect(page.locator('.assistant-workspace')).toHaveCSS('overflow-y','visible');await expect(page.getByRole('log')).toHaveCSS('overflow-y','visible');expect(await surface.evaluate(el=>Math.abs(el.getBoundingClientRect().right-innerWidth))).toBeLessThan(3);await surface.evaluate(el=>el.scrollTo(0,el.scrollHeight));await page.screenshot({path:testInfo.outputPath('page-scroll-list.png')});
+});
+
+test('long conversations scroll at the page edge and keep the composer reachable on desktop and mobile',async({page},testInfo)=>{
+ await page.route('**/api/ai/chat',route=>route.fulfill({json:{...empty,task:null,text:Array.from({length:25},(_,i)=>`### Check ${i+1}\n\nReview the available stock data and strategy rules.`).join('\n\n')}}));
+ await open(page);await send(page,'Review this plan');await expect(page.getByRole('heading',{name:'Check 25',exact:true})).toBeVisible();
+ const surface=page.getByRole('region',{name:'QuantForge assistant',exact:true});
+ for(const width of [1440,390]){await page.setViewportSize({width,height:800});await surface.evaluate(el=>el.scrollTo(0,el.scrollHeight));expect(await surface.evaluate(el=>el.scrollHeight>el.clientHeight&&el.scrollTop>0)).toBe(true);await expect(page.getByRole('heading',{name:'AI assistant',exact:true})).toBeInViewport();await expect(page.getByRole('button',{name:'Chat history',exact:true})).toBeInViewport();await expect(page.getByRole('button',{name:'New conversation',exact:true})).toBeInViewport();expect(await page.locator('.assistant-page-header').evaluate(el=>Math.abs(el.getBoundingClientRect().top-el.parentElement!.getBoundingClientRect().top))).toBeLessThan(2);await expect(page.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(page.getByRole('log')).toHaveCSS('overflow-y','visible');await page.screenshot({path:testInfo.outputPath(`conversation-scroll-${width}.png`)});await surface.evaluate(el=>el.scrollTo(0,0));await expect(page.getByRole('heading',{name:'AI assistant',exact:true})).toBeInViewport();}
+});
+
+test('image attachments open a large preview before sending and from saved history',async({page})=>{
+ await page.route('**/api/ai/chat',r=>r.fulfill({json:{...empty,task:null,text:'Image received.'}}));
+ await open(page);await page.locator('input[type=file]').setInputFiles({name:'chart.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6PQAAAABJRU5ErkJggg==','base64')});
+ await page.getByRole('button',{name:'Preview chart.png',exact:true}).click();await expect(page.locator('.ant-image-preview-img')).toBeVisible();await page.keyboard.press('Escape');await expect(page.locator('.ant-image-preview-img')).not.toBeVisible();
+ await send(page,'Explain this chart');await expect(page.getByRole('log')).toContainText('Image received.');await page.getByRole('button',{name:'Remove chart.png',exact:true}).click();await page.waitForTimeout(1000);await page.reload();
+ await page.getByRole('log').getByText('Attachments (1)',{exact:true}).click();await page.getByRole('log').getByRole('button',{name:'Preview chart.png',exact:true}).click();await expect(page.locator('.ant-image-preview-img')).toBeVisible();await page.keyboard.press('Escape');await expect(page.locator('.ant-image-preview-img')).not.toBeVisible();
+});
+
+
+test('image thumbnails reveal controls on hover and duplicate filenames warn without moving the composer',async({page})=>{
+ await open(page);const file={name:'chart.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6PQAAAABJRU5ErkJggg==','base64')};
+ await page.locator('input[type=file]').setInputFiles(file);const card=page.locator('.assistant-image-card');await expect(card).toHaveCount(1);await expect(page.getByText('View image',{exact:true})).toHaveCount(0);await card.hover();await expect(page.getByRole('tooltip')).toHaveText('chart.png');await expect(card.getByRole('button',{name:'Remove chart.png'})).toHaveCSS('opacity','1');
+ const composer=page.locator('.assistant-composer');const before=await composer.boundingBox();await page.locator('input[type=file]').setInputFiles({...file,name:'CHART.PNG'});await expect(page.getByText(/A file named CHART.PNG is already attached/)).toBeVisible();await expect(card).toHaveCount(1);const after=await composer.boundingBox();expect(after?.y).toBe(before?.y);await expect(page.getByText(/A file named CHART.PNG is already attached/)).toHaveCount(0,{timeout:9000});
+ await card.getByRole('button',{name:'Remove chart.png'}).click();await page.locator('input[type=file]').setInputFiles({name:'rules.txt',mimeType:'text/plain',buffer:Buffer.from('First note')});await page.locator('input[type=file]').setInputFiles({name:'rules.txt',mimeType:'text/plain',buffer:Buffer.from('Different note')});await expect(page.getByText(/A file named rules.txt is already attached/)).toBeVisible();await expect(page.locator('.assistant-file-card')).toHaveCount(1);
+});
+
+
+test('character count sits beside Send and cannot be selected',async({page})=>{
+ await open(page);await page.getByRole('textbox',{name:'Message QuantForge assistant'}).fill('Hello');const count=page.locator('.assistant-composer-count');await expect(count).toContainText('5 / 1,200');await expect(count).toHaveCSS('user-select','none');await expect(page.locator('.assistant-editor-count')).toHaveCount(0);
+ for(const width of [1440,390]){await page.setViewportSize({width,height:800});const counter=await count.boundingBox(),send=await page.getByRole('button',{name:'Send',exact:true}).boundingBox();expect(Math.abs(counter!.y+counter!.height/2-send!.y-send!.height/2)).toBeLessThan(2);expect(counter!.x+counter!.width).toBeLessThan(send!.x);}
+});
+
+
+test('clipboard screenshots with the same browser filename get unique names and keep both images',async({page})=>{
+ await open(page);const input=page.getByRole('textbox',{name:'Message QuantForge assistant'});
+ const paste=async(color:string)=>{await input.click();await input.evaluate(async(el,color)=>{const canvas=document.createElement('canvas');canvas.width=4;canvas.height=4;const ctx=canvas.getContext('2d')!;ctx.fillStyle=color;ctx.fillRect(0,0,4,4);const blob=await new Promise<Blob>(resolve=>canvas.toBlob(blob=>resolve(blob!),'image/png'));const data=new DataTransfer();data.items.add(new File([blob],'image.png',{type:'image/png'}));el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));},color);};
+ await paste('red');await expect(page.getByRole('button',{name:'Preview Clipboard screenshot 1.png',exact:true})).toBeVisible();
+ await paste('blue');await expect(page.getByRole('button',{name:'Preview Clipboard screenshot 2.png',exact:true})).toBeVisible();await expect(page.locator('.assistant-image-card')).toHaveCount(2);await expect(page.getByText(/is already attached/)).toHaveCount(0);
+ const sources=await page.locator('.assistant-image-open img').evaluateAll(images=>images.map(image=>image.getAttribute('src')));expect(sources[0]).not.toBe(sources[1]);
+ for(let n=3;n<=10;n++){await paste('green');await expect(page.locator('.assistant-image-card')).toHaveCount(n);}
+ await paste('green');await expect(page.getByText('Attach up to 10 files. Remove one first.',{exact:true})).toBeVisible();await expect(page.locator('.assistant-image-card')).toHaveCount(10);
+});
+
+
+test('sidebar wheel scrolling stays independent at both navigation boundaries',async({page})=>{
+ await page.setViewportSize({width:1440,height:650});await open(page);await page.getByRole('link',{name:'Algo Strategies',exact:true}).click();
+ // Ensure enough page content to expose scroll chaining, independently of test data.
+ await page.locator('#main-content').evaluate(el=>{el.style.minHeight='2400px';});await page.evaluate(()=>window.scrollTo(0,300));
+ const nav=page.locator('.desktop-sidebar .sidebar-nav');await expect(nav).toHaveCSS('overscroll-behavior-y','contain');expect(await nav.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+ await nav.hover();await page.mouse.wheel(0,120);await expect.poll(()=>nav.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);expect(await page.evaluate(()=>scrollY)).toBe(300);
+ for(const bottom of [true,false]){await nav.evaluate((el,bottom)=>el.scrollTop=bottom?el.scrollHeight:0,bottom);await page.mouse.wheel(0,bottom?1000:-1000);await page.waitForTimeout(300);expect(await page.evaluate(()=>scrollY)).toBe(300);}
+ await page.mouse.move(900,400);await page.mouse.wheel(0,300);await expect.poll(()=>page.evaluate(()=>scrollY)).toBeGreaterThan(300);
 });

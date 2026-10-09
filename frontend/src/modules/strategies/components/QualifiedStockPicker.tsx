@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { orderedBacktestStocks } from '../utils/backtestSelection';
 import type { Horizon } from '../../qualification/types';
 import { Alert, Button, Empty, Form, Select, Tag } from 'antd';
@@ -14,7 +15,7 @@ export function QualifiedStockPicker({ stocks, value, onChange, loading, error, 
   return <div className="qualified-stock-picker">
     <div className="stock-scope-actions"><span>{value.length} selected / {stocks.length} available</span><Button size="small" disabled={loading || !!error || !stocks.length} onClick={() => onChange(limit(ordered.slice(0, 10)))}>Select first 10</Button><Button size="small" disabled={loading || !!error || !stocks.length} onClick={() => onChange(limit(ordered))}>{maxStocks&&stocks.length>maxStocks?`Select up to ${maxStocks}`:'Select all'}</Button><>{horizon&&!historical&&<Button size="small" disabled={loading||!!error||!matches.length} title="Replaces your selection with stocks matching this holding-period profile" onClick={()=>onChange(limit(matches))}>Select matching stocks ({Math.min(matches.length,maxStocks??matches.length)})</Button>}</><Button type="text" size="small" disabled={!value.length} onClick={() => onChange([])}>Clear</Button></div>
     {maxStocks&&<p className="muted">Up to {maxStocks} stocks per run. {historical?"Historical lists use alphabetical order; today's suitability is not applied.":'Selection prioritises stocks matching this strategy profile, then uses alphabetical order. This is not a ranking of expected returns.'} {value.length>=maxStocks?'Limit reached: remove a selected stock to add another.':''}</p>}
-    {error && <Alert className="mb-3" showIcon type="error" title="Stock list could not be loaded" description={error} action={<Button onClick={onRetry}>Retry stock list</Button>} />}
+    {error && <RequestFeedback className="mb-3" showIcon type="error" title="Stock list could not be loaded" description={error} action={<Button onClick={onRetry}>Retry stock list</Button>} />}
     <Form.Item label="Qualified stocks" htmlFor="qualified-stock-selection" validateStatus={validationError || unavailable.length ? 'error' : undefined} help={validationError}>
       <Select id="qualified-stock-selection" mode="multiple" maxCount={maxStocks} showSearch optionFilterProp="label" maxTagCount={5} allowClear loading={loading} disabled={loading || !!error} value={value} onChange={onChange} placeholder="Search by stock name or symbol" optionRender={option => {
         const stock=stocks.find(s=>s._id===option.value), profile=stock?.suitability?.profiles.find(p=>p.horizon===horizon);

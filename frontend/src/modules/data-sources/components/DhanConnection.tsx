@@ -1,5 +1,7 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { useState } from 'react';
-import { Alert, App, Button, Card, Form, Modal, Space, Tag } from 'antd';
+import { App, Button, Card, Form, Modal, Space, Tag } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -46,11 +48,11 @@ export function DhanConnection({ connection, refresh }: { connection: DataStatus
         {connection.connected && <Button danger disabled={busy} onClick={async () => { setBusy(true); try { await apiClient.delete('/connections/dhan'); await refresh(); } catch (e) { message.error((e as Error).message); } finally { setBusy(false); } }}>Disconnect</Button>}
       </Space>
       <DhanRenewalStatus connection={connection} refresh={refresh} busy={busy} onSetup={() => { openToken(true); }} />
-      {loginStarted && !connection.connected && <Alert className="mt-5" type="info" showIcon title="Finish your Dhan login" description="After signing in, this page will update when Dhan returns here. If the redirect opens your previous app or an error page, copy its full address (including tokenId) and use Paste token or login code." />}
+      {loginStarted && !connection.connected && <GuidanceNote className="mt-5" type="info" showIcon title="Finish your Dhan login" description="After signing in, this page will update when Dhan returns here. If the redirect opens your previous app or an error page, copy its full address (including tokenId) and use Paste token or login code." />}
     </Card>
     <Modal open={tokenOpen} title="Complete Dhan connection" onCancel={() => { setTokenOpen(false); form.reset(); setError(''); }} closable={!busy} maskClosable={!busy} keyboard={!busy} footer={null} destroyOnHidden>
-      <Alert type="info" showIcon title="Paste a login result or an access token" description="Use the redirect URL or tokenId from your completed Dhan login, or the full Access Token from Dhan Web. Login codes are exchanged automatically. API keys and API secrets do not go here." />
-      {error && <Alert className="mt-5" type="error" showIcon title="Dhan connection failed" description={error} />}
+      <GuidanceNote type="info" showIcon title="Paste a login result or an access token" description="Use the redirect URL or tokenId from your completed Dhan login, or the full Access Token from Dhan Web. Login codes are exchanged automatically. API keys and API secrets do not go here." />
+      {error && <RequestFeedback className="mt-5" type="error" showIcon title="Dhan connection failed" description={error} />}
       <Form layout="vertical" className="mt-5" onFinish={form.handleSubmit(saveToken)}>
         <RhfPassword name="token" control={form.control} label="Access token, login code or redirect URL" autoComplete="off" disabled={busy} />
         <RhfSwitch name="autoRenew" control={form.control} label="This token is from Dhan Web — renew automatically" disabled={busy} />

@@ -102,3 +102,19 @@ test('per-line visibility and colours preserve line identity and crossover label
   assert.ok(plots[0].markers!.length>0);assert.ok(plots[0].markers!.every(m=>!m.label.includes('BUY')));
   assert.equal(plotIndicator({...config,showCrosses:false},bars,bars,'1d',Date.parse('2026-05-01'))[0].markers,undefined);
 });
+
+
+test('benchmark plots use index prices and exact matching intraday timestamps', () => {
+ const bars=Array.from({length:5},(_,i)=>bar(new Date(Date.parse('2026-09-30T03:45:00Z')+i*60000).toISOString(),100+i));
+ const benchmark=bars.map((b,i)=>({...b,open:999+i,high:1002+i,low:998+i,close:1000+i,volume:0}));
+ const config:ChartIndicator={id:'index',kind:'benchmarkClose',period:3,timeframe:'1m',color:'#3366aa'};
+ const now=Date.parse('2026-09-30T04:00:00Z');
+ const plotted=plotIndicator(config,bars,bars,'1m',now,benchmark);
+ assert.equal(plotted[0].values.at(-1)?.value,1004);
+ assert.deepEqual(plotIndicator(config,bars,bars,'1m',now),[]);
+ const ema=plotIndicator({...config,kind:'benchmarkEma'},bars,bars,'1m',now,benchmark);
+ assert.equal(ema[0].values.at(-1)?.value,indicatorValues(benchmark,'ema',3,{})[0].at(-1));
+ benchmark.splice(3,1);
+ const rs=plotIndicator({...config,kind:'relativeStrength'},bars,bars,'1m',now,benchmark);
+ assert.equal(rs[0].values.length,0);
+});

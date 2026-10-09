@@ -1,3 +1,4 @@
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { Alert, Button, Skeleton, Space, Tag } from 'antd';
 import { ArrowRightOutlined, ReloadOutlined, SettingOutlined, StarOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
@@ -39,7 +40,7 @@ export default function DashboardPage() {
       <Button icon={<ReloadOutlined aria-hidden />} onClick={() => { resource.retry(); if (marketVisible) void indices.refresh(); }} loading={resource.loading}>Refresh</Button>
       <Button type="primary" onClick={() => navigate('/market-data/watchlists?tab=watchlist')} icon={<StarOutlined />}>My watchlist</Button>
     </Space></div>
-    {resource.error && <Alert type="warning" showIcon title="Workspace could not be refreshed" description={resource.error} action={<Button onClick={resource.retry}>Retry</Button>} />}
+    {resource.error && <RequestFeedback type="warning" showIcon title="Workspace could not be refreshed" description={resource.error} action={<Button onClick={resource.retry}>Retry</Button>} />}
     {!data || !widgets ? <Skeleton active paragraph={{ rows: 8 }} /> : <>
       {data.paper.sessions.length > 0 && (!data.paper.workerRunning || data.market.open && data.paper.feed !== 'live') && <Alert className="workspace-alert" type="warning" showIcon title={!data.paper.workerRunning ? 'The paper worker is offline' : 'Live feed needs attention'} description={data.paper.workerRunning ? data.paper.feedMessage : 'Monitoring and paper fills need the paper worker running.'} action={<Link to="/data-sources">Check connections</Link>} />}
       {data.paper.confirmations > 0 && <Alert className="workspace-alert" type="info" showIcon title={`${data.paper.confirmations} paper orders await your confirmation`} action={<Link to="/paper-trading">Review orders</Link>} />}

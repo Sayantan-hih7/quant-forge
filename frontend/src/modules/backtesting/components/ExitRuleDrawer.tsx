@@ -1,4 +1,5 @@
-import { Button, Drawer, Form, Alert } from "antd";
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
+import { Button, Drawer, Form } from "antd";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RhfInput } from "../../../components/forms";
@@ -35,7 +36,7 @@ export function ExitRuleDrawer({
         </div>
       }
     >
-      <Alert
+      <GuidanceNote
         type="info"
         showIcon
         title="Sell closes an existing long position"

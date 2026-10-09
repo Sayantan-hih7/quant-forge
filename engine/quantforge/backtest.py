@@ -1,3 +1,4 @@
+from .signal_ranking import signal_score
 from .execution_session import execution_close, square_off, entry_cutoff
 from .entry_safety import EntrySafety, validate_entry_safety
 from .performance_metrics import performance_metrics
@@ -180,7 +181,7 @@ def run_backtest(body, prepared=None, progress=None):
                     p["target"] = next(t["price"] for t in p["targets"] if not t["completed"])
             elif opening >= p["target"]:
                 sell(ident, opening, at, "Target", phase='open')
-        for ident, row in tradable_rows:
+        for ident, row in sorted(tradable_rows, key=lambda item: (-pending.get(item[0], {}).get("rankingScore", 0), item[0])):
             order = pending.pop(ident, None)
             if not order or order["side"] != "BUY" or ident in positions or len(positions) >= risk["maxPositions"] or not eligible(ident, at):
                 continue
@@ -298,6 +299,11 @@ def run_backtest(body, prepared=None, progress=None):
                     safety.blocked[blocked] += 1
                     continue
             if result["matched"] and ident not in pending:
+                score = signal_score(obs, risk, signal_frame) if side == 'BUY' else 0
+                if score is None:
+                    unknown += 1
+                    unavailable_inputs[('signalRanking', 'Ranking history unavailable')] = unavailable_inputs.get(('signalRanking', 'Ranking history unavailable'), 0) + 1
+                    continue
                 signal_low = obs.signal_low(risk['timeframe']) if risk['stopMode'] == 'candleLow' else None
                 if side == 'BUY' and risk['stopMode'] == 'candleLow' and (signal_low is None or not math.isfinite(signal_low) or signal_low <= 0):
                     unknown += 1
@@ -311,7 +317,7 @@ def run_backtest(body, prepared=None, progress=None):
                     local_cutoff = obs.cutoff.tz_convert(IST)
                     session_end = local_cutoff.normalize() + pd.Timedelta(hours=15, minutes=15 if not risk["overnight"] else 30)
                     expiry = session_end if side == 'BUY' and risk.get('entryOrderType') == 'limit' else min(expiry, session_end)
-                pending[ident] = {"expiresAt": expiry, "side": side, "atr": obs.atr(risk["timeframe"], risk["atrPeriod"]), "date": obs.cutoff.tz_convert(IST).date(),
+                pending[ident] = {"rankingScore": score, "expiresAt": expiry, "side": side, "atr": obs.atr(risk["timeframe"], risk["atrPeriod"]), "date": obs.cutoff.tz_convert(IST).date(),
                                   "signalAt": obs.cutoff.isoformat(), "referencePrice": float(row.close), "checks": result['checks'],
                                   "signalCandle": signal_candle(obs, signal_frame),
                                   "signalLow": signal_low,

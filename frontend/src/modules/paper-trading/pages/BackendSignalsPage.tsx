@@ -1,12 +1,14 @@
+import { IntradayContinuation } from '../components/IntradayContinuation';
+import { ExecutionStatus } from '../../../components/feedback/ExecutionStatus';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import {WatchingStocks} from '../components/WatchingStocks';
 import { StrategyHistoryButton } from '../../strategies/components/StrategyHistoryButton';
 import {useEffect,useState} from 'react';
-import {Alert,App,Button,Card,Collapse,Drawer,Empty,Select,Space,Table,Tag} from 'antd';
+import {App,Button,Card,Collapse,Drawer,Empty,Select,Space,Table,Tag} from 'antd';
 import {useNavigate,useSearchParams} from 'react-router-dom';
 import {useBackendStrategies} from '../../strategies/hooks/useBackendStrategies';
 import {useBackendPaper,type PaperObservation,type PaperSession} from '../hooks/useBackendPaper';
 import {RunnerSetup} from '../components/RunnerSetup';
-import {ExecutionReadiness} from '../components/ExecutionReadiness';
 import {SignalTable} from '../components/SignalTable';
 import {MonitoringSettings} from '../components/MonitoringSettings';
 import {SessionStockScope} from '../components/SessionStockScope';
@@ -24,15 +26,13 @@ export default function BackendSignalsPage(){
  const setSelected=(value?:string)=>setParams(previous=>{const next=new URLSearchParams(previous);if(value)next.set('session',value);else next.delete('session');return next;});
  const [chart,setChart]=useState<PaperChartSelection>();
  const active=data?.sessions.filter(s=>s.active)??[],filtered=active.filter(s=>!selected||s._id===selected),settings=data?.sessions.find(s=>s._id===editing);
- const ids=[...new Set(filtered.flatMap(s=>s.scope?.monitoredIds??s.ids??[]))];
  async function action(path:string){try{await apiClient.post(path);await refresh();}catch(e){message.error((e as Error).message);}}
  const closeSetup=()=>{setSetup(false);if(params.has('backtest')||params.has('setup'))setParams(previous=>{const next=new URLSearchParams(previous);next.delete('backtest');next.delete('setup');return next;},{replace:true});};
  return <div className="page-enter"><div className="page-heading"><div><h1>Signal runner</h1><p>Buy and sell alerts from your saved strategies. Watch signals or connect them to paper trading.</p></div><Space wrap><Button onClick={()=>navigate('/paper-trading')}>View paper trades</Button><Button type="primary" onClick={()=>setSetup(true)}>Monitor a strategy</Button></Space></div>
   <Space orientation="vertical" size={20} style={{width:'100%'}}>
-   {error&&<Alert showIcon type="error" title={error}/>}
-   {!!data?.safety?.notices?.length&&<details><summary>Paper execution hours and limitations</summary>{data.safety.notices.map(note=><p key={note}>{note}</p>)}</details>}
-   {data?.safety?.warnings.map(w=><Alert key={w} type="error" showIcon title="Execution safety" description={w}/>)}
-   <ExecutionReadiness data={data} ids={ids} monitoring={!!active.length} error={error}/>
+   <ExecutionStatus data={data} error={error} onRetry={()=>void refresh()}/>
+   <IntradayContinuation data={data} selected={selected} onRefresh={refresh} onSettings={setEditing} unavailable={!!error}/>
+   {error&&<RequestFeedback showIcon type="error" title={error}/>}
    {data&&<Card title="Watching stocks"><p className="muted">Every selected stock stays visible, even before a signal. Expand a row to see its latest rule checks.</p><WatchingStocks data={data} sessionId={selected} onChart={(sessionId,instrumentId)=>setChart({sessionId,instrumentId})}/></Card>}
    <Card title="Buy / sell signals" extra={<Select aria-label="Filter signals by strategy" style={{width:230,maxWidth:'100%'}} value={selected??'all'} onChange={v=>setSelected(v==='all'?undefined:v)} options={[{value:'all',label:'All strategies'},...(data?.sessions??[]).map(s=>({value:s._id,label:`${s.strategy.name} · r${s.strategy.revision}`+(s.active?'':' · Stopped')}))]}/> }>
     <p className="muted">Signals are listed across strategies by default. An expired signal remains in history and cannot be confirmed. Sell rules are for held shares; the app does not short stocks.</p>

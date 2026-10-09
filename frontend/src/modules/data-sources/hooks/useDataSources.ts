@@ -4,11 +4,16 @@ import { apiClient } from '../../../services/apiClient';
 import type { DataStatus } from '../types';
 
 interface SourcesState { data: DataStatus | null; error: string; loading: boolean; refresh: () => Promise<void> }
+let inFlight: Promise<void> | null = null;
 const useSourcesStore = create<SourcesState>(set => ({
   data: null, error: '', loading: true,
-  refresh: async () => {
+  refresh: () => {
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
     try { const response = await apiClient.get<DataStatus>('/market-data/status'); set({ data: response.data, error: '', loading: false }); }
     catch (e) { set({ error: e instanceof Error ? e.message : 'Could not load data sources', loading: false }); }
+    })().finally(() => { inFlight = null; });
+    return inFlight;
   },
 }));
 export function useDataSources() {

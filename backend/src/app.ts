@@ -28,8 +28,8 @@ export const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({ origin: (origin, callback) => callback(null, isAllowedFrontendOrigin(origin)), credentials: true }));
-app.use('/api/ai/chat',express.json({limit:'4mb'}));
-app.use('/api/ai/conversations',express.json({limit:'9mb'}));
+app.use('/api/ai/chat',express.json({limit:'7mb'}));
+app.use('/api/ai/conversations',express.json({limit:'15mb'}));
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (_req, res) => {
   const ready = databaseReady() && redis.status === 'ready';

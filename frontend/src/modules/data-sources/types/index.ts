@@ -8,6 +8,7 @@ export interface MaintenanceTask {
   lastStartedAt: string | null; lastFinishedAt: string | null; lastError: string | null;
 }
 export interface DataStatus {
+  summaries?: Record<'coverage' | 'candles', { state: string; updatedAt?: string }>;
   universeRefresh?: UniverseRefresh;
   maintenance?: MaintenanceTask[];
   dailyCloses?: { from: string; to: string; sessions: number; companiesOnLatest: number } | null;

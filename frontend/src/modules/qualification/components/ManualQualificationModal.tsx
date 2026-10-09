@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useEffect, useState } from 'react';
 import { Alert, App, Button, Form, Modal } from 'antd';
 import { useForm } from 'react-hook-form';
@@ -32,7 +33,7 @@ export function ManualQualificationModal({ stock, onClose, onAdded }: { stock?: 
     } catch (error) { message.error((error as Error).message); } finally { setBusy(false); }
   }
   return <Modal title="Add to qualification" open onCancel={busy ? undefined : onClose} closable={!busy} mask={{ closable: !busy }} footer={null}>
-    <Alert className="mb-5" type="info" showIcon title="Manually added · monthly rules not verified"
+    <GuidanceNote className="mb-5" type="info" showIcon title="Manually added · monthly rules not verified"
       description="Your reason is saved with this stock. It becomes eligible for strategies using this month's qualified list, but buying still requires their signals and risk checks. Adding it does not place an order." />
     {!membership?.published && <Alert className="mb-5" type="warning" showIcon title="Publish your monthly qualified list first." />}
     <Form layout="vertical" onFinish={form.handleSubmit(add)}>

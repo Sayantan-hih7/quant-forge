@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useState } from 'react';
 import { Alert, Button, Drawer, Select, Space, Tooltip } from 'antd';
 import { useStockResource } from '../hooks/useStockResource';
@@ -30,7 +31,7 @@ export function QuickPaperTrade({instrumentId,symbol,quote,now}:{instrumentId:st
   </div>
   <Drawer open={!!side} onClose={()=>setSide(undefined)} title={`${side==='SELL'?'Sell':'Buy'} ${symbol} - paper order`} size={420} destroyOnHidden>
    <Space orientation="vertical" size={16} style={{width:'100%'}}>
-    <Alert type="info" showIcon title="Paper trading only" description="Uses your selected strategy session and its risk limits. Submitting a manual order pauses new automatic buys in that session; stops and targets remain active."/>
+    <GuidanceNote type="info" showIcon title="Paper trading only" description="Uses your selected strategy session and its risk limits. Submitting a manual order pauses new automatic buys in that session; stops and targets remain active."/>
     {paper.error&&<Alert type="error" title={paper.error} action={<Button onClick={paper.retry}>Retry</Button>}/>}
     <Select aria-label="Paper trading session" placeholder={paper.loading?'Loading paper sessions...':'Choose a paper session'} loading={paper.loading} style={{width:'100%'}} value={session?._id} onChange={setSessionId}
       options={sessions.map(s=>({value:s._id,label:`${s.strategy.name} - cash ${stockMoney(s.cashPaise/100)}`}))}/>

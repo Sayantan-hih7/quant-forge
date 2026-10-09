@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { MonthlyRuleReview } from './MonthlyRuleReview';
 import { useState } from 'react';
 import { Alert, App, Button, Drawer, Form, Space, Tag } from 'antd';
@@ -41,7 +42,7 @@ export function SavedMonthlyRuleBuilder({ state, capabilities, refresh, visible 
   }
   return <div className="monthly-rule-builder">
     <div className="q-section-heading"><div><h2>Monthly qualification rules</h2><p>One saved rule for the current month’s stock universe.</p></div><Tag>{form.formState.isDirty || !state.rule ? 'Draft changes' : 'Saved'}</Tag></div>
-    <Alert type="info" showIcon className="mb-5" title="Completed monthly candles" description="Technical conditions use completed months. Company and exchange facts use dated, available reports. A missing value is reported as unavailable; it never silently passes a condition." />
+    <GuidanceNote type="info" showIcon className="mb-5" title="Completed monthly candles" description="Technical conditions use completed months. Company and exchange facts use dated, available reports. A missing value is reported as unavailable; it never silently passes a condition." />
     {state.rule && state.rule.revision !== revision && <Alert type="warning" className="mb-5" title="The saved rule changed in another tab. Reload before saving this draft." />}
     <div className="q-editor-actions"><span className="muted">Build conditions below, or start with an AI suggestion.</span><Button icon={<RobotOutlined aria-hidden />} onClick={() => setAssistantOpen(true)}>AI assistant</Button></div>
     <ol className="qualification-flow"><li><b>1 · Set monthly rules</b><span>Choose the qualities your stock list needs.</span></li><li><b>2 · Save and scan</b><span>Data loads first; progress continues in the background.</span></li><li><b>3 · Review and publish</b><span>Your trading universe updates after your review.</span></li></ol>

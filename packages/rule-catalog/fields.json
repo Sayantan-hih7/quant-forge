@@ -1454,7 +1454,7 @@
     ],
     "monthly": true,
     "trading": true,
-    "description": "Chosen candle price plus/minus Wilder ATR × multiplier. Middle line is the chosen price, not a moving average.",
+    "description": "Chosen candle price plus/minus Wilder ATR \u00d7 multiplier. Middle line is the chosen price, not a moving average.",
     "offset": true,
     "period": {
       "default": 14,
@@ -1479,7 +1479,7 @@
     ],
     "monthly": true,
     "trading": true,
-    "description": "Chosen candle price plus/minus Wilder ATR × multiplier. Middle line is the chosen price, not a moving average.",
+    "description": "Chosen candle price plus/minus Wilder ATR \u00d7 multiplier. Middle line is the chosen price, not a moving average.",
     "offset": true,
     "period": {
       "default": 14,
@@ -1859,6 +1859,11 @@
     "category": "technical",
     "source": "candles",
     "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "4h",
       "1d",
       "1w",
       "1mo"
@@ -2095,7 +2100,7 @@
     "monthly": true,
     "trading": true,
     "offset": false,
-    "description": "Confidence- and recency-weighted average impact of stories about the company, from −100 (strongly negative) to +100 (strongly positive). Unavailable when there were no stories. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+    "description": "Confidence- and recency-weighted average impact of stories about the company, from \u2212100 (strongly negative) to +100 (strongly positive). Unavailable when there were no stories. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
   },
   "newsSentiment30d": {
     "label": "News sentiment (30 days)",
@@ -2134,7 +2139,7 @@
     "monthly": true,
     "trading": true,
     "offset": false,
-    "description": "Distinct stories judged positive for the company (impact ≥ +0.25) in 30 days. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+    "description": "Distinct stories judged positive for the company (impact \u2265 +0.25) in 30 days. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
   },
   "newsNegative30d": {
     "label": "Negative stories (30 days)",
@@ -2147,7 +2152,7 @@
     "monthly": true,
     "trading": true,
     "offset": false,
-    "description": "Distinct stories judged negative for the company (impact ≤ −0.25) in 30 days, e.g. probes, defaults, downgrades, weak results. Use “at most 0” to exclude companies with recent negative news. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+    "description": "Distinct stories judged negative for the company (impact \u2264 \u22120.25) in 30 days, e.g. probes, defaults, downgrades, weak results. Use \u201cat most 0\u201d to exclude companies with recent negative news. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
   },
   "newsMood7d": {
     "label": "News mood (7 days)",
@@ -2160,6 +2165,97 @@
     "monthly": true,
     "trading": true,
     "offset": false,
-    "description": "Positive (sentiment ≥ +20), Negative (≤ −20), Neutral, or No coverage when no stories were found in 7 days. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+    "description": "Positive (sentiment \u2265 +20), Negative (\u2264 \u221220), Neutral, or No coverage when no stories were found in 7 days. Computed from collected headlines (CNBC-TV18, Economic Times, Business Standard, Mint, BusinessLine, NDTV Profit, Google News) and NSE filings, refreshed through the day. Dated when computed, never backdated; history exists only from when collection started."
+  },
+  "benchmarkClose": {
+    "label": "Benchmark close",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Selected index closing price, using its own completed candles. Missing matching history is unavailable.",
+    "offset": true,
+    "indicator": "benchmarkClose"
+  },
+  "benchmarkEma": {
+    "label": "Benchmark EMA",
+    "unit": "points",
+    "category": "technical",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "4h",
+      "1d",
+      "1w",
+      "1mo"
+    ],
+    "monthly": true,
+    "trading": true,
+    "description": "Selected index EMA, using its own completed candles. Missing matching history is unavailable.",
+    "offset": true,
+    "indicator": "benchmarkEma",
+    "period": {
+      "default": 20,
+      "min": 2,
+      "max": 500
+    }
+  },
+  "openingRangeHigh": {
+    "label": "Opening range high",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "4h"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "High/low of the first N minutes from 09:15 IST (period is minutes, default 15). Available only once every minute in that opening window has closed. Resets each session; missing minutes make the range unavailable.",
+    "offset": true,
+    "period": {
+      "default": 15,
+      "min": 1,
+      "max": 60
+    }
+  },
+  "openingRangeLow": {
+    "label": "Opening range low",
+    "unit": "price",
+    "category": "price-volume",
+    "source": "candles",
+    "frames": [
+      "1m",
+      "5m",
+      "15m",
+      "1h",
+      "4h"
+    ],
+    "monthly": false,
+    "trading": true,
+    "description": "High/low of the first N minutes from 09:15 IST (period is minutes, default 15). Available only once every minute in that opening window has closed. Resets each session; missing minutes make the range unavailable.",
+    "offset": true,
+    "period": {
+      "default": 15,
+      "min": 1,
+      "max": 60
+    }
   }
 }

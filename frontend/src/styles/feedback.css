@@ -1,0 +1,59 @@
+/*
+ * Workspace feedback contract:
+ * 1. Temporary request/action failures use RequestFeedback; no in-flow banner.
+ * 2. Execution blockers stay visible in ExecutionStatus; reasons never auto-dismiss.
+ * 3. Data-quality and field-validation warnings stay beside the affected data/control.
+ * 4. Static explanatory text uses GuidanceNote; expand only on user request.
+ * 5. Initial loading/failure uses ResourcePlaceholder; retain loaded data on refresh.
+ * 6. Modal defaults come from ThemeProvider; shared shell/footers, specialized widths.
+ */
+html { scrollbar-gutter: stable; }
+.ant-space-item:empty { display: none; }
+.ant-alert { padding: 10px 12px; border-radius: 8px; }
+.ant-alert .ant-alert-icon { font-size: 14px; margin-inline-end: 9px; }
+.ant-alert .ant-alert-title { font-size: 12px; line-height: 1.5; }
+.ant-alert .ant-alert-description { font-size: 12px; line-height: 1.55; margin-top: 3px; }
+.ant-alert .ant-alert-actions { flex-shrink: 0; }
+.ant-alert .ant-alert-content { min-width: 0; overflow-wrap: anywhere; }
+.guidance-note { color: var(--muted); font-size: 12px; border-radius: 6px; }
+.guidance-note summary { cursor: pointer; padding: 8px 0; line-height: 1.5; }
+.guidance-note summary .anticon { margin-inline: 6px; }
+.guidance-note-body { padding: 4px 12px 12px 20px; max-width: 100ch; color: var(--text); }
+.execution-status { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; }
+.execution-status > .anticon { color: var(--positive); }
+.execution-status.needs-attention > .anticon { color: var(--warning); }
+.execution-status > strong { font-weight: 500; min-width: 0; }
+.execution-status > .ant-btn { margin-left: auto; flex-shrink: 0; }
+.execution-status-details { width: min(440px, calc(100vw - 56px)); max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
+.execution-status-details p + p { margin-top: 10px; }
+.feedback-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+/* The overlay shell is shared; chart/research drawers retain their specialized widths. */
+.ant-modal .ant-modal-container { border-radius: 12px; padding: 24px; background: var(--surface); }
+.ant-modal .ant-modal-header { margin-bottom: 20px; padding-right: 28px; background: var(--surface); }
+.ant-modal .ant-modal-title { font-size: 16px; line-height: 1.5; font-weight: 600; }
+.ant-modal .ant-modal-body { max-height: calc(100dvh - 210px); overflow-y: auto; overscroll-behavior: contain; }
+.ant-modal .ant-modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ant-modal .ant-modal-footer > .ant-btn + .ant-btn { margin-inline-start: 0; }
+.ant-drawer .ant-drawer-header { padding: 18px 24px; }
+.ant-drawer .ant-drawer-body { overscroll-behavior: contain; }
+.ant-drawer .ant-drawer-footer { padding: 14px 24px; }
+.ant-notification .ant-notification-notice { border-radius: 10px; }
+.ant-notification .ant-notification-notice-description { overflow-wrap: anywhere; max-height: 35vh; overflow-y: auto; }
+@media (max-width: 600px) {
+  .ant-card-head:has(.ant-card-extra) .ant-card-head-wrapper { flex-wrap: wrap; gap: 8px; padding-block: 12px; }
+  .ant-card-head:has(.ant-card-extra) .ant-card-head-title { flex-basis: 100%; white-space: normal; }
+  .ant-card-head .ant-card-extra { margin-inline-start: 0; max-width: 100%; }
+  .execution-status > .muted { display: none; }
+  .ant-alert { flex-wrap: wrap; row-gap: 8px; }
+  .ant-modal .ant-modal-container { padding: 18px; }
+  .ant-modal .ant-modal-body { max-height: calc(100dvh - 180px); }
+  .ant-drawer .ant-drawer-header, .ant-drawer .ant-drawer-footer { padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter { animation: none; }
+}
+
+.resource-placeholder { min-height: 300px; padding: 24px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+
+.intraday-plan-account { border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.intraday-plan-account > p { margin-block: 8px; }

@@ -1,3 +1,5 @@
+import { ResourcePlaceholder } from '../../../components/feedback/ResourcePlaceholder';
+import { RequestFeedback } from '../../../components/feedback/RequestFeedback';
 import { NewsStockPicker, type NewsStock } from '../components/NewsStockPicker';
 import { useState } from 'react';
 import { Alert, App, Button, Empty, Input, Pagination, Segmented, Select, Skeleton, Tabs, Tooltip } from 'antd';
@@ -70,8 +72,8 @@ function NewsFeed({ onOpen, sources }: { onOpen: (stock: StockSelection) => void
     {stock&&<p className="muted news-scope-note">Showing news linked to {stock.symbol}. Company coverage includes both exchange listings.</p>}
     {(stock||publisher||search||sentiment||eventType||kind!=='important'||days!==3||scope!=='linked')&&<Button type="link" onClick={()=>{setStock(undefined);setPublisher(undefined);setSearch('');setQ('');setSentiment(undefined);setEventType(undefined);setKind('important');setDays(3);setScope('linked');setPage(1);}}>Reset filters</Button>}
     {!stock && scope === 'following' && <p className="muted news-scope-note">Stories about companies in your published qualified list and watchlists.</p>}
-    {feed.error && <Alert type="warning" showIcon title="News could not be loaded" description={feed.error} action={<Button onClick={feed.retry}>Retry</Button>} />}
-    {feed.loading && !feed.data ? <Skeleton active paragraph={{ rows: 10 }} /> : !feed.data?.items.length ? <Empty description="No stories match these filters yet." />
+    {feed.error && <RequestFeedback type="warning" showIcon title="News could not be loaded" description={feed.error} action={<Button onClick={feed.retry}>Retry</Button>} />}
+    {!feed.data && (feed.loading || feed.error) ? <ResourcePlaceholder loading={feed.loading} label="News" onRetry={feed.retry}/> : !feed.data?.items.length ? <Empty description="No stories match these filters yet." />
       : <div className="news-list">{feed.data.items.map(story => <NewsStoryCard key={story._id} story={story} now={now} onOpen={company => { void openCompany(company); }} />)}</div>}
     {(feed.data?.total ?? 0) > PAGE && <Pagination current={page} pageSize={PAGE} total={feed.data!.total} showSizeChanger={false} onChange={setPage} showTotal={n => `${n.toLocaleString('en-IN')} stories`} />}
   </div>;

@@ -1,5 +1,6 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useState } from 'react';
-import { Alert, Button, Drawer, Input, Select, Table, Tag } from 'antd';
+import { Button, Drawer, Input, Select, Table, Tag } from 'antd';
 import { DownloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { UniverseSnapshot } from '../types/workspace';
 import { formatMonth } from '../utils/monthlyCycle';
@@ -23,7 +24,7 @@ export function QualifiedStocksDrawer({ snapshot, matchedSymbols, title, kind = 
   };
   return <Drawer open size={850} onClose={onClose} title={title ?? 'Qualified stock universe'} extra={<Button icon={<DownloadOutlined />} onClick={download}>Export CSV</Button>}>
     <div className="universe-drawer-summary"><div><strong>{universe.length} stocks</strong><p>{formatMonth(snapshot.month)} · Base snapshot v{snapshot.version}</p></div><Tag color="blue">{kind === 'universe' ? 'Saved monthly universe' : kind === 'watchlist' ? 'Qualified watchlist' : 'Demo entry signals'}</Tag></div>
-    <Alert type="info" className="mb-5" title={kind === 'universe' ? 'This is the saved list, not a new scan.' : kind === 'watchlist' ? 'Qualified from the monthly universe only.' : 'Signals are restricted to the qualified watchlist.'} description="These are synthetic demo results. Values below belong to the saved monthly base; opening this list does not rerun qualification or check signals." />
+    <GuidanceNote type="info" className="mb-5" title={kind === 'universe' ? 'This is the saved list, not a new scan.' : kind === 'watchlist' ? 'Qualified from the monthly universe only.' : 'Signals are restricted to the qualified watchlist.'} description="These are synthetic demo results. Values below belong to the saved monthly base; opening this list does not rerun qualification or check signals." />
     <div className="universe-search"><Input aria-label="Search qualified stocks" placeholder="Search symbol or company" prefix={<SearchOutlined />} value={search} onChange={(event) => setSearch(event.target.value)} allowClear /><Select aria-label="Filter by sector" value={sector} onChange={setSector} options={[{ value: 'all', label: 'All sectors' }, ...[...new Set(universe.map((stock) => stock.sector))].map((value) => ({ value, label: value }))]} /></div>
     <Table rowKey="symbol" size="small" dataSource={rows} scroll={{ x: 620 }} pagination={{ pageSize: 15, showSizeChanger: false, showTotal: (total) => `${total} stocks` }} columns={[
       { title: 'Stock', dataIndex: 'symbol', width: 200, render: (_, stock) => <div className="universe-stock"><strong>{stock.symbol}</strong><small>{stock.name}</small></div> },

@@ -19,6 +19,7 @@ export async function* backtestStream(run: Pick<BacktestRun, 'strategy' | 'confi
   observe: (stock: Instrument) => void = () => {}, replayInstrumentId?: string) {
   invariant(run.config.ids.length > 0 && run.config.ids.length <= 200 && new Set(run.config.ids).size === run.config.ids.length, 'Select 1-200 distinct stocks');
   let bytes = 0, candles = 0;
+  let sharedBenchmark: {id:string; value:Instrument['benchmarks']} | undefined;
   const line = (value: unknown) => {
     const encoded = Buffer.from(JSON.stringify(value) + '\n'); bytes += encoded.length;
     invariant(bytes <= BACKTEST_STREAM_BYTES && encoded.length <= 64 * 1024 * 1024, 'Backtest history exceeds the safe transfer size. Shorten the date range or indicator warm-up.');
@@ -31,7 +32,9 @@ export async function* backtestStream(run: Pick<BacktestRun, 'strategy' | 'confi
     candles += stock.daily.length + stock.intraday.length;
     invariant(candles <= BACKTEST_MAX_CANDLES, 'This backtest exceeds 8 million candles including indicator warm-up. Shorten the date range or warm-up.');
     observe(stock);
-    yield line({ ...stock, daily: compact(stock.daily), intraday: compact(stock.intraday), candleEncoding: 'ohlcv-v1' });
+    const benchmarkReference=sharedBenchmark?.value===stock.benchmarks?sharedBenchmark.id:undefined;
+    if(!sharedBenchmark)sharedBenchmark={id:stock.id,value:stock.benchmarks};
+    yield line({ ...stock, ...(benchmarkReference?{benchmarks:undefined,benchmarksRef:benchmarkReference}:{}), daily: compact(stock.daily), intraday: compact(stock.intraday), candleEncoding: 'ohlcv-v1' });
   }
   yield line({ end: true, instruments: run.config.ids.length, candles });
 }

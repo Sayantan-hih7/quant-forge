@@ -7,7 +7,7 @@ import { WorkspaceAccess } from './modules/auth/components/WorkspaceAccess';
 export default function App() {
   return (
     <ThemeProvider>
-      <AntApp>
+      <AntApp message={{ duration: 5, maxCount: 3 }} notification={{ placement: 'topRight', duration: 8, maxCount: 3 }}>
         <BrowserRouter>
           <WorkspaceAccess><AppRouter /></WorkspaceAccess>
         </BrowserRouter>

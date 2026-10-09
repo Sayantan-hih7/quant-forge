@@ -19,11 +19,14 @@ test('conversations persist, tolerate response retries, reject stale writes, ren
  try{await mongoose.connect(uri.toString());if(!server.listening)await once(server,'listening');
  const base=`http://127.0.0.1:${(server.address() as AddressInfo).port}/chats`,id=randomUUID(),snapshot={messages:[{role:'user',text:'My test chat'}]};
  const put=(revision:number,value:unknown=snapshot)=>fetch(base+'/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({expectedRevision:revision,snapshot:value})});
+ assert.equal((await put(0,{messages:[],resume:{prompt:'hello',reviewOpen:false}})).status,400);assert.equal(await ConversationModel.countDocuments(),0);
  assert.equal((await put(0)).status,200);assert.equal((await put(0)).status,200);
  const changed={messages:[...snapshot.messages,{role:'assistant',text:'Answer'}]};assert.equal((await put(1,changed)).status,200);assert.equal((await put(1,changed)).status,200);assert.equal((await put(1)).status,409);
  const loaded=await(await fetch(base+'/'+id)).json() as {snapshot:unknown;revision:number};assert.deepEqual(loaded.snapshot,changed);assert.equal(loaded.revision,2);
  assert.equal((await fetch(base+'/'+id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({title:'Renamed'})})).status,200);
  const list=await(await fetch(base)).json() as {title:string;snapshot?:unknown}[];assert.equal(list[0].title,'Renamed');assert.equal(list[0].snapshot,undefined);
+ const draftId=randomUUID();await ConversationModel.create({_id:draftId,title:'Unsent legacy draft',snapshot:{messages:[],resume:{prompt:'hello',reviewOpen:false}},revision:1,updatedAt:new Date().toISOString()});
+ const visible=await(await fetch(base)).json() as {_id:string}[];assert.equal(visible.some(row=>row._id===draftId),false);await ConversationModel.deleteOne({_id:draftId});
  const usage=await(await fetch(base+'/storage')).json() as {count:number;maxCount:number;usedBytes:number};assert.equal(usage.count,1);assert.equal(usage.maxCount,500);assert.ok(usage.usedBytes>0);
  // Exercise the real cleanup transaction in this isolated test database.
  await ConversationModel.insertMany(Array.from({length:498},(_,i)=>({_id:randomUUID(),title:`Old ${i}`,snapshot,revision:1,updatedAt:`2020-01-01T00:00:${String(i%60).padStart(2,'0')}.000Z`}))); 
@@ -51,4 +54,11 @@ test('history retains presentation, bounded files, pending controls and unsent d
  assert.equal(conversationSnapshotSchema.safeParse({messages:[],resume:{prompt:'Unsent message',reviewOpen:false}}).success,true);
  assert.equal(conversationSnapshotSchema.safeParse({...value,resume:{...value.resume,backtestState:{...value.resume.backtestState,mode:'live'}}}).success,false);
  assert.equal(conversationSnapshotSchema.safeParse({...value,resume:{...value.resume,attachments:[{kind:'text',name:'huge.txt',text:'a'.repeat(20001)}]}}).success,false);
+});
+
+
+test('message timestamps, failure state and execution timing survive validation',()=>{
+ const id=randomUUID();const snapshot={messages:[{id,role:'user',text:'Check records',createdAt:'2026-10-09T04:00:00.000Z',status:'failed'},{role:'assistant',text:'Provider unavailable',replyTo:id,createdAt:'2026-10-09T04:00:01.000Z',status:'failed',durationMs:1000,activity:[{tool:'connections',status:'completed',checkedAt:'2026-10-09T04:00:00.500Z',durationMs:123,summary:'Checked feed'}]}]};
+ assert.deepEqual(conversationSnapshotSchema.parse(snapshot),snapshot);
+ assert.equal(conversationSnapshotSchema.safeParse({messages:[{role:'assistant',text:'Invalid timer',durationMs:-1}]}).success,false);
 });

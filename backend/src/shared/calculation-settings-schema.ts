@@ -29,5 +29,5 @@ export const calculationSettingsSchema = z.object({
   stochPeriod: z.number().finite().min(1).max(500).int().optional(),
   adxSmoothing: z.number().finite().min(1).max(500).int().optional(),
   maPeriod: z.number().finite().min(0).max(500).int().optional(),
-  benchmark: z.enum(["NIFTY 50", "NIFTY BANK", "SENSEX"]).optional(),
+  benchmark: z.enum(["NIFTY 50", "NIFTY BANK", "SENSEX", "NIFTY IT", "NIFTY AUTO", "NIFTY FMCG", "NIFTY PHARMA", "NIFTY METAL", "NIFTY REALTY", "NIFTY ENERGY", "NIFTY FIN SERVICE", "NIFTY PSU BANK", "NIFTY PVT BANK", "NIFTY HEALTHCARE"]).optional(),
 }).strict();

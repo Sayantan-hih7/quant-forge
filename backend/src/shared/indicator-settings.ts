@@ -13,7 +13,7 @@ export interface CalculationSettings {
   smoothK?: number; dPeriod?: number; stochPeriod?: number; adxSmoothing?: number;
   streakPeriod?: number; rankPeriod?: number; maPeriod?: number; overbought?: number; oversold?: number;
   pivotType?: 'traditional' | 'fibonacci' | 'camarilla'; pivotFrame?: '1d' | '1w' | '1mo';
-  benchmark?: 'NIFTY 50' | 'NIFTY BANK' | 'SENSEX';
+  benchmark?: 'NIFTY 50' | 'NIFTY BANK' | 'SENSEX' | 'NIFTY IT' | 'NIFTY AUTO' | 'NIFTY FMCG' | 'NIFTY PHARMA' | 'NIFTY METAL' | 'NIFTY REALTY' | 'NIFTY ENERGY' | 'NIFTY FIN SERVICE' | 'NIFTY PSU BANK' | 'NIFTY PVT BANK' | 'NIFTY HEALTHCARE';
 }
 export interface SettingSpec { label: string; type: string; default?: string | number; min?: number; max?: number; integer?: boolean; options?: string[] }
 export interface IndicatorDefinition { label: string; pane: string; period: number | null; settings: Record<string, SettingSpec>; lines: string[]; description: string }
@@ -49,7 +49,7 @@ export function settingDefaults(kind: IndicatorKind): CalculationSettings {
 export function requiredCandles(kind: IndicatorKind, n: number, s: CalculationSettings = {}): number {
   if ((kind === 'bollinger' || kind === 'bollingerBandwidth') && s.maType === 'dema') return 2 * n - 1;
   if (kind === 'dema') return 2 * n - 1;
-  if (kind === 'averagePrice') return 1;
+  if (kind === 'averagePrice' || kind === 'benchmarkClose') return 1;
   if (kind === 'connorsRsi') return Math.max(n + 1, (s.streakPeriod ?? 2) + 1, (s.rankPeriod ?? 100) + 2);
   if (kind === 'maCross') return Math.max(requiredCandles(s.maType ?? 'ema', s.fastPeriod ?? 9), requiredCandles(s.maType ?? 'ema', s.slowPeriod ?? 21)) + 1;
   if (kind === 'macd') return (s.slowPeriod ?? 26) + (s.signalPeriod ?? 9) - 1;

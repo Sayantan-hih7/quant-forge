@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { Alert, Button, Descriptions, Empty, Table, Tabs, Tag } from "antd";
 import { DownloadOutlined, ExperimentOutlined } from "@ant-design/icons";
 import type { BacktestRun, BacktestTrade } from "../types";
@@ -191,7 +192,7 @@ export function BacktestResults({
         <Tag color="purple">Sample result</Tag>
       </header>
       {changed && (
-        <Alert
+        <GuidanceNote
           className="bt-result-note"
           showIcon
           type="info"

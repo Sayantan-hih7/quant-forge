@@ -13,6 +13,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   }, [resolved]);
   return (
     <ConfigProvider
+      modal={{ centered: true }}
       theme={{
         ...sharedTheme,
         ...themePresets[resolved],

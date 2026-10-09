@@ -1,4 +1,5 @@
 """Conservative pre-run scope checks; never remove positions after replay starts."""
+from .signal_ranking import signal_score
 from .market import stamp, IST
 from .rules import evaluate_observations
 
@@ -62,6 +63,8 @@ def assess_scope(body, prepared, progress=None):
                     if missing_fields:
                         reasons.append(f"{side.title()} inputs not ready at period start: {', '.join(missing_fields)}. More warm-up or dated input data is required.")
                 risk = strategy['risk']
+                if signal_score(obs, risk, signal) is None:
+                    reasons.append('Signal ranking history is not ready at period start.')
                 if risk['stopMode'] == 'ATR' and obs.atr(risk['timeframe'], risk['atrPeriod']) is None:
                     reasons.append('ATR stop history is not ready at period start.')
                 if risk['stopMode'] == 'candleLow' and obs.signal_low(risk['timeframe']) is None:

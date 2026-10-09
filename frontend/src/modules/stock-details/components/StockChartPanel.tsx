@@ -1,3 +1,4 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { ChartGapDetails } from './ChartGapDetails';
 import { indicatorCatalog } from '../utils/indicatorCatalog';
 import { useCallback, useMemo, useState } from 'react';
@@ -92,7 +93,7 @@ export function StockChartPanel({ compact = false, instrumentId, symbol, quote, 
     {!!benchmarks.errors.length&&<Alert type="warning" showIcon title="Benchmark history unavailable" description={benchmarks.errors.join(' ')}/>}
     {!!indicatorWarnings.length && <Alert type="warning" showIcon title="Some indicator history has gaps" description={indicatorWarnings.join(' ')}/>}
     {otherHistory.loading && <p className="muted">Loading indicator history for the other timeframes…</p>}
-    {missingEvent && <Alert type="info" showIcon title="The selected event has no candle in this interval’s loaded history." description="Its recorded time and price remain in the activity list. Try a daily chart for older trades."/>}
+    {missingEvent && <GuidanceNote type="info" showIcon title="The selected event has no candle in this interval’s loaded history." description="Its recorded time and price remain in the activity list. Try a daily chart for older trades."/>}
     {chart.loading && !chart.data ? <div className="stock-chart-loading"><Skeleton active paragraph={{ rows: 5 }}/><p>Loading price history. The first download can take longer.</p></div> : view.bars.length ?
       <StockCandlestickChart key={chartIdentity} bars={view.bars} quote={quote} timeframe={timeframe} kind={kind} symbol={symbol} volumeStyle={profile.volumeStyle} showVolume={showVolume} indicators={plots} events={shownEvents} levels={showTrades ? levels : undefined} focusEventId={focusEventId} onSelectEvent={onSelectEvent} onHoverTime={setHoverTime} visibleRange={visibleRange}/> :
       <div className="stock-chart-empty"><Empty description="No chart history available for this interval"/><Button onClick={chart.retry}>Try again</Button></div>}

@@ -1,3 +1,4 @@
+import { delegatedDraftChoices } from '../src/modules/ai/services/draft-delegation.js';
 import { workspaceChat, workspaceChatSchema } from '../src/modules/ai/services/workspace-chat.service.js';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -421,9 +422,9 @@ test('named holding period overrides the previous workflow when improving anothe
 
 test('invalid relative strength interval names the condition and a valid alternative',()=>{
  const caps={...capabilities,technical:[...capabilities.technical,'relativeStrength']};
- const rule={...technical,left:'relativeStrength',leftFrame:'5m',rightType:'value',operator:'gt',value:0};
+ const rule={...technical,left:'relativeStrength',leftFrame:'1q',rightType:'value',operator:'gt',value:0};
  const draft={...strategy,entry:{logic:'AND',groups:[{logic:'AND',conditions:[rule]}]}};
- assert.throws(()=>tradingDraft(draft,caps),(error:unknown)=>{assert.ok(error instanceof AppError);const visible=invalidProposalError(error);assert.match(visible.message,/Buy rule, group 1, condition 1/);assert.match(visible.message,/Relative strength vs benchmark cannot use 5m/);assert.match(visible.message,/1d, 1w, 1mo/);return true;});
+ assert.throws(()=>tradingDraft(draft,caps),(error:unknown)=>{assert.ok(error instanceof AppError);const visible=invalidProposalError(error);assert.match(visible.message,/Buy rule, group 1, condition 1/);assert.match(visible.message,/Relative strength vs benchmark cannot use 1q/);assert.match(visible.message,/1d, 1w, 1mo/);return true;});
  assert.doesNotThrow(()=>tradingDraft({...draft,entry:{logic:'AND',groups:[{logic:'AND',conditions:[{...rule,leftFrame:'1d'}]}]}},caps));
 });
 
@@ -436,4 +437,84 @@ test('explicit existing strategy choice binds to its saved revision instead of a
  const saved={...tradingDraft(strategy,capabilities),_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'Intraday plan',revision:6};
  const result=await workspaceChat(workspaceChatSchema.parse({prompt:'My answers:\n1. [existing_strategy] Prepare changes to Intraday plan'}),undefined,{...chatEmpty,strategies:async()=>[saved],generate:async()=>({text:'New draft',action:'draft-strategy'}),propose:async input=>{assert.equal(input.currentDraft?.name,saved.name);return chatReply(null);}});
  assert.equal(result.task?.id,saved._id);assert.equal(result.task?.revision,6);
+});
+
+
+test('AI close versus EMA repairs only redundant price period and discloses the correction',async()=>{
+ const key=env.GEMINI_API_KEY;env.GEMINI_API_KEY='unit-test-only';
+ try{
+  const c={...technical,left:'close',leftPeriod:20,leftOffset:1,right:'ema',rightPeriod:20};
+  const raw={message:'Review',assumptions:[],proposal:{...strategy,entry:{logic:'AND',groups:[{logic:'AND',conditions:[c]}]}}};
+  let validated=0;
+  const result=await proposeRules({scope:'strategy',prompt:'Price crosses above 20 EMA',messages:[]},undefined,{
+    capabilities:async()=>({...capabilities,technical:[...capabilities.technical,'ema']}),usage:async()=>{},validate:async()=>{validated++;},generate:generateAfterIntent(raw),
+  });
+  const proposal=result.proposal as ReturnType<typeof tradingDraft>;
+  assert.equal(proposal.entry.groups[0].conditions[0].leftPeriod,undefined);
+  assert.equal(proposal.entry.groups[0].conditions[0].rightPeriod,20);
+  assert.equal(proposal.entry.groups[0].conditions[0].leftOffset,1);
+  assert.equal(c.leftPeriod,20,'Provider reply is not mutated');
+  assert.equal(validated,2);
+  assert.ok(result.assumptions.some(x=>x.includes('formatting error')));
+  assert.throws(()=>tradingDraft(raw.proposal,{...capabilities,technical:[...capabilities.technical,'ema']}),/period for close/,'Manual validators remain strict');
+ }finally{env.GEMINI_API_KEY=key;}
+});
+
+test('draft follow-up preserves task and current draft even if router says draft-strategy',async()=>{
+ const task={scope:'strategy' as const,id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',revision:0};
+ const currentDraft={name:'Accepted pullback draft'};
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:'Use the recommended entry',task,currentDraft}),undefined,{...chatEmpty,generate:async()=>({text:'Draft',action:'draft-strategy'}),propose:async input=>{assert.deepEqual(input.currentDraft,currentDraft);return chatReply(null);}});
+ assert.deepEqual(result.task,task);
+});
+
+const delegatedPrompt = 'My answers:\n1. [entry_trigger] do whatever is good when market is bad going down\n2. [stop_loss_method] do whatever is good when market is bad going down\n3. [profit_target] Fixed 1:2 Risk-to-Reward target';
+const delegatedQuestions = ['entry_trigger', 'stop_loss_method'].map(id => ({id,question:'Which technical method?',reason:'Select the draft technical method.',options:['Recommended method','Other method']}));
+
+test('technical delegation is scoped to answered settings and never inferred from ordinary questions',()=>{
+ assert.deepEqual(delegatedDraftChoices(delegatedPrompt),['entry_trigger','stop_loss_method']);
+ for(const text of ['choose a stock','Do not choose for me','Should you decide?','He said "you decide"','[start_trading] you decide','[existing_strategy] you decide']) assert.deepEqual(delegatedDraftChoices(text),[]);
+ assert.ok(delegatedDraftChoices('You decide what is good').includes('entry_trigger'));
+});
+
+test('delegated entry and stop proceed through intent and generation repair to a validated draft',async()=>{
+ const key=env.GEMINI_API_KEY;env.GEMINI_API_KEY='unit-test-only';
+ try{
+  let generated=0,validated=0;
+  const result=await proposeRules({scope:'strategy',prompt:delegatedPrompt,messages:[]},undefined,{
+   capabilities:async()=>capabilities,usage:async()=>{},validate:async()=>{validated++;},
+   generate:async(system,input)=>{
+    if(system.startsWith('You are the clarification stage'))return {...readyIntent,status:'clarify',questions:delegatedQuestions};
+    generated++;
+    if(generated===1)return {message:'Choose entry and stop',assumptions:[],proposal:null,questions:delegatedQuestions};
+    assert.match(input,/explicitly asked you to choose/);
+    return {message:'Review my concrete draft choices',assumptions:['Use ATR-based stop for this draft; validate with backtesting.'],proposal:strategy};
+   },
+  });
+  assert.equal(generated,2);assert.equal(validated,2);assert.deepEqual(result.questions,[]);
+  assert.equal((result.proposal as ReturnType<typeof tradingDraft>).risk.targetR,2);
+  assert.ok(result.assumptions.some(x=>x.includes('ATR')));
+ }finally{env.GEMINI_API_KEY=key;}
+});
+
+test('delegation does not suppress unresolved capital or unsupported requirements',async()=>{
+ const key=env.GEMINI_API_KEY;env.GEMINI_API_KEY='unit-test-only';
+ try{
+  for(const blockers of [[],['Short selling is unsupported']]){
+   const result=await proposeRules({scope:'strategy',prompt:delegatedPrompt,messages:[]},undefined,{
+    capabilities:async()=>capabilities,usage:async()=>{},validate:async()=>{throw new Error('Must not validate');},
+    generate:async(system)=>{assert.ok(system.startsWith('You are the clarification stage'));return {...readyIntent,status:'clarify',questions:[...delegatedQuestions,{id:'capital',question:'What paper capital?',reason:'Capital is still unspecified.',options:['100000','50000']}],blockers};},
+   });
+   assert.equal(result.proposal,null);assert.ok(result.questions.some(q=>q.id==='capital'));assert.deepEqual(result.blockers,blockers);
+  }
+ }finally{env.GEMINI_API_KEY=key;}
+});
+
+test('router passes delegated technical choices to draft builder instead of repeating questionnaire',async()=>{
+ const task={scope:'strategy' as const,id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',revision:0};let proposed=0;
+ const result=await workspaceChat(workspaceChatSchema.parse({prompt:delegatedPrompt,task}),undefined,{
+ ...chatEmpty,generate:async()=>({text:'Choose entry and stop',action:'explain',questions:delegatedQuestions}),
+ propose:async input=>{proposed++;assert.equal(input.prompt,delegatedPrompt);return chatReply(tradingDraft(strategy,capabilities));},
+ prepareWorkflow:async()=>{throw new Error('Must not execute');},
+ });
+ assert.equal(proposed,1);assert.ok(result.proposal);assert.deepEqual(result.task,task);assert.deepEqual(result.questions,[]);
 });

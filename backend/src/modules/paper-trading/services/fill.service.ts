@@ -1,3 +1,4 @@
+import { carriedIntradayPositions } from './intraday-continuation.js';
 import {executionOpen} from './execution-session.js';
 import { paperReentryBlock } from './reentry.service.js';
 import { protectiveBookQuote } from './book-exit.js';
@@ -43,6 +44,7 @@ export async function fillPaperOrder(id:string, quote:LiveQuote, now=Date.now(),
     let change:number,fee:number;
     let accounting:ExitAccounting|undefined;
     if(order.side==='BUY'){
+      if(carriedIntradayPositions(risk.overnight,positions,now).length){await reject('Unresolved intraday positions from an earlier day must exit before new buys. Protective exits remain active.');return;}
       const safety=await PaperSafetyModel.findOneAndUpdate({_id:'global'},{$inc:{revision:1}},{upsert:true,returnDocument:'after',session:transaction}).lean();
       if(safety?.halted){await reject('Emergency entry halt is active. Existing exits remain enabled.');return;}
       if(dailyRiskBlocked(session,now)){await reject('Daily loss limit reached. New buys blocked for this trading day.');return;}

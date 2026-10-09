@@ -46,6 +46,10 @@ export function StrategyRiskFields({ example, onExampleChange, onAskAi }: { exam
       <RhfInputNumber control={control} emptyAsUndefined name="risk.dailyLossLimitPercent" label="Daily loss limit (%)" min={0.1} max={10} step={0.1} />
       <RhfInputNumber control={control} emptyAsUndefined name="risk.maxEntryDeviationPercent" label="Max entry deviation from signal (%)" min={0.1} max={10} step={0.1} />
     </div><p className="muted">Daily loss blocks new entries until the next trading day; it does not forcibly close holdings. Paper checks live equity; backtests check available candle opens and closes, so intrabar timing can differ. Blank loss/deviation fields preserve legacy backtests; paper defaults to 2%. Save explicit values to test the same limits. Paper session overrides remain possible.</p></section>
+    <section className="strategy-risk-section"><h4>Competing buy signals</h4>
+      <RhfSelect control={control} name="risk.signalRanking" label="Priority when signals compete for position slots" options={[{value:'instrumentId',label:'Instrument ID (existing order)'},{value:'turnover',label:'Higher signal-candle traded value first'},{value:'relativeVolume',label:'Higher relative volume first'}]} />
+      <p className="muted">Applies to buys in the same evaluation batch. Traded value is completed candle close times volume. Relative volume compares that candle with the previous 20 candles. Missing ranking data prevents a new buy. Ties use instrument ID. This is a priority rule, not a prediction of returns.</p>
+    </section>
     <FixedPriceNotice risk={risk} />
     <section className="strategy-risk-section" aria-label="Initial stop-loss"><h4>Initial stop-loss</h4><p className="muted">Protection starts when your buy fills, even if no profit target is reached. Entry minus this initial stop defines 1R.</p><div className="strategy-form-grid">
       <Controller control={control} name="risk.stopMode" render={({ field, fieldState }) => <Form.Item label="Initial stop method" htmlFor={field.name} validateStatus={fieldState.error ? 'error' : undefined} help={fieldState.error?.message}>

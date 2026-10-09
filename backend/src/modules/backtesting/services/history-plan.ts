@@ -5,7 +5,7 @@ import { ruleFields } from '../../../shared/rule-fields.js';
 import { indicatorMonths, monthlyFactFields } from '../../qualification/services/history-requirements.js';
 import type { StrategyDraft } from '../../strategies/validations/strategy.validation.js';
 
-export interface HistoryPlan { benchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; to: string; replay: '1d' | '1m'; reportsFrom?: string }
+export interface HistoryPlan { benchmarks?: BenchmarkName[]; dailyBenchmarks?: BenchmarkName[]; intradayBenchmarks?: BenchmarkName[]; dailyFrom?: string; intradayFrom?: string; to: string; replay: '1d' | '1m'; reportsFrom?: string }
 const day = 86_400_000;
 const before = (date: string, days: number) => new Date(Date.parse(date) - Math.ceil(days) * day).toISOString().slice(0, 10);
 
@@ -19,7 +19,7 @@ export function strategyHistoryPlan(strategy: StrategyDraft, from: string, to: s
     if(ruleFields[field]?.indicator==='pivots') { daily=Math.max(daily,(settings?.pivotFrame==='1d'?14:settings?.pivotFrame==='1w'?28:95)+extra*31); return; }
     if(ruleFields[field]?.indicator==='vwap'&&settings?.anchor==='custom'&&settings.anchorDate) { const length=Math.max(0,(Date.parse(from)-Date.parse(settings.anchorDate))/day)+14;if(['1d','1w','1mo'].includes(frame))daily=Math.max(daily,length);else intraday=Math.max(intraday,length); }
     const length = indicatorMonths(field, period, settings);
-    const bars = (/^(dema|connorsRsi|ema|rsi|atr|macd|hma|keltner|stochRsi|adx|diPlus|diMinus|supertrend|bodyAboveEma|bodyBelowEma)/.test(field) ? length * 3 : length) + extra + 2;
+    const bars = (/^(benchmarkEma|dema|connorsRsi|ema|rsi|atr|macd|hma|keltner|stochRsi|adx|diPlus|diMinus|supertrend|bodyAboveEma|bodyBelowEma)/.test(field) ? length * 3 : length) + extra + 2;
     if (['high52w', 'low52w'].includes(field)) { daily = Math.max(daily, 400 + extra * (frame === '1mo' ? 31 : 2)); return; }
     if (ruleFields[field]?.source === 'dailyReports') reports = Math.max(reports, bars * 1.7 + 14);
     if (['1d', '1w', '1mo', '1q'].includes(frame)) {
@@ -38,7 +38,8 @@ export function strategyHistoryPlan(strategy: StrategyDraft, from: string, to: s
       if (c.rightType === 'indicator') requireField(String(c.right), String(c.rightFrame), extra + Number(c.rightOffset ?? 0), c.rightPeriod as number | undefined, c.rightSettings as CalculationSettings | undefined);
     }
   }
+  if (strategy.risk.signalRanking === 'relativeVolume') requireField('avgVolume', strategy.entry.cadence === 'daily' ? '1d' : String(strategy.entry.cadence), 1, 20);
   if (strategy.risk.stopMode === 'ATR') requireField('atr', strategy.risk.timeframe, 0, strategy.risk.atrPeriod);
   if (strategy.risk.stopMode === 'candleLow') requireField('low', strategy.risk.timeframe);
-  return { replay, to, benchmarks: ruleBenchmarks([strategy.entry,strategy.exit]), ...(reports ? { reportsFrom: before(from, reports) } : {}), ...(daily ? { dailyFrom: before(from, daily) } : {}), ...(intraday ? { intradayFrom: before(from, intraday) } : {}) };
+  return { replay, to, benchmarks: ruleBenchmarks([strategy.entry,strategy.exit]), dailyBenchmarks: ruleBenchmarks([strategy.entry,strategy.exit],'daily'), intradayBenchmarks: ruleBenchmarks([strategy.entry,strategy.exit],'intraday'), ...(reports ? { reportsFrom: before(from, reports) } : {}), ...(daily ? { dailyFrom: before(from, daily) } : {}), ...(intraday ? { intradayFrom: before(from, intraday) } : {}) };
 }

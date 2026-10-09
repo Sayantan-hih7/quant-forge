@@ -235,7 +235,7 @@ class Observations:
         self.cutoff = stamp(cutoff)
         self.daily = candles(instrument.get("daily", []), cutoff)
         self.intraday = candles(instrument.get("intraday", []), cutoff, "1m")
-        self.benchmarks = {name:candles(rows,cutoff) for name,rows in instrument.get('benchmarks',{}).items()}
+        self.benchmarks = {name: (candles(rows.get('daily', []), cutoff), candles(rows.get('intraday', []), cutoff, '1m')) if isinstance(rows, dict) else (candles(rows, cutoff), candles([], cutoff, '1m')) for name, rows in instrument.get('benchmarks', {}).items()}
         self.facts = instrument.get("facts", [])
         self.reports = instrument.get('reports', [])
         self.cache = {}
@@ -262,12 +262,35 @@ class Observations:
 
     def calculate(self, field, frame, period=None, settings=None):
         bars = self.bars(frame)
-        if field == 'relativeStrength':
-            benchmark=self.benchmarks.get((settings or {}).get('benchmark','NIFTY 50'),pd.DataFrame())
-            if benchmark.empty or bars.empty: return pd.Series(float('nan'),index=bars.index)
-            comparison=timeframe(benchmark,pd.DataFrame(),frame,getattr(self,'end',self.cutoff)).close.reindex(bars.index)
-            ratio=bars.close/comparison.replace(0,np.nan);n=period or 20
-            return ((ratio/ratio.shift(n)-1)*100).where(ratio.rolling(n+1).count()==n+1)
+        if field in ('openingRangeHigh', 'openingRangeLow'):
+            result = pd.Series(float('nan'), index=bars.index)
+            minutes = period or 15
+            if self.intraday.empty or bars.empty:
+                return result
+            sessions = self.intraday.index.tz_convert(IST).normalize()
+            for session, opening in self.intraday.groupby(sessions):
+                start = session + pd.Timedelta(hours=9, minutes=15)
+                end = start + pd.Timedelta(minutes=minutes)
+                opening = opening.loc[(opening.index >= start) & (opening.index < end)]
+                expected = pd.date_range(start, periods=minutes, freq='min').tz_convert('UTC')
+                if not opening.index.equals(expected):
+                    continue
+                selected = (bars.index.tz_convert(IST).normalize() == session) & (bars.end >= end)
+                result.loc[selected] = opening.high.max() if field == 'openingRangeHigh' else opening.low.min()
+            return result
+        if field in ('relativeStrength', 'benchmarkClose', 'benchmarkEma'):
+            daily, intraday = self.benchmarks.get((settings or {}).get('benchmark', 'NIFTY 50'), (pd.DataFrame(), pd.DataFrame()))
+            reference = timeframe(daily, intraday, frame, getattr(self, 'end', self.cutoff))
+            if reference.empty or bars.empty:
+                return pd.Series(float('nan'), index=bars.index)
+            if field != 'relativeStrength':
+                # Compute the index indicator on index bars before exact timestamp alignment.
+                values = reference.close if field == 'benchmarkClose' else indicator(reference, 'ema', period or 20)
+                return values.reindex(bars.index)
+            comparison = reference.close.reindex(bars.index)
+            ratio = bars.close / comparison.replace(0, np.nan)
+            n = period or 20
+            return ((ratio / ratio.shift(n) - 1) * 100).where(ratio.rolling(n + 1).count() == n + 1)
         if FIELDS.get(field,{}).get('indicator')=='pivots':
             return pivot_series(self.daily,bars,field,settings or {})
         if field in REPORT_FIELDS:
@@ -313,9 +336,19 @@ def condition(c, data, monthly):
     left = data.values(field, frame, left_period, left_offset, operand_settings(c, monthly))
     def unavailable(operand, observation_frame, period, offset):
         period = parameters(operand, period, offset)[0]
+        if operand in ('openingRangeHigh', 'openingRangeLow'):
+            available = data.bars(observation_frame)
+            available = available.loc[available.end <= data.cutoff]
+            end_at = len(available) - offset
+            extra = int(c.get('lookback', 1)) if c['operator'] in ('crossAbove', 'crossBelow', 'increasing', 'decreasing') else 0
+            window = available.iloc[max(0, end_at-extra-1):max(0, end_at)]
+            for index, row in window.iterrows():
+                finish = index.tz_convert(IST).normalize() + pd.Timedelta(hours=9, minutes=15 + (period or 15))
+                if row.end < finish:
+                    return {'matched': False, 'field': field, 'reason': 'Waiting for the completed opening range', 'code': 'opening_range_forming'}
         label = FIELDS.get(operand, {}).get('label', operand)
         if period is not None:
-            label += f' ({period} candles)'
+            label += f" ({period} {'minutes' if operand in ('openingRangeHigh', 'openingRangeLow') else 'candles'})"
         if offset:
             label += f', {offset} completed candles earlier'
         reason = f'Missing/insufficient {label} ({observation_frame}) history or dated facts'

@@ -44,7 +44,7 @@ export const generateAi: AiGenerator = async (system, input, schema, signal, att
         ? { model: env.AI_MODEL, instructions, input:images.length?[{role:'user',content:[{type:'input_text',text:input},...images.map(f=>({type:'input_image',image_url:`data:${f.mimeType};base64,${f.data}`,detail:'auto'}))]}]:input, text: { format: { type: 'json_object' } }, max_output_tokens: 8192, store: false }
         : { model: env.AI_MODEL, system: instructions, messages: [{ role: 'user', content:images.length?[...images.map(f=>({type:'image',source:{type:'base64',media_type:f.mimeType,data:f.data}})),{type:'text',text:input}]:input }], max_tokens: 8192 },
       { headers: provider === 'openai' ? { Authorization: `Bearer ${env.OPENAI_API_KEY}` } : { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        signal: signal ? AbortSignal.any([signal, deadline]) : deadline, timeout: 60_000, maxRedirects: 0, maxContentLength: 1_000_000, maxBodyLength: 4_000_000 });
+        signal: signal ? AbortSignal.any([signal, deadline]) : deadline, timeout: 60_000, maxRedirects: 0, maxContentLength: 1_000_000, maxBodyLength: 8_000_000 });
     return parseProviderReply(provider, data);
   } catch (error) { throw providerError(error); }
 };

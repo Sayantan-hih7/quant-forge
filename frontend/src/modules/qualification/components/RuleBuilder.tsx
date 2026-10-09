@@ -1,5 +1,6 @@
+import { GuidanceNote } from '../../../components/feedback/GuidanceNote';
 import { useState } from 'react';
-import { Alert, App, Button, Drawer, Form, Segmented, Tag } from 'antd';
+import { App, Button, Drawer, Form, Segmented, Tag } from 'antd';
 import { CheckOutlined, CopyOutlined, PlusOutlined, SaveOutlined, FileTextOutlined } from '@ant-design/icons';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,7 +48,7 @@ export function RuleBuilder({ workspace, cache, onSave, onActivate, initialId, t
         <div className="q-editor-actions"><Button icon={<FileTextOutlined aria-hidden />} onClick={form.handleSubmit((definition) => setPreview(structuredClone(definition)))}>Preview rule</Button><div>{onBacktest && selected?.side === 'BUY' && <Button disabled={form.formState.isDirty} onClick={() => onBacktest(selected.id)}>Backtest saved rule</Button>}{selectedId && <Button icon={<CopyOutlined aria-hidden />} onClick={form.handleSubmit((definition) => save({ ...definition, name: definition.name.slice(0, 53) + ' copy' }, true))}>Save as copy</Button>}<Button type="primary" htmlType="submit" icon={<SaveOutlined aria-hidden />} disabled={!!selectedId && !form.formState.isDirty}>Save template</Button></div></div>
       </Form></FormProvider>
       {tier === 'base' && <div className="q-active-rule-footer"><div><strong>{selectedId === workspace.activeBaseId ? 'Selected for the next monthly run' : 'Use this preset for the next monthly run'}</strong><p>{cache ? `Published universe uses ${cache.rule.name} v${cache.rule.revision}.` : 'The next monthly scan will use this preset.'} Activating a preset does not start a scan. Queue and review scans in Monthly Qualified Universe.</p></div><Button disabled={!selectedId || form.formState.isDirty || selectedId === workspace.activeBaseId} onClick={() => { onActivate(selectedId!); message.success('Monthly preset selected. No scan has started.'); }}>Activate preset</Button></div>}
-      {tier === 'tactical' && <Alert type="info" showIcon title="Each condition carries its own timeframe." description="Combine Daily or 4-hour context with a 5-minute or 15-minute entry condition. All trigger checks stay inside the monthly cache." />}
+      {tier === 'tactical' && <GuidanceNote type="info" showIcon title="Each condition carries its own timeframe." description="Combine Daily or 4-hour context with a 5-minute or 15-minute entry condition. All trigger checks stay inside the monthly cache." />}
     </div>
     <Drawer open={!!preview} onClose={() => setPreview(null)} title="Rule summary" size={560} footer={<Button onClick={() => setPreview(null)}>Back to editor</Button>}>
       {preview && <><RuleSummary rule={preview} /><p className="q-summary-note">This is a summary of your draft. No stocks have been scanned. Save the template, then queue a separate scan when you are ready.</p></>}

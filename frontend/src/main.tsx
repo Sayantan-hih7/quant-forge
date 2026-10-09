@@ -4,6 +4,7 @@ import './index.css'
 import './styles/theme.css'
 import './styles/app.css'
 import './styles/auth.css'
+import './styles/feedback.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
